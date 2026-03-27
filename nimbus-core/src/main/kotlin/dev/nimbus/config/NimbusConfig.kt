@@ -8,7 +8,8 @@ data class NimbusConfig(
     val network: NetworkConfig = NetworkConfig(),
     val controller: ControllerConfig = ControllerConfig(),
     val console: ConsoleConfig = ConsoleConfig(),
-    val paths: PathsConfig = PathsConfig()
+    val paths: PathsConfig = PathsConfig(),
+    val api: ApiConfig = ApiConfig()
 )
 
 @Serializable
@@ -41,4 +42,12 @@ data class PathsConfig(
     val templates: String = "templates",
     val running: String = "running",
     val logs: String = "logs"
+)
+
+@Serializable
+data class ApiConfig(
+    val enabled: Boolean = false,
+    val bind: String = "127.0.0.1",
+    val port: Int = 8080,
+    val token: String = ""
 )

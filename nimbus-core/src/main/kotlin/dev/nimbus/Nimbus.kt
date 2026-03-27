@@ -1,5 +1,6 @@
 package dev.nimbus
 
+import dev.nimbus.api.NimbusApi
 import dev.nimbus.config.ConfigLoader
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.console.NimbusConsole
@@ -98,11 +99,24 @@ fun main() = runBlocking {
     val scalingJob = scalingEngine.start()
     logger.info("Scaling engine started (interval: {}ms)", config.controller.heartbeatInterval)
 
+    // Start REST API if enabled
+    val api = NimbusApi(
+        config = config,
+        registry = registry,
+        serviceManager = serviceManager,
+        groupManager = groupManager,
+        eventBus = eventBus,
+        scope = scope,
+        groupsDir = groupsDir
+    )
+    api.start()
+
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)
     Runtime.getRuntime().addShutdownHook(Thread {
         runBlocking {
             logger.info("Shutdown signal received, stopping all services...")
             scalingJob.cancel()
+            api.stop()
             try {
                 serviceManager.stopAll()
             } catch (e: Exception) {
@@ -135,6 +149,7 @@ fun main() = runBlocking {
 
     // Console exited (shutdown command), clean up
     scalingJob.cancel()
+    api.stop()
     serviceManager.stopAll()
     scope.cancel()
     logger.info("Nimbus stopped.")

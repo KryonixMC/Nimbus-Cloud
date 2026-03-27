@@ -307,4 +307,172 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 
 ---
 
+## Phase 7: REST API (v0.2)
+> Goal: HTTP API + WebSocket for external integrations (dashboards, bots, monitoring).
+
+| # | Task | Status |
+|---|------|--------|
+| 1 | Ktor Server dependencies (core, CIO, content-negotiation, auth, websockets, CORS, status-pages) | done |
+| 2 | `ApiConfig` in NimbusConfig (`[api]` section: enabled, bind, port, token) | done |
+| 3 | `ApiModels.kt`: JSON-serializable DTOs for all endpoints | done |
+| 4 | `NimbusApi.kt`: Ktor embedded server, Bearer auth, plugin setup, route wiring | done |
+| 5 | Service routes: GET list, GET by name, POST start/stop/restart/exec, GET logs | done |
+| 6 | Group routes: GET list, GET by name, POST create, PUT update, DELETE | done |
+| 7 | Network routes: GET status (cluster overview), GET players, POST send player | done |
+| 8 | System routes: POST reload, POST shutdown, GET health | done |
+| 9 | WebSocket `/api/events`: live event stream (all NimbusEvents) | done |
+| 10 | WebSocket `/api/services/{name}/console`: bidirectional console (stdout + stdin) | done |
+| 11 | Wire NimbusApi into Nimbus.kt (start/stop lifecycle, shutdown hook) | done |
+
+### New Files (Phase 7)
+
+```
+nimbus-core/src/main/kotlin/dev/nimbus/
+├── api/
+│   ├── NimbusApi.kt              # Ktor server setup, auth, plugin config, routing
+│   ├── ApiModels.kt              # All request/response DTOs
+│   └── routes/
+│       ├── ServiceRoutes.kt      # /api/services/* endpoints
+│       ├── GroupRoutes.kt        # /api/groups/* endpoints
+│       ├── NetworkRoutes.kt      # /api/status, /api/players, /api/players/{name}/send
+│       ├── SystemRoutes.kt       # /api/reload, /api/shutdown
+│       └── EventRoutes.kt        # WS /api/events, WS /api/services/{name}/console
+```
+
+### Changes (Phase 7)
+- `NimbusConfig.kt` — added `ApiConfig` data class with `enabled`, `bind`, `port`, `token` fields
+- `Nimbus.kt` — creates and starts `NimbusApi`, stops it in shutdown hook and on console exit
+- `build.gradle.kts` — added 8 Ktor Server dependencies (server-core, server-cio, content-negotiation, serialization-kotlinx-json, auth, websockets, cors, status-pages)
+
+### API Endpoint Reference
+
+#### Services
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/services` | List all services (filter: `?group=`, `?state=`) |
+| `GET` | `/api/services/{name}` | Service details (state, port, players, uptime) |
+| `POST` | `/api/services/{name}/start` | Start new instance of a group |
+| `POST` | `/api/services/{name}/stop` | Stop a service |
+| `POST` | `/api/services/{name}/restart` | Restart a service |
+| `POST` | `/api/services/{name}/exec` | Execute command on service |
+| `GET` | `/api/services/{name}/logs` | Get log lines (`?lines=100`) |
+
+#### Groups
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/groups` | List all groups with config + instance count |
+| `GET` | `/api/groups/{name}` | Group details |
+| `POST` | `/api/groups` | Create new group (writes TOML + registers) |
+| `PUT` | `/api/groups/{name}` | Update group config |
+| `DELETE` | `/api/groups/{name}` | Delete group (must have 0 running instances) |
+
+#### Network
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/status` | Full cluster overview |
+| `GET` | `/api/players` | All players with current server |
+| `POST` | `/api/players/{name}/send` | Transfer player to another service |
+
+#### System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check (always public, no auth) |
+| `POST` | `/api/reload` | Hot-reload group configs |
+| `POST` | `/api/shutdown` | Graceful shutdown |
+
+#### WebSocket
+| Endpoint | Description |
+|----------|-------------|
+| `WS /api/events` | Live event stream (JSON, all NimbusEvents) |
+| `WS /api/services/{name}/console` | Bidirectional console (stdout → client, client → stdin) |
+
+### Configuration
+
+```toml
+# nimbus.toml
+[api]
+enabled = true
+bind = "127.0.0.1"
+port = 8080
+token = "your-secret-token"
+```
+
+### Authentication
+- Bearer token via `Authorization: Bearer <token>` header
+- `/api/health` is always public (no auth required)
+- If token is empty, all endpoints are open (warning logged)
+- CORS enabled for all origins (dashboard support)
+
+---
+
+## Full File Tree
+
+```
+nimbus-core/src/main/kotlin/dev/nimbus/
+├── Nimbus.kt
+├── api/
+│   ├── NimbusApi.kt
+│   ├── ApiModels.kt
+│   └── routes/
+│       ├── ServiceRoutes.kt
+│       ├── GroupRoutes.kt
+│       ├── NetworkRoutes.kt
+│       ├── SystemRoutes.kt
+│       └── EventRoutes.kt
+├── config/
+│   ├── NimbusConfig.kt
+│   ├── GroupConfig.kt
+│   └── ConfigLoader.kt
+├── console/
+│   ├── NimbusConsole.kt
+│   ├── CommandDispatcher.kt
+│   ├── ConsoleFormatter.kt
+│   ├── ScreenSession.kt
+│   └── commands/
+│       ├── HelpCommand.kt
+│       ├── ListCommand.kt
+│       ├── StartCommand.kt
+│       ├── StopCommand.kt
+│       ├── RestartCommand.kt
+│       ├── StatusCommand.kt
+│       ├── ScreenCommand.kt
+│       ├── ExecCommand.kt
+│       ├── GroupsCommand.kt
+│       ├── InfoCommand.kt
+│       ├── PlayersCommand.kt
+│       ├── SendCommand.kt
+│       ├── LogsCommand.kt
+│       ├── ReloadCommand.kt
+│       ├── CreateGroupCommand.kt
+│       ├── ClearCommand.kt
+│       └── ShutdownCommand.kt
+├── event/
+│   ├── Events.kt
+│   └── EventBus.kt
+├── group/
+│   ├── ServerGroup.kt
+│   └── GroupManager.kt
+├── scaling/
+│   ├── ScalingEngine.kt
+│   └── ScalingRule.kt
+├── service/
+│   ├── ServiceState.kt
+│   ├── Service.kt
+│   ├── ServiceRegistry.kt
+│   ├── PortAllocator.kt
+│   ├── ProcessHandle.kt
+│   ├── ServerListPing.kt
+│   └── ServiceManager.kt
+├── setup/
+│   └── SetupWizard.kt
+├── template/
+│   ├── TemplateManager.kt
+│   ├── ConfigPatcher.kt
+│   └── SoftwareResolver.kt
+└── velocity/
+    └── VelocityConfigGen.kt
+```
+
+---
+
 *Last updated: 2026-03-27*
