@@ -92,6 +92,10 @@ class CommandDispatcher {
                     val groups = groupManager?.getAllGroups()?.map { it.name } ?: emptyList()
                     groups.filter { it.startsWith(argPrefix, ignoreCase = true) }
                 }
+                "api" -> {
+                    val subcommands = listOf("start", "stop", "status", "token")
+                    subcommands.filter { it.startsWith(argPrefix, ignoreCase = true) }
+                }
                 else -> emptyList()
             }
         }

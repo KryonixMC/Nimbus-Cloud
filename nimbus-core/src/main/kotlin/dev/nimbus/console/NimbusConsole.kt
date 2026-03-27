@@ -1,5 +1,6 @@
 package dev.nimbus.console
 
+import dev.nimbus.api.NimbusApi
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.console.commands.*
 import dev.nimbus.event.EventBus
@@ -30,7 +31,8 @@ class NimbusConsole(
     private val eventBus: EventBus,
     private val scope: CoroutineScope,
     private val groupsDir: Path? = null,
-    private val softwareResolver: SoftwareResolver? = null
+    private val softwareResolver: SoftwareResolver? = null,
+    private val api: NimbusApi? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(NimbusConsole::class.java)
@@ -87,6 +89,9 @@ class NimbusConsole(
         if (groupsDir != null && softwareResolver != null) {
             val templatesDir = java.nio.file.Path.of(config.paths.templates)
             dispatcher.register(CreateGroupCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir))
+        }
+        if (api != null) {
+            dispatcher.register(ApiCommand(api))
         }
         dispatcher.register(ClearCommand(terminal))
         dispatcher.register(ShutdownCommand(serviceManager, registry))

@@ -1,8 +1,10 @@
 package dev.nimbus.api
 
 import dev.nimbus.api.routes.*
+import dev.nimbus.config.ApiConfig
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.event.EventBus
+import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
 import dev.nimbus.service.ServiceManager
 import dev.nimbus.service.ServiceRegistry
@@ -19,6 +21,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
@@ -40,10 +43,18 @@ class NimbusApi(
 
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
+    val isRunning: Boolean get() = server != null
+
+    val currentBind: String get() = config.api.bind
+    val currentPort: Int get() = config.api.port
+
     fun start() {
-        val apiConfig = config.api
-        if (!apiConfig.enabled) {
-            logger.info("REST API is disabled (set [api] enabled = true in nimbus.toml)")
+        startWithConfig(config.api)
+    }
+
+    fun startWithConfig(apiConfig: ApiConfig) {
+        if (server != null) {
+            logger.warn("REST API is already running")
             return
         }
 
@@ -51,19 +62,43 @@ class NimbusApi(
             logger.warn("REST API token is empty — API will be accessible without authentication!")
         }
 
-        server = embeddedServer(CIO, port = apiConfig.port, host = apiConfig.bind) {
-            configurePlugins(apiConfig.token)
-            configureRoutes()
-        }
+        try {
+            server = embeddedServer(CIO, port = apiConfig.port, host = apiConfig.bind) {
+                configurePlugins(apiConfig.token)
+                configureRoutes(apiConfig.token)
+            }
 
-        server?.start(wait = false)
-        logger.info("REST API started on http://{}:{}", apiConfig.bind, apiConfig.port)
+            server?.start(wait = false)
+            logger.info("REST API started on http://{}:{}", apiConfig.bind, apiConfig.port)
+
+            scope.launch {
+                eventBus.emit(NimbusEvent.ApiStarted(apiConfig.bind, apiConfig.port))
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to start REST API: {}", e.message)
+            server = null
+            scope.launch {
+                eventBus.emit(NimbusEvent.ApiError("Failed to start: ${e.message}"))
+            }
+        }
     }
 
     fun stop() {
+        if (server == null) {
+            logger.warn("REST API is not running")
+            return
+        }
+
         server?.stop(1000, 5000)
+        server = null
         logger.info("REST API stopped")
+
+        scope.launch {
+            eventBus.emit(NimbusEvent.ApiStopped("manual stop"))
+        }
     }
+
+    fun token(): String = config.api.token
 
     private fun Application.configurePlugins(token: String) {
         install(ContentNegotiation) {
@@ -114,9 +149,7 @@ class NimbusApi(
         }
     }
 
-    private fun Application.configureRoutes() {
-        val token = config.api.token
-
+    private fun Application.configureRoutes(token: String) {
         routing {
             // Health endpoint is always public
             get("/api/health") {

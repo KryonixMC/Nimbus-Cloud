@@ -98,6 +98,12 @@ object ConsoleFormatter {
                 "${success("+")} ${BOLD}${event.playerName}${RESET} joined ${event.serviceName}"
             is NimbusEvent.PlayerDisconnected ->
                 "${error("-")} ${BOLD}${event.playerName}${RESET} left ${event.serviceName}"
+            is NimbusEvent.ApiStarted ->
+                "${success("API")} REST API started on ${BOLD}${event.bind}:${event.port}${RESET}"
+            is NimbusEvent.ApiStopped ->
+                "${info("API")} REST API stopped (${event.reason})"
+            is NimbusEvent.ApiError ->
+                "${error("API")} REST API error: ${event.error}"
         }
         return "$time $prefix $message"
     }

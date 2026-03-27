@@ -137,7 +137,8 @@ fun main() = runBlocking {
         eventBus = eventBus,
         scope = scope,
         groupsDir = groupsDir,
-        softwareResolver = softwareResolver
+        softwareResolver = softwareResolver,
+        api = api
     )
     console.init()
 

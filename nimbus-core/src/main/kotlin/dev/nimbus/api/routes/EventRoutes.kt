@@ -129,5 +129,20 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("player" to playerName, "service" to serviceName)
         )
+        is NimbusEvent.ApiStarted -> EventMessage(
+            type = "API_STARTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("bind" to bind, "port" to port.toString())
+        )
+        is NimbusEvent.ApiStopped -> EventMessage(
+            type = "API_STOPPED",
+            timestamp = timestamp.toString(),
+            data = mapOf("reason" to reason)
+        )
+        is NimbusEvent.ApiError -> EventMessage(
+            type = "API_ERROR",
+            timestamp = timestamp.toString(),
+            data = mapOf("error" to error)
+        )
     }
 }

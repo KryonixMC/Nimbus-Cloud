@@ -19,4 +19,9 @@ sealed class NimbusEvent {
     // Player (for future use)
     data class PlayerConnected(val playerName: String, val serviceName: String) : NimbusEvent()
     data class PlayerDisconnected(val playerName: String, val serviceName: String) : NimbusEvent()
+
+    // API lifecycle
+    data class ApiStarted(val bind: String, val port: Int) : NimbusEvent()
+    data class ApiStopped(val reason: String = "shutdown") : NimbusEvent()
+    data class ApiError(val error: String) : NimbusEvent()
 }
