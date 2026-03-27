@@ -54,16 +54,16 @@ class SetupWizard(
 
             val w = terminal.writer()
 
-            // Print the cloud banner
+            // Print the box banner
             w.println()
-            w.println("$GRAY               ___  _  __$RESET")
-            w.println("$GRAY            .-~   ~~ ~  ~-.$RESET")
-            w.println("$GRAY          .~                ~.$RESET")
-            w.println("$GRAY        .~   ${GREEN}N I M B U S$RESET$GRAY    ~.$RESET")
-            w.println("$GRAY    .--~                      ~--.$RESET")
-            w.println("$GRAY   (______________________________ )$RESET")
+            w.println("${DIM}           .         .    .${RESET}")
+            w.println("${DIM}     .  _____  .  _____${RESET}")
+            w.println("${DIM}   ___/       \\__/      \\___${RESET}")
+            w.println("${DIM}  /${RESET}    ${BOLD}N I M B U S${RESET}          ${DIM}\\${RESET}")
+            w.println("${DIM} |${RESET}      ${BOLD}C L O U D${RESET}    ${CYAN}☁${RESET}      ${DIM}|${RESET}")
+            w.println("${DIM}  \\________________________/${RESET}")
             w.println()
-            w.println("  ${BOLD}First-time setup$RESET  ${DIM}Let's get your cloud ready.$RESET")
+            w.println("  ${DIM}Let's get your cloud ready.$RESET")
             w.println()
             w.flush()
 

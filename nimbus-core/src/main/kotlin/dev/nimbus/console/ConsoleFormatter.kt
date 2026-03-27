@@ -122,15 +122,15 @@ object ConsoleFormatter {
 
     fun banner(networkName: String): String = buildString {
         appendLine()
-        appendLine(colorize("               ___  _  __", GRAY))
-        appendLine(colorize("            .-~   ~~ ~  ~-.", GRAY))
-        appendLine(colorize("          .~                ~.", GRAY))
-        appendLine(colorize("        .~   ", GRAY) + colorize("N I M B U S", GREEN) + colorize("    ~.", GRAY))
-        appendLine(colorize("    .--~                      ~--.", GRAY))
-        appendLine(colorize("   (______________________________ )", GRAY))
+        appendLine("${DIM}           .         .    .${RESET}")
+        appendLine("${DIM}     .  _____  .  _____${RESET}")
+        appendLine("${DIM}   ___/       \\__/      \\___${RESET}")
+        appendLine("${DIM}  /${RESET}    ${BOLD}N I M B U S${RESET}          ${DIM}\\${RESET}")
+        appendLine("${DIM} |${RESET}      ${BOLD}C L O U D${RESET}    ${CYAN}☁${RESET}      ${DIM}|${RESET}")
+        appendLine("${DIM}  \\________________________/${RESET}")
         appendLine()
-        appendLine(colorize("    The lightweight Minecraft cloud", BOLD) + "   " + colorize("v0.1.0", DIM))
-        appendLine(colorize("    Network: $networkName", DIM))
+        appendLine("${DIM}minecraft cloud system · v0.1.0${RESET}")
+        appendLine("${DIM}${"─".repeat(32)}${RESET}")
         appendLine()
     }
 }
