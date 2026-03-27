@@ -1,0 +1,25 @@
+[group]
+name = "Survival"
+type = "DYNAMIC"
+template = "survival"
+software = "PAPER"
+version = "1.8.8"
+
+[group.resources]
+memory = "1G"
+max_players = 16
+
+[group.scaling]
+min_instances = 1
+max_instances = 4
+players_per_instance = 16
+scale_threshold = 0.8
+idle_timeout = 300
+
+[group.lifecycle]
+stop_on_empty = true
+restart_on_crash = true
+max_restarts = 5
+
+[group.jvm]
+args = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"]

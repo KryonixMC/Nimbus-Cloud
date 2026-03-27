@@ -1,0 +1,20 @@
+# Nimbus — Main Configuration
+
+[network]
+name = "MyNetwork"
+bind = "0.0.0.0"
+
+[controller]
+max_memory = "10G"
+max_services = 20
+heartbeat_interval = 5000
+
+[console]
+colored = true
+log_events = true
+history_file = ".nimbus_history"
+
+[paths]
+templates = "templates"
+running = "running"
+logs = "logs"

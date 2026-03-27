@@ -1,0 +1,17 @@
+[group]
+name = "Proxy"
+type = "STATIC"
+template = "proxy"
+software = "VELOCITY"
+version = "3.4.0-SNAPSHOT"
+
+[group.resources]
+memory = "512M"
+max_players = 500
+
+[group.scaling]
+min_instances = 1
+max_instances = 1
+
+[group.jvm]
+args = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"]
