@@ -146,6 +146,9 @@ fun nimbusMain() = runBlocking {
     // Deploy Nimbus SDK plugin to global (all backend servers: Paper, Purpur, etc.)
     deploySdkPlugin(globalTemplateDir)
 
+    // Auto-update Nimbus plugins where the user has placed them (templates + static services)
+    autoUpdateNimbusPlugins(templatesDir, staticDir)
+
     // Deploy bridge config so the plugin can connect to the API
     deployBridgeConfig(globalProxyTemplateDir, config)
 
@@ -247,7 +250,8 @@ fun nimbusMain() = runBlocking {
         groupsDir = groupsDir,
         softwareResolver = softwareResolver,
         api = api,
-        permissionManager = permissionManager
+        permissionManager = permissionManager,
+        proxySyncManager = proxySyncManager
     )
     console.init()
 
@@ -337,6 +341,60 @@ private fun deploySdkPlugin(globalDir: NioPath) {
     deployPlugin(globalDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
 }
 
+/**
+ * Scans template directories and static service directories for Nimbus plugins
+ * (nimbus-signs.jar, nimbus-npc.jar, etc.) and replaces them with the latest
+ * version from embedded resources. Only updates where the user has already
+ * placed the plugin — does NOT deploy to new locations.
+ */
+private fun autoUpdateNimbusPlugins(templatesDir: NioPath, staticDir: NioPath) {
+    val nimbusPlugins = listOf("nimbus-signs.jar")
+    var updated = 0
+
+    // Scan all template directories (except global/global_proxy which are handled separately)
+    if (templatesDir.exists()) {
+        Files.list(templatesDir)
+            .filter { Files.isDirectory(it) }
+            .filter { it.fileName.toString() !in listOf("global", "global_proxy") }
+            .forEach { templateDir ->
+                updated += updatePluginsInDir(templateDir.resolve("plugins"), nimbusPlugins)
+            }
+    }
+
+    // Scan all static service directories
+    if (staticDir.exists()) {
+        Files.list(staticDir)
+            .filter { Files.isDirectory(it) }
+            .forEach { serviceDir ->
+                updated += updatePluginsInDir(serviceDir.resolve("plugins"), nimbusPlugins)
+            }
+    }
+
+    if (updated > 0) {
+        logger.info("Auto-updated {} Nimbus plugin(s) in templates/static services", updated)
+    }
+}
+
+private fun updatePluginsInDir(pluginsDir: NioPath, pluginNames: List<String>): Int {
+    if (!pluginsDir.exists()) return 0
+    var count = 0
+
+    for (fileName in pluginNames) {
+        val targetFile = pluginsDir.resolve(fileName)
+        if (!targetFile.exists()) continue // User hasn't placed it here — skip
+
+        val resource = object {}.javaClass.classLoader.getResourceAsStream("plugins/$fileName")
+        if (resource == null) continue
+
+        resource.use { input ->
+            Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+        logger.debug("Updated {} in {}", fileName, pluginsDir)
+        count++
+    }
+    return count
+}
+
 private fun deployBridgeConfig(globalProxyDir: NioPath, config: NimbusConfig) {
     if (!config.api.enabled) {
         logger.debug("API disabled, skipping bridge config deploy")
@@ -371,8 +429,7 @@ private fun extractOptionalPlugins(pluginsDir: NioPath) {
 
     val optionalPlugins = mapOf(
         "nimbus-sdk.jar" to "plugins/nimbus-sdk.jar",
-        "nimbus-signs.jar" to "plugins/nimbus-signs.jar",
-        "nimbus-npc.jar" to "plugins/nimbus-npc.jar"
+        "nimbus-signs.jar" to "plugins/nimbus-signs.jar"
     )
 
     for ((fileName, resourcePath) in optionalPlugins) {

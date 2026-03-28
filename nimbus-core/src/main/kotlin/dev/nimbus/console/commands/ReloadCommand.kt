@@ -3,18 +3,23 @@ package dev.nimbus.console.commands
 import dev.nimbus.config.ConfigLoader
 import dev.nimbus.console.Command
 import dev.nimbus.console.ConsoleFormatter
+import dev.nimbus.event.EventBus
+import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
+import dev.nimbus.proxy.ProxySyncManager
 import dev.nimbus.service.ServiceRegistry
 import java.nio.file.Path
 
 class ReloadCommand(
     private val groupManager: GroupManager,
     private val registry: ServiceRegistry,
-    private val groupsDir: Path
+    private val groupsDir: Path,
+    private val proxySyncManager: ProxySyncManager?,
+    private val eventBus: EventBus
 ) : Command {
 
     override val name = "reload"
-    override val description = "Hot-reload group configuration files"
+    override val description = "Hot-reload group and proxy configuration files"
     override val usage = "reload"
 
     override suspend fun execute(args: List<String>) {
@@ -62,6 +67,29 @@ class ReloadCommand(
                     )
                 )
             }
+        }
+
+        // Reload proxy sync config and push to connected proxies
+        if (proxySyncManager != null) {
+            proxySyncManager.reload()
+            val cfg = proxySyncManager.getConfig()
+            eventBus.emit(NimbusEvent.TabListUpdated(
+                header = cfg.tabList.header,
+                footer = cfg.tabList.footer,
+                playerFormat = cfg.tabList.playerFormat,
+                updateInterval = cfg.tabList.updateInterval
+            ))
+            eventBus.emit(NimbusEvent.MotdUpdated(
+                line1 = cfg.motd.line1,
+                line2 = cfg.motd.line2,
+                maxPlayers = cfg.motd.maxPlayers,
+                playerCountOffset = cfg.motd.playerCountOffset
+            ))
+            eventBus.emit(NimbusEvent.ChatFormatUpdated(
+                format = cfg.chat.format,
+                enabled = cfg.chat.enabled
+            ))
+            println(ConsoleFormatter.success("Proxy sync config reloaded and pushed to proxies."))
         }
     }
 }

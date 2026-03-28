@@ -65,22 +65,14 @@ val signsJar = tasks.register("copySignsJar", Copy::class) {
     rename { "nimbus-signs.jar" }
 }
 
-// Embed the NPC plugin JAR as a resource (extracted at runtime to plugins/)
-val npcJar = tasks.register("copyNpcJar", Copy::class) {
-    dependsOn(project(":nimbus-npc").tasks.named("shadowJar"))
-    from(project(":nimbus-npc").tasks.named("shadowJar").map { (it as Jar).archiveFile })
-    into(layout.buildDirectory.dir("resources/main/plugins"))
-    rename { "nimbus-npc.jar" }
-}
-
 tasks.processResources {
-    dependsOn(pluginJar, sdkJar, signsJar, npcJar)
+    dependsOn(pluginJar, sdkJar, signsJar)
 }
 
 tasks.shadowJar {
     archiveClassifier.set("all")
     mergeServiceFiles()
-    dependsOn(pluginJar, sdkJar, signsJar, npcJar)
+    dependsOn(pluginJar, sdkJar, signsJar)
 }
 
 kotlin {

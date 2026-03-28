@@ -34,7 +34,8 @@ class NimbusConsole(
     private val groupsDir: Path? = null,
     private val softwareResolver: SoftwareResolver? = null,
     private val api: NimbusApi? = null,
-    private val permissionManager: PermissionManager? = null
+    private val permissionManager: PermissionManager? = null,
+    private val proxySyncManager: dev.nimbus.proxy.ProxySyncManager? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(NimbusConsole::class.java)
@@ -88,7 +89,7 @@ class NimbusConsole(
         dispatcher.register(SendCommand(serviceManager, registry, groupManager))
         dispatcher.register(LogsCommand(serviceManager, registry))
         if (groupsDir != null) {
-            dispatcher.register(ReloadCommand(groupManager, registry, groupsDir))
+            dispatcher.register(ReloadCommand(groupManager, registry, groupsDir, proxySyncManager, eventBus))
         }
         if (groupsDir != null && softwareResolver != null) {
             val templatesDir = java.nio.file.Path.of(config.paths.templates)

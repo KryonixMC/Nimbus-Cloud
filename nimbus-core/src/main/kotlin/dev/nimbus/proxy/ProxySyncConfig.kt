@@ -7,15 +7,15 @@ data class ProxySyncConfig(
 )
 
 data class TabListConfig(
-    val header: String = "<gradient:aqua:blue><bold>MY SERVER</bold></gradient>\n<gray>Online: <white>{online}</white>/{max}</gray>",
-    val footer: String = "<gray>play.myserver.com</gray>",
+    val header: String = "\n<gradient:#58a6ff:#56d4dd><bold>☁ NIMBUS CLOUD</bold></gradient>\n",
+    val footer: String = "\n<gray>Online</gray> <white>»</white> <gradient:#56d4dd:#b392f0>{online}</gradient><dark_gray>/</dark_gray><gray>{max}</gray>\n",
     val playerFormat: String = "{prefix}{player}{suffix}",
     val updateInterval: Int = 5
 )
 
 data class MotdConfig(
-    val line1: String = "<gradient:aqua:blue><bold>My Server Network</bold></gradient>",
-    val line2: String = "<green>Welcome! {online} players online",
+    val line1: String = "  <gradient:#58a6ff:#56d4dd:#b392f0><bold>☁ NIMBUS CLOUD</bold></gradient>",
+    val line2: String = "  <gray>» </gray><gradient:#56d364:#56d4dd>{online} players online</gradient>",
     val maxPlayers: Int = -1,
     val playerCountOffset: Int = 0
 )
