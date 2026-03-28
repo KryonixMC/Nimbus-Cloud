@@ -78,10 +78,64 @@ public class NimbusCloudPlugin {
             // Register as Velocity's permission provider
             server.getEventManager().register(this, new PermissionListener(permissionProvider));
 
+            // Listen for permission change events via WebSocket and refresh online players
+            startPermissionEventListener(config);
+
             logger.info("Nimbus Permission Provider registered");
         } catch (Exception e) {
             logger.warn("Failed to register permission provider: {}", e.getMessage());
         }
+    }
+
+    private dev.nimbus.sdk.NimbusEventStream eventStream;
+
+    /**
+     * Connects to the Nimbus event stream and refreshes all online players'
+     * permissions when a permission-related event is received.
+     */
+    private void startPermissionEventListener(BridgeConfig config) {
+        try {
+            dev.nimbus.sdk.NimbusClient sdkClient = new dev.nimbus.sdk.NimbusClient(config.getApiUrl(), config.getToken());
+            eventStream = sdkClient.createEventStream();
+
+            // Listen for any permission change → refresh all online players
+            eventStream.onEvent("PERMISSION_GROUP_CREATED", e -> refreshAllPermissions());
+            eventStream.onEvent("PERMISSION_GROUP_UPDATED", e -> refreshAllPermissions());
+            eventStream.onEvent("PERMISSION_GROUP_DELETED", e -> refreshAllPermissions());
+            eventStream.onEvent("PLAYER_PERMISSIONS_UPDATED", e -> {
+                String uuid = e.get("uuid");
+                if (uuid != null) {
+                    try {
+                        refreshPlayerPermissions(java.util.UUID.fromString(uuid));
+                    } catch (IllegalArgumentException ignored) {
+                        refreshAllPermissions();
+                    }
+                } else {
+                    refreshAllPermissions();
+                }
+            });
+
+            eventStream.connect();
+            logger.info("Permission event listener connected");
+        } catch (Exception e) {
+            logger.warn("Failed to start permission event listener: {}", e.getMessage());
+        }
+    }
+
+    private void refreshAllPermissions() {
+        if (permissionProvider == null) return;
+        permissionProvider.invalidateAll();
+        for (Player player : server.getAllPlayers()) {
+            permissionProvider.loadPermissions(player.getUniqueId(), player.getUsername());
+        }
+        logger.debug("Refreshed permissions for {} online player(s)", server.getPlayerCount());
+    }
+
+    private void refreshPlayerPermissions(java.util.UUID uuid) {
+        if (permissionProvider == null) return;
+        server.getPlayer(uuid).ifPresent(player ->
+            permissionProvider.loadPermissions(player.getUniqueId(), player.getUsername())
+        );
     }
 
     private void registerBridge(com.velocitypowered.api.command.CommandManager commandManager) {

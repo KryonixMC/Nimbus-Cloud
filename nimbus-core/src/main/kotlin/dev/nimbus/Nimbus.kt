@@ -8,6 +8,7 @@ import dev.nimbus.event.EventBus
 import dev.nimbus.group.GroupManager
 import dev.nimbus.permissions.PermissionManager
 import dev.nimbus.scaling.ScalingEngine
+import java.security.SecureRandom
 import dev.nimbus.service.PortAllocator
 import dev.nimbus.service.ServiceManager
 import dev.nimbus.service.ServiceRegistry
@@ -43,7 +44,7 @@ fun main() = runBlocking {
 
     // Load main config
     val configPath = baseDir.resolve("nimbus.toml")
-    val config = try {
+    var config = try {
         if (configPath.exists()) {
             ConfigLoader.loadNimbusConfig(configPath)
         } else {
@@ -54,6 +55,23 @@ fun main() = runBlocking {
         logger.error("Fatal: Failed to load nimbus.toml — {}", e.message)
         logger.error("Fix the config file and restart Nimbus.")
         return@runBlocking
+    }
+
+    // Auto-generate API token if missing (existing installs without [api] section)
+    if (config.api.enabled && config.api.token.isBlank() && configPath.exists()) {
+        val token = generateApiToken()
+        val tomlContent = configPath.toFile().readText()
+        if (tomlContent.contains("[api]")) {
+            val updated = tomlContent.replace(
+                Regex("""token\s*=\s*".*""""),
+                "token = \"$token\""
+            )
+            configPath.toFile().writeText(updated)
+        } else {
+            configPath.toFile().appendText("\n[api]\nenabled = true\nbind = \"127.0.0.1\"\nport = 8080\ntoken = \"$token\"\n")
+        }
+        logger.info("Generated API token (saved to nimbus.toml)")
+        config = ConfigLoader.loadNimbusConfig(configPath)
     }
 
     // Ensure directories exist
@@ -67,13 +85,21 @@ fun main() = runBlocking {
     val globalProxyTemplateDir = templatesDir.resolve("global_proxy")
 
     val permissionsDir = baseDir.resolve("permissions")
+    val displaysDir = baseDir.resolve("displays")
 
     listOf(
-        templatesDir, staticDir, tempDir, logsDir, groupsDir, permissionsDir,
+        templatesDir, staticDir, tempDir, logsDir, groupsDir, permissionsDir, displaysDir,
         globalTemplateDir, globalTemplateDir.resolve("plugins"),
         globalProxyTemplateDir, globalProxyTemplateDir.resolve("plugins")
     ).forEach { dir ->
         if (!dir.exists()) dir.createDirectories()
+    }
+
+    // Clean temp directory from previous session
+    if (tempDir.exists()) {
+        tempDir.toFile().deleteRecursively()
+        tempDir.createDirectories()
+        logger.info("Cleared temp directory: {}", tempDir)
     }
 
     // Migrate old .hub-deployed marker to .nimbus-plugins
@@ -88,6 +114,9 @@ fun main() = runBlocking {
     // Deploy bridge config so the plugin can connect to the API
     deployBridgeConfig(globalProxyTemplateDir, config)
 
+    // Extract optional plugins to plugins/ for easy installation on servers
+    extractOptionalPlugins(baseDir.resolve("plugins"))
+
     // Initialize components
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val eventBus = EventBus(scope)
@@ -98,12 +127,18 @@ fun main() = runBlocking {
     val permissionManager = PermissionManager(permissionsDir)
     permissionManager.init()
 
+    val displayManager = dev.nimbus.display.DisplayManager(displaysDir)
+    displayManager.init()
+
     // Load group configs
     val groupConfigs = ConfigLoader.loadGroupConfigs(groupsDir)
     if (groupConfigs.isEmpty()) {
         logger.warn("No valid group configs found in {}/ — nothing to start", groupsDir)
     }
     groupManager.loadGroups(groupConfigs)
+
+    // Auto-generate display configs for groups (signs + NPCs)
+    displayManager.ensureDisplays(groupConfigs)
 
     logger.info("Found ${groupConfigs.size} groups: ${groupConfigs.joinToString { it.group.name }}")
 
@@ -137,6 +172,7 @@ fun main() = runBlocking {
         serviceManager = serviceManager,
         groupManager = groupManager,
         permissionManager = permissionManager,
+        displayManager = displayManager,
         eventBus = eventBus,
         scope = scope,
         baseDir = baseDir,
@@ -302,4 +338,37 @@ private fun deployBridgeConfig(globalProxyDir: NioPath, config: NimbusConfig) {
 
     Files.writeString(bridgeConfig, json)
     logger.info("Deployed bridge config (API: {})", apiUrl)
+}
+
+/**
+ * Extracts optional plugins (SDK, Signs) from the embedded resources
+ * into the plugins/ directory at the Nimbus root. Users can then copy
+ * these JARs to their server's plugins/ folder as needed.
+ */
+private fun extractOptionalPlugins(pluginsDir: NioPath) {
+    if (!pluginsDir.exists()) pluginsDir.createDirectories()
+
+    val optionalPlugins = mapOf(
+        "nimbus-sdk.jar" to "plugins/nimbus-sdk.jar",
+        "nimbus-signs.jar" to "plugins/nimbus-signs.jar"
+    )
+
+    for ((fileName, resourcePath) in optionalPlugins) {
+        val targetFile = pluginsDir.resolve(fileName)
+        val resource = object {}.javaClass.classLoader.getResourceAsStream(resourcePath)
+        if (resource == null) continue
+
+        resource.use { input ->
+            Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        }
+        logger.debug("Extracted {} to {}", fileName, pluginsDir)
+    }
+
+    logger.info("Optional plugins available in {}/", pluginsDir)
+}
+
+private fun generateApiToken(): String {
+    val bytes = ByteArray(32)
+    SecureRandom().nextBytes(bytes)
+    return bytes.joinToString("") { "%02x".format(it) }
 }

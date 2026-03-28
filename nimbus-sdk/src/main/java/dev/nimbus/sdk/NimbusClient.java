@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -138,6 +139,25 @@ public class NimbusClient {
         }
         body.add("data", dataObj);
         return post("/api/services/" + encode(targetService) + "/message", body).thenApply(r -> null);
+    }
+
+    // ── Displays ──────────────────────────────────────────────────────
+
+    /** Get the display config for a group. */
+    public CompletableFuture<NimbusDisplay> getDisplay(String groupName) {
+        return get("/api/displays/" + encode(groupName)).thenApply(json -> parseDisplay(json.getAsJsonObject()));
+    }
+
+    /** Get all display configs. */
+    public CompletableFuture<List<NimbusDisplay>> getDisplays() {
+        return get("/api/displays").thenApply(json -> {
+            JsonArray arr = json.getAsJsonObject().getAsJsonArray("displays");
+            List<NimbusDisplay> displays = new ArrayList<>();
+            for (JsonElement el : arr) {
+                displays.add(parseDisplay(el.getAsJsonObject()));
+            }
+            return Collections.unmodifiableList(displays);
+        });
     }
 
     // ── Groups ────────────────────────────────────────────────────────
@@ -269,6 +289,32 @@ public class NimbusClient {
                 obj.has("activeInstances") ? obj.get("activeInstances").getAsInt() : 0,
                 scaling != null && scaling.has("maxInstances") ? scaling.get("maxInstances").getAsInt() : 0,
                 resources != null && resources.has("maxPlayers") ? resources.get("maxPlayers").getAsInt() : 0
+        );
+    }
+
+    private NimbusDisplay parseDisplay(JsonObject obj) {
+        JsonObject sign = obj.has("sign") ? obj.getAsJsonObject("sign") : new JsonObject();
+        JsonObject npc = obj.has("npc") ? obj.getAsJsonObject("npc") : new JsonObject();
+
+        Map<String, String> states = new java.util.HashMap<>();
+        if (obj.has("states") && obj.get("states").isJsonObject()) {
+            for (var entry : obj.getAsJsonObject("states").entrySet()) {
+                states.put(entry.getKey(), entry.getValue().getAsString());
+            }
+        }
+
+        return new NimbusDisplay(
+                getString(obj, "name"),
+                getString(sign, "line1"),
+                getString(sign, "line2"),
+                getString(sign, "line3"),
+                getString(sign, "line4Online"),
+                getString(sign, "line4Offline"),
+                getString(npc, "displayName"),
+                getString(npc, "item"),
+                getString(npc, "subtitle"),
+                getString(npc, "subtitleOffline"),
+                states
         );
     }
 

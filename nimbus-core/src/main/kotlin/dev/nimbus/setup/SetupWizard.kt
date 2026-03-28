@@ -2,6 +2,7 @@ package dev.nimbus.setup
 
 import dev.nimbus.config.ServerSoftware
 import dev.nimbus.console.ConsoleFormatter
+import java.security.SecureRandom
 import dev.nimbus.console.ConsoleFormatter.BOLD
 import dev.nimbus.console.ConsoleFormatter.CYAN
 import dev.nimbus.console.ConsoleFormatter.DIM
@@ -389,6 +390,7 @@ class SetupWizard(
     // ── Config writers ──────────────────────────────────────────
 
     private fun writeNimbusToml(networkName: String) {
+        val token = generateToken()
         val content = """
             |# Nimbus — Main Configuration
             |
@@ -410,8 +412,20 @@ class SetupWizard(
             |templates = "templates"
             |services = "services"
             |logs = "logs"
+            |
+            |[api]
+            |enabled = true
+            |bind = "127.0.0.1"
+            |port = 8080
+            |token = "$token"
         """.trimMargin() + "\n"
         Files.writeString(baseDir.resolve("nimbus.toml"), content)
+    }
+
+    private fun generateToken(): String {
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     private fun writeProxyToml(velocityVersion: String) {

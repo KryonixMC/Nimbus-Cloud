@@ -295,6 +295,39 @@ data class ConfigUpdateRequest(
     val consoleLogEvents: Boolean? = null
 )
 
+// ── Display DTOs ───────────────────────────────────────────────────
+
+@Serializable
+data class DisplayResponse(
+    val name: String,
+    val sign: SignDisplayResponse,
+    val npc: NpcDisplayResponse,
+    val states: Map<String, String>
+)
+
+@Serializable
+data class SignDisplayResponse(
+    val line1: String,
+    val line2: String,
+    val line3: String,
+    val line4Online: String,
+    val line4Offline: String
+)
+
+@Serializable
+data class NpcDisplayResponse(
+    val displayName: String,
+    val item: String,
+    val subtitle: String,
+    val subtitleOffline: String
+)
+
+@Serializable
+data class DisplayListResponse(
+    val displays: List<DisplayResponse>,
+    val total: Int
+)
+
 // ── Permission DTOs ─────────────────────────────────────────────────
 
 @Serializable

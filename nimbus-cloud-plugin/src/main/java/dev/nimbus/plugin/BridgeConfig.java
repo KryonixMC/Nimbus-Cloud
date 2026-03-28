@@ -28,6 +28,16 @@ public class BridgeConfig {
     }
 
     public static BridgeConfig load(Path dataDirectory) throws IOException {
+        // 1. Try JVM system properties (injected by Nimbus Core at startup)
+        String sysUrl = System.getProperty("nimbus.api.url");
+        if (sysUrl != null && !sysUrl.isEmpty()) {
+            BridgeConfig config = new BridgeConfig();
+            config.apiUrl = sysUrl;
+            config.token = System.getProperty("nimbus.api.token", "");
+            return config;
+        }
+
+        // 2. Fall back to bridge.json file
         Path configFile = dataDirectory.resolve("bridge.json");
         if (!Files.exists(configFile)) {
             return null;

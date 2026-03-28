@@ -12,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class NimbusSdkPlugin extends JavaPlugin {
 
     private static NimbusSdkPlugin instance;
+    private NimbusPermissionHandler permissionHandler;
 
     @Override
     public void onEnable() {
@@ -21,6 +22,14 @@ public class NimbusSdkPlugin extends JavaPlugin {
             try {
                 Nimbus.init();
                 getLogger().info("Nimbus SDK initialized — service: " + Nimbus.name() + " (group: " + Nimbus.group() + ")");
+
+                // Start permission handler
+                String apiUrl = System.getProperty("nimbus.api.url");
+                String token = System.getProperty("nimbus.api.token", "");
+                if (apiUrl != null && !apiUrl.isEmpty()) {
+                    permissionHandler = new NimbusPermissionHandler(this, apiUrl, token);
+                    permissionHandler.start();
+                }
             } catch (Exception e) {
                 getLogger().warning("Failed to initialize Nimbus SDK: " + e.getMessage());
             }
@@ -31,6 +40,9 @@ public class NimbusSdkPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (permissionHandler != null) {
+            permissionHandler.shutdown();
+        }
         Nimbus.shutdown();
         instance = null;
     }

@@ -36,6 +36,7 @@ class NimbusApi(
     private val serviceManager: ServiceManager,
     private val groupManager: GroupManager,
     private val permissionManager: PermissionManager,
+    private val displayManager: dev.nimbus.display.DisplayManager,
     private val eventBus: EventBus,
     private val scope: CoroutineScope,
     private val baseDir: Path,
@@ -192,6 +193,7 @@ class NimbusApi(
                 permissionRoutes(permissionManager, eventBus)
                 networkRoutes(config, registry, groupManager, serviceManager, startedAt)
                 systemRoutes(config, groupManager, groupsDir, serviceManager, eventBus, scope, startedAt)
+                displayRoutes(displayManager)
                 fileRoutes(scopeRoots, readOnlyScopes, maxUploadBytes)
                 configRoutes(config, configPath)
             }

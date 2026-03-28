@@ -47,7 +47,7 @@ data class PathsConfig(
 
 @Serializable
 data class ApiConfig(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val bind: String = "127.0.0.1",
     val port: Int = 8080,
     val token: String = "",
