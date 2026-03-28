@@ -120,8 +120,14 @@ class ConfigPatcher {
             logger.debug("Copied forwarding.secret to {}", workDir)
         }
 
-        // Patch paper-global.yml (Paper 1.19+)
-        // This file might be in config/ subdirectory
+        // Paper 1.13–1.18: velocity-support in paper.yml
+        val paperYml = workDir.resolve("paper.yml")
+        if (paperYml.exists()) {
+            patchPaperYml(paperYml, readForwardingSecret(velocityTemplateDir))
+            return
+        }
+
+        // Paper 1.19+: proxies.velocity in paper-global.yml (may be in config/ subdirectory)
         val paperGlobalPaths = listOf(
             workDir.resolve("config/paper-global.yml"),
             workDir.resolve("paper-global.yml")
@@ -134,8 +140,17 @@ class ConfigPatcher {
             }
         }
 
-        // Paper hasn't generated configs yet — create a minimal config/paper-global.yml
-        // Paper will merge this with defaults on first start
+        // Paper hasn't generated configs yet — create both formats so whichever version picks it up
+        // paper.yml for 1.13–1.18
+        val secret = readForwardingSecret(velocityTemplateDir)
+        paperYml.writeText(buildString {
+            appendLine("settings:")
+            appendLine("  velocity-support:")
+            appendLine("    enabled: true")
+            appendLine("    online-mode: true")
+            appendLine("    secret: '$secret'")
+        })
+        // config/paper-global.yml for 1.19+
         val configDir = workDir.resolve("config")
         if (!configDir.exists()) configDir.createDirectories()
         val paperGlobal = configDir.resolve("paper-global.yml")
@@ -144,9 +159,46 @@ class ConfigPatcher {
             appendLine("  velocity:")
             appendLine("    enabled: true")
             appendLine("    online-mode: true")
-            appendLine("    secret: '${readForwardingSecret(velocityTemplateDir)}'")
+            appendLine("    secret: '$secret'")
         })
-        logger.debug("Created paper-global.yml with Velocity forwarding at {}", paperGlobal)
+        logger.debug("Created paper.yml + paper-global.yml with Velocity forwarding at {}", workDir)
+    }
+
+    /**
+     * Patches paper.yml (Paper 1.13–1.18) for Velocity forwarding.
+     * Sets settings.velocity-support.enabled=true, online-mode=true, secret=<secret>
+     */
+    private fun patchPaperYml(file: Path, secret: String) {
+        val lines = file.readLines().toMutableList()
+        var inVelocitySupport = false
+        var velocityIndent = 0
+
+        for (i in lines.indices) {
+            val line = lines[i]
+            val trimmed = line.trim()
+
+            if (trimmed == "velocity-support:" || trimmed.startsWith("velocity-support:")) {
+                inVelocitySupport = true
+                velocityIndent = line.indexOf("velocity-support:")
+                continue
+            }
+
+            if (inVelocitySupport) {
+                val currentIndent = line.length - line.trimStart().length
+                if (trimmed.isNotEmpty() && currentIndent <= velocityIndent) {
+                    inVelocitySupport = false
+                    continue
+                }
+                when {
+                    trimmed.startsWith("enabled:") -> lines[i] = line.replaceAfter("enabled:", " true")
+                    trimmed.startsWith("online-mode:") -> lines[i] = line.replaceAfter("online-mode:", " true")
+                    trimmed.startsWith("secret:") -> lines[i] = line.replaceAfter("secret:", " '$secret'")
+                }
+            }
+        }
+
+        file.writeLines(lines)
+        logger.debug("Patched paper.yml (1.13-1.18) for Velocity forwarding at {}", file)
     }
 
     private fun patchPaperGlobalYml(file: Path) {
