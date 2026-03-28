@@ -13,7 +13,7 @@ java -jar nimbus-core/build/libs/nimbus-core-0.1.0-all.jar
 ## Modules
 
 - `nimbus-core` — Main application (entry point: `dev.nimbus.NimbusKt`)
-- `nimbus-velocity-plugin` — Hub plugin (Java, auto-embedded as resource `nimbus-hub.jar` during build)
+- `nimbus-cloud-plugin` — Velocity plugin: hub commands + cloud bridge (Java, auto-embedded as resource `nimbus-cloud.jar` during build)
 
 ## Tech Stack
 

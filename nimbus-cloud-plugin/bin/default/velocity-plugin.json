@@ -1,0 +1,1 @@
+{"id":"nimbus-hub","name":"Nimbus Hub","version":"0.1.0","description":"Lobby/Hub command for Nimbus cloud networks","authors":["Nimbus"],"dependencies":[],"main":"dev.nimbus.plugin.NimbusHubPlugin"}
