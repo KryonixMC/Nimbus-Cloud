@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 
@@ -35,7 +36,9 @@ class NimbusApi(
     private val groupManager: GroupManager,
     private val eventBus: EventBus,
     private val scope: CoroutineScope,
-    private val groupsDir: Path
+    private val baseDir: Path,
+    private val groupsDir: Path,
+    private val configPath: Path
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -64,7 +67,7 @@ class NimbusApi(
 
         try {
             server = embeddedServer(CIO, port = apiConfig.port, host = apiConfig.bind) {
-                configurePlugins(apiConfig.token)
+                configurePlugins(apiConfig)
                 configureRoutes(apiConfig.token)
             }
 
@@ -103,7 +106,7 @@ class NimbusApi(
 
     fun token(): String = config.api.token
 
-    private fun Application.configurePlugins(token: String) {
+    private fun Application.configurePlugins(apiConfig: ApiConfig) {
         install(ContentNegotiation) {
             json(Json {
                 prettyPrint = true
@@ -114,17 +117,23 @@ class NimbusApi(
         install(WebSockets) {
             pingPeriod = kotlin.time.Duration.parse("15s")
             timeout = kotlin.time.Duration.parse("30s")
-            maxFrameSize = Long.MAX_VALUE
+            maxFrameSize = 65536 // 64 KB
         }
 
         install(CORS) {
-            anyHost()
+            val origins = apiConfig.allowedOrigins
+            if (origins.isEmpty() || origins.singleOrNull() == "*") {
+                anyHost()
+            } else {
+                origins.forEach { allowHost(it, schemes = listOf("http", "https")) }
+            }
             allowHeader(HttpHeaders.ContentType)
             allowHeader(HttpHeaders.Authorization)
             allowMethod(HttpMethod.Get)
             allowMethod(HttpMethod.Post)
             allowMethod(HttpMethod.Put)
             allowMethod(HttpMethod.Delete)
+            allowMethod(HttpMethod.Patch)
         }
 
         install(StatusPages) {
@@ -137,11 +146,11 @@ class NimbusApi(
             }
         }
 
-        if (token.isNotBlank()) {
+        if (apiConfig.token.isNotBlank()) {
             install(Authentication) {
                 bearer("api-token") {
                     authenticate { credential ->
-                        if (credential.token == token) {
+                        if (timingSafeEquals(credential.token, apiConfig.token)) {
                             UserIdPrincipal("nimbus-api")
                         } else {
                             null
@@ -159,7 +168,7 @@ class NimbusApi(
                 val uptime = Duration.between(startedAt, Instant.now()).seconds
                 call.respond(HealthResponse(
                     status = "ok",
-                    version = "0.2.0",
+                    version = VERSION,
                     uptimeSeconds = uptime,
                     services = registry.getAll().size,
                     apiEnabled = true
@@ -167,12 +176,22 @@ class NimbusApi(
             }
 
             // All other routes require auth if token is set
+            val scopeRoots = mapOf(
+                "templates" to baseDir.resolve(config.paths.templates).toAbsolutePath(),
+                "services" to baseDir.resolve(config.paths.services).toAbsolutePath(),
+                "groups" to groupsDir.toAbsolutePath()
+            )
+            val readOnlyScopes = setOf("groups")
+            val maxUploadBytes = 100L * 1024 * 1024 // 100 MB
+
             val routeBlock: Route.() -> Unit = {
                 serviceRoutes(registry, serviceManager, groupManager, eventBus)
-                groupRoutes(registry, groupManager, groupsDir)
+                groupRoutes(registry, groupManager, groupsDir, eventBus)
                 networkRoutes(config, registry, groupManager, serviceManager, startedAt)
-                systemRoutes(config, groupManager, groupsDir, serviceManager, startedAt)
-                eventRoutes(eventBus, registry, serviceManager)
+                systemRoutes(config, groupManager, groupsDir, serviceManager, eventBus, scope, startedAt)
+                eventRoutes(eventBus, registry, serviceManager, token)
+                fileRoutes(scopeRoots, readOnlyScopes, maxUploadBytes)
+                configRoutes(config, configPath)
             }
 
             if (token.isNotBlank()) {
@@ -182,6 +201,19 @@ class NimbusApi(
             } else {
                 routeBlock()
             }
+        }
+    }
+
+    companion object {
+        const val VERSION = "0.2.0"
+
+        /**
+         * Timing-safe token comparison to prevent timing attacks.
+         */
+        fun timingSafeEquals(a: String, b: String): Boolean {
+            val aBytes = a.toByteArray(Charsets.UTF_8)
+            val bBytes = b.toByteArray(Charsets.UTF_8)
+            return MessageDigest.isEqual(aBytes, bBytes)
         }
     }
 }

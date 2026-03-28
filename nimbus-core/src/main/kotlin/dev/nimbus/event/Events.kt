@@ -20,6 +20,14 @@ sealed class NimbusEvent {
     data class PlayerConnected(val playerName: String, val serviceName: String) : NimbusEvent()
     data class PlayerDisconnected(val playerName: String, val serviceName: String) : NimbusEvent()
 
+    // Group management
+    data class GroupCreated(val groupName: String) : NimbusEvent()
+    data class GroupUpdated(val groupName: String) : NimbusEvent()
+    data class GroupDeleted(val groupName: String) : NimbusEvent()
+
+    // Config
+    data class ConfigReloaded(val groupsLoaded: Int) : NimbusEvent()
+
     // API lifecycle
     data class ApiStarted(val bind: String, val port: Int) : NimbusEvent()
     data class ApiStopped(val reason: String = "shutdown") : NimbusEvent()

@@ -41,7 +41,7 @@ data class ConsoleConfig(
 @Serializable
 data class PathsConfig(
     val templates: String = "templates",
-    val running: String = "running",
+    val services: String = "services",
     val logs: String = "logs"
 )
 
@@ -50,7 +50,9 @@ data class ApiConfig(
     val enabled: Boolean = false,
     val bind: String = "127.0.0.1",
     val port: Int = 8080,
-    val token: String = ""
+    val token: String = "",
+    @SerialName("allowed_origins")
+    val allowedOrigins: List<String> = emptyList()
 )
 
 @Serializable

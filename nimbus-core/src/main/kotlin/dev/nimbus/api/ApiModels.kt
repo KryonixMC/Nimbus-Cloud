@@ -148,6 +148,15 @@ data class ReloadResponse(
     val message: String
 )
 
+// ── Log DTOs ────────────────────────────────────────────────────────
+
+@Serializable
+data class LogsResponse(
+    val service: String,
+    val lines: List<String>,
+    val total: Int
+)
+
 // ── Command DTOs ────────────────────────────────────────────────────
 
 @Serializable
@@ -168,6 +177,98 @@ data class ExecResponse(
 data class ApiMessage(
     val success: Boolean,
     val message: String
+)
+
+// ── File API DTOs ──────────────────────────────────────────────────
+
+@Serializable
+data class FileEntry(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean,
+    val size: Long = 0,
+    val lastModified: String? = null
+)
+
+@Serializable
+data class FileListResponse(
+    val scope: String,
+    val path: String,
+    val entries: List<FileEntry>,
+    val total: Int
+)
+
+@Serializable
+data class FileContentResponse(
+    val scope: String,
+    val path: String,
+    val content: String,
+    val size: Long
+)
+
+@Serializable
+data class FileWriteRequest(
+    val content: String
+)
+
+@Serializable
+data class FileUploadResponse(
+    val success: Boolean,
+    val path: String,
+    val size: Long
+)
+
+// ── Config DTOs ────────────────────────────────────────────────────
+
+@Serializable
+data class ConfigResponse(
+    val network: ConfigNetworkResponse,
+    val controller: ConfigControllerResponse,
+    val console: ConfigConsoleResponse,
+    val paths: ConfigPathsResponse,
+    val api: ConfigApiResponse
+)
+
+@Serializable
+data class ConfigNetworkResponse(
+    val name: String,
+    val bind: String
+)
+
+@Serializable
+data class ConfigControllerResponse(
+    val maxMemory: String,
+    val maxServices: Int,
+    val heartbeatInterval: Long
+)
+
+@Serializable
+data class ConfigConsoleResponse(
+    val colored: Boolean,
+    val logEvents: Boolean
+)
+
+@Serializable
+data class ConfigPathsResponse(
+    val templates: String,
+    val services: String,
+    val logs: String
+)
+
+@Serializable
+data class ConfigApiResponse(
+    val enabled: Boolean,
+    val bind: String,
+    val port: Int,
+    val hasToken: Boolean,
+    val allowedOrigins: List<String>
+)
+
+@Serializable
+data class ConfigUpdateRequest(
+    val networkName: String? = null,
+    val consoleColored: Boolean? = null,
+    val consoleLogEvents: Boolean? = null
 )
 
 // ── Event DTOs (for WebSocket) ──────────────────────────────────────

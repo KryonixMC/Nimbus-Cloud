@@ -3,23 +3,25 @@ package dev.nimbus.api.routes
 import dev.nimbus.api.*
 import dev.nimbus.config.ConfigLoader
 import dev.nimbus.config.NimbusConfig
+import dev.nimbus.event.EventBus
+import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
 import dev.nimbus.service.ServiceManager
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.nio.file.Path
 import java.time.Instant
 
-@OptIn(DelicateCoroutinesApi::class)
 fun Route.systemRoutes(
     config: NimbusConfig,
     groupManager: GroupManager,
     groupsDir: Path,
     serviceManager: ServiceManager,
+    eventBus: EventBus,
+    scope: CoroutineScope,
     startedAt: Instant
 ) {
     // POST /api/reload — Hot-reload group configs
@@ -27,6 +29,7 @@ fun Route.systemRoutes(
         try {
             val configs = ConfigLoader.reloadGroupConfigs(groupsDir)
             groupManager.reloadGroups(configs)
+            eventBus.emit(NimbusEvent.ConfigReloaded(configs.size))
             call.respond(ReloadResponse(
                 success = true,
                 groupsLoaded = configs.size,
@@ -46,7 +49,7 @@ fun Route.systemRoutes(
         call.respond(ApiMessage(true, "Shutdown initiated — stopping all services..."))
 
         // Run shutdown in background so the response is sent first
-        GlobalScope.launch {
+        scope.launch {
             delay(500)
             serviceManager.stopAll()
             Runtime.getRuntime().exit(0)

@@ -1,15 +1,18 @@
 package dev.nimbus.api.routes
 
+import dev.nimbus.api.ApiMessage
 import dev.nimbus.api.EventMessage
+import dev.nimbus.api.NimbusApi
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.service.ServiceManager
 import dev.nimbus.service.ServiceRegistry
+import io.ktor.http.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -19,10 +22,13 @@ private val json = Json { encodeDefaults = true }
 fun Route.eventRoutes(
     eventBus: EventBus,
     registry: ServiceRegistry,
-    serviceManager: ServiceManager
+    serviceManager: ServiceManager,
+    token: String
 ) {
     // WS /api/events — Live event stream
     webSocket("/api/events") {
+        if (!authenticateWebSocket(token)) return@webSocket
+
         val subscription = eventBus.subscribe()
 
         try {
@@ -37,6 +43,8 @@ fun Route.eventRoutes(
 
     // WS /api/services/{name}/console — Bidirectional console access
     webSocket("/api/services/{name}/console") {
+        if (!authenticateWebSocket(token)) return@webSocket
+
         val serviceName = call.parameters["name"]!!
         val service = registry.get(serviceName)
 
@@ -80,6 +88,21 @@ fun Route.eventRoutes(
             outputJob.cancel()
         }
     }
+}
+
+/**
+ * Authenticates a WebSocket connection via ?token= query parameter.
+ * Returns true if authenticated, false if the connection was rejected.
+ */
+private suspend fun DefaultWebSocketServerSession.authenticateWebSocket(expectedToken: String): Boolean {
+    if (expectedToken.isBlank()) return true
+
+    val clientToken = call.request.queryParameters["token"]
+    if (clientToken == null || !NimbusApi.timingSafeEquals(clientToken, expectedToken)) {
+        close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Authentication required — provide ?token= query parameter"))
+        return false
+    }
+    return true
 }
 
 private fun NimbusEvent.toEventMessage(): EventMessage {
@@ -128,6 +151,26 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             type = "PLAYER_DISCONNECTED",
             timestamp = timestamp.toString(),
             data = mapOf("player" to playerName, "service" to serviceName)
+        )
+        is NimbusEvent.GroupCreated -> EventMessage(
+            type = "GROUP_CREATED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.GroupUpdated -> EventMessage(
+            type = "GROUP_UPDATED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.GroupDeleted -> EventMessage(
+            type = "GROUP_DELETED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.ConfigReloaded -> EventMessage(
+            type = "CONFIG_RELOADED",
+            timestamp = timestamp.toString(),
+            data = mapOf("groupsLoaded" to groupsLoaded.toString())
         )
         is NimbusEvent.ApiStarted -> EventMessage(
             type = "API_STARTED",

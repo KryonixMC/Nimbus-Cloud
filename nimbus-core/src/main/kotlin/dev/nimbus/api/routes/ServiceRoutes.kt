@@ -10,6 +10,7 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import java.io.RandomAccessFile
 import java.time.Duration
 import java.time.Instant
 
@@ -24,7 +25,7 @@ fun Route.serviceRoutes(
         // GET /api/services — List all services
         get {
             val group = call.queryParameters["group"]
-            val state = call.queryParameters["state"]
+            val stateParam = call.queryParameters["state"]
 
             var services = if (group != null) {
                 registry.getByGroup(group)
@@ -32,8 +33,15 @@ fun Route.serviceRoutes(
                 registry.getAll()
             }
 
-            if (state != null) {
-                val stateFilter = ServiceState.valueOf(state.uppercase())
+            if (stateParam != null) {
+                val stateFilter = try {
+                    ServiceState.valueOf(stateParam.uppercase())
+                } catch (_: IllegalArgumentException) {
+                    return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiMessage(false, "Invalid state: '$stateParam'. Valid: ${ServiceState.entries.joinToString()}")
+                    )
+                }
                 services = services.filter { it.state == stateFilter }
             }
 
@@ -68,7 +76,7 @@ fun Route.serviceRoutes(
         // POST /api/services/{name}/stop — Stop a service
         post("{name}/stop") {
             val name = call.parameters["name"]!!
-            val service = registry.get(name)
+            registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
 
             val stopped = serviceManager.stopService(name)
@@ -82,7 +90,7 @@ fun Route.serviceRoutes(
         // POST /api/services/{name}/restart — Restart a service
         post("{name}/restart") {
             val name = call.parameters["name"]!!
-            val service = registry.get(name)
+            registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
 
             val newService = serviceManager.restartService(name)
@@ -104,21 +112,58 @@ fun Route.serviceRoutes(
             call.respond(ExecResponse(success, name, request.command))
         }
 
-        // GET /api/services/{name}/logs — Get recent log lines
+        // GET /api/services/{name}/logs — Get recent log lines (tail-read, not full file)
         get("{name}/logs") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
 
-            val logFile = service.workingDirectory.resolve("logs/latest.log")
-            if (!logFile.toFile().exists()) {
-                return@get call.respond(ApiMessage(true, "No log file found for '$name'"))
+            val logFile = service.workingDirectory.resolve("logs/latest.log").toFile()
+            if (!logFile.exists()) {
+                return@get call.respond(LogsResponse(name, emptyList(), 0))
             }
 
-            val lines = call.queryParameters["lines"]?.toIntOrNull() ?: 100
-            val logLines = logFile.toFile().readLines().takeLast(lines)
-            call.respond(mapOf("service" to name, "lines" to logLines, "total" to logLines.size))
+            val requestedLines = (call.queryParameters["lines"]?.toIntOrNull() ?: 100).coerceIn(1, 1000)
+            val logLines = tailFile(logFile, requestedLines)
+            call.respond(LogsResponse(name, logLines, logLines.size))
         }
+    }
+}
+
+/**
+ * Efficiently reads the last N lines from a file using reverse seeking.
+ */
+private fun tailFile(file: java.io.File, lines: Int): List<String> {
+    if (file.length() == 0L) return emptyList()
+
+    RandomAccessFile(file, "r").use { raf ->
+        val fileLength = raf.length()
+        var pos = fileLength - 1
+        var lineCount = 0
+
+        // Scan backwards to find enough newlines
+        while (pos > 0 && lineCount <= lines) {
+            raf.seek(pos)
+            if (raf.readByte().toInt().toChar() == '\n') {
+                lineCount++
+            }
+            pos--
+        }
+
+        // Position to start reading
+        if (pos == 0L) {
+            raf.seek(0)
+        } else {
+            raf.seek(pos + 2) // Skip past the newline we stopped on
+        }
+
+        val result = mutableListOf<String>()
+        var line = raf.readLine()
+        while (line != null) {
+            result.add(line)
+            line = raf.readLine()
+        }
+        return result.takeLast(lines)
     }
 }
 

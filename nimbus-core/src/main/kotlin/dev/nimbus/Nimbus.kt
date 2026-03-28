@@ -15,6 +15,8 @@ import dev.nimbus.template.SoftwareResolver
 import dev.nimbus.template.TemplateManager
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
+import java.nio.file.Files
+import java.nio.file.Path as NioPath
 import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -52,12 +54,24 @@ fun main() = runBlocking {
 
     // Ensure directories exist
     val templatesDir = baseDir.resolve(config.paths.templates)
-    val runningDir = baseDir.resolve(config.paths.running)
+    val servicesDir = baseDir.resolve(config.paths.services)
+    val staticDir = servicesDir.resolve("static")
+    val tempDir = servicesDir.resolve("temp")
     val logsDir = baseDir.resolve(config.paths.logs)
 
-    listOf(templatesDir, runningDir, logsDir, groupsDir).forEach { dir ->
+    val globalTemplateDir = templatesDir.resolve("global")
+    val globalProxyTemplateDir = templatesDir.resolve("global_proxy")
+
+    listOf(
+        templatesDir, staticDir, tempDir, logsDir, groupsDir,
+        globalTemplateDir, globalTemplateDir.resolve("plugins"),
+        globalProxyTemplateDir, globalProxyTemplateDir.resolve("plugins")
+    ).forEach { dir ->
         if (!dir.exists()) dir.createDirectories()
     }
+
+    // Deploy Nimbus Hub plugin to global_proxy (always overwrite for updates)
+    deployHubPlugin(globalProxyTemplateDir)
 
     // Initialize components
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -107,7 +121,9 @@ fun main() = runBlocking {
         groupManager = groupManager,
         eventBus = eventBus,
         scope = scope,
-        groupsDir = groupsDir
+        baseDir = baseDir,
+        groupsDir = groupsDir,
+        configPath = configPath
     )
 
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)
@@ -159,4 +175,31 @@ fun main() = runBlocking {
     serviceManager.stopAll()
     scope.cancel()
     logger.info("Nimbus stopped.")
+}
+
+private fun deployHubPlugin(globalProxyDir: NioPath) {
+    val pluginsDir = globalProxyDir.resolve("plugins")
+    val targetFile = pluginsDir.resolve("nimbus-hub.jar")
+
+    // If the file was manually removed, don't re-deploy
+    // Only deploy on fresh install or update existing
+    val markerFile = globalProxyDir.resolve(".hub-deployed")
+    if (markerFile.exists() && !targetFile.exists()) {
+        logger.debug("Nimbus Hub plugin was removed by user, skipping deploy")
+        return
+    }
+
+    val resource = object {}.javaClass.classLoader.getResourceAsStream("plugins/nimbus-hub.jar")
+    if (resource == null) {
+        logger.debug("Nimbus Hub plugin not found in resources, skipping")
+        return
+    }
+
+    if (!pluginsDir.exists()) pluginsDir.createDirectories()
+    resource.use { input ->
+        Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }
+    // Mark that we've deployed at least once
+    if (!markerFile.exists()) Files.createFile(markerFile)
+    logger.info("Deployed Nimbus Hub plugin to {}", targetFile)
 }

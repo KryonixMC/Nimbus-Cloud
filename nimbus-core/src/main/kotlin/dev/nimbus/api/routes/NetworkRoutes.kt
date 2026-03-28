@@ -12,6 +12,9 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.time.Duration
 import java.time.Instant
 
@@ -54,19 +57,22 @@ fun Route.networkRoutes(
         ))
     }
 
-    // GET /api/players — List all connected players
+    // GET /api/players — List all connected players (pings in parallel)
     get("/api/players") {
-        val allPlayers = mutableListOf<PlayerInfo>()
         val readyServices = registry.getAll().filter { it.state == ServiceState.READY }
 
-        for (service in readyServices) {
-            val result = ServerListPing.ping("127.0.0.1", service.port, timeout = 3000)
-            if (result != null) {
-                service.playerCount = result.onlinePlayers
-                for (playerName in result.playerNames) {
-                    allPlayers.add(PlayerInfo(playerName, service.name))
+        val allPlayers = coroutineScope {
+            readyServices.map { service ->
+                async {
+                    val result = ServerListPing.ping("127.0.0.1", service.port, timeout = 3000)
+                    if (result != null) {
+                        service.playerCount = result.onlinePlayers
+                        result.playerNames.map { PlayerInfo(it, service.name) }
+                    } else {
+                        emptyList()
+                    }
                 }
-            }
+            }.awaitAll().flatten()
         }
 
         call.respond(PlayersResponse(allPlayers, allPlayers.size))

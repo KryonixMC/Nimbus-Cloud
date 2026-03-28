@@ -153,6 +153,14 @@ object ConsoleFormatter {
                 "${warn("◆ API")} ${event.message}"
             is NimbusEvent.ApiError ->
                 "${error("◆ API")} ${event.error}"
+            is NimbusEvent.GroupCreated ->
+                "${success("+ GROUP")} ${BOLD}${event.groupName}${RESET} created"
+            is NimbusEvent.GroupUpdated ->
+                "${info("~ GROUP")} ${BOLD}${event.groupName}${RESET} updated"
+            is NimbusEvent.GroupDeleted ->
+                "${warn("- GROUP")} ${BOLD}${event.groupName}${RESET} deleted"
+            is NimbusEvent.ConfigReloaded ->
+                "${info("↻ CONFIG")} reloaded ${BOLD}${event.groupsLoaded}${RESET} group(s)"
         }
         return "$time $message"
     }
