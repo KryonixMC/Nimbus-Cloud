@@ -408,7 +408,7 @@ class SetupWizard(
             |
             |[paths]
             |templates = "templates"
-            |running = "running"
+            |services = "services"
             |logs = "logs"
         """.trimMargin() + "\n"
         Files.writeString(baseDir.resolve("nimbus.toml"), content)

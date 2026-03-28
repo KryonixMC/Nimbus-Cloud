@@ -17,18 +17,18 @@ class TemplateManager {
 
     fun prepareService(
         templateName: String,
-        serviceName: String,
+        targetDir: Path,
         templatesDir: Path,
-        runningDir: Path
+        preserveExisting: Boolean = false
     ): Path {
         val sourceDir = templatesDir.resolve(templateName)
-        val targetDir = runningDir.resolve(serviceName)
 
         require(sourceDir.exists() && sourceDir.isDirectory()) {
             "Template directory does not exist: $sourceDir"
         }
 
-        logger.info("Preparing service '{}' from template '{}' -> {}", serviceName, templateName, targetDir)
+        logger.info("Preparing service from template '{}' -> {}{}", templateName, targetDir,
+            if (preserveExisting) " (static, preserving existing)" else "")
 
         Files.createDirectories(targetDir)
 
@@ -53,13 +53,40 @@ class TemplateManager {
 
                 if (Files.isDirectory(source)) {
                     Files.createDirectories(destination)
+                } else if (preserveExisting && destination.exists()) {
+                    // Static services: don't overwrite existing files (world data, configs, etc.)
+                    return@forEach
                 } else {
                     Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
                 }
             }
         }
 
-        logger.info("Template '{}' copied to '{}'", templateName, targetDir)
+        logger.info("Template '{}' prepared in '{}'", templateName, targetDir)
         return targetDir
+    }
+
+    /**
+     * Overlays a global template directory onto the service working directory.
+     * Always overwrites existing files (used for shared plugins, configs, etc.).
+     */
+    fun applyGlobalTemplate(globalDir: Path, targetDir: Path) {
+        if (!globalDir.exists() || !globalDir.isDirectory()) return
+
+        Files.walk(globalDir).use { stream ->
+            stream.forEach { source ->
+                if (source == globalDir) return@forEach
+                val relativePath = globalDir.relativize(source)
+                val destination = targetDir.resolve(relativePath)
+
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(destination)
+                } else {
+                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                }
+            }
+        }
+
+        logger.debug("Applied global template '{}' to '{}'", globalDir.fileName, targetDir)
     }
 }

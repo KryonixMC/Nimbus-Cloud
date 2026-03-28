@@ -3,7 +3,7 @@ name = "Lobby"
 type = "DYNAMIC"
 template = "lobby"
 software = "PURPUR"
-version = "1.21.4"
+version = "1.21.11"
 
 [group.resources]
 memory = "1G"

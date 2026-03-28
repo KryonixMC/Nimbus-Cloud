@@ -2,8 +2,8 @@
 name = "SkyBlock"
 type = "DYNAMIC"
 template = "skyblock"
-software = "PURPUR"
-version = "1.21.4"
+software = "PAPER"
+version = "1.8.8"
 
 [group.resources]
 memory = "2G"

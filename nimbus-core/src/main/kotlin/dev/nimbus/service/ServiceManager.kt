@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.Path
@@ -113,14 +114,22 @@ class ServiceManager(
         }
 
         val templatesDir = Path(config.paths.templates)
-        val runningDir = Path(config.paths.running)
+        val servicesDir = Path(config.paths.services)
+        val isStatic = group.isStatic
+
+        val workingDirectory = if (isStatic) {
+            servicesDir.resolve("static").resolve(serviceName)
+        } else {
+            val shortUuid = UUID.randomUUID().toString().replace("-", "").take(8)
+            servicesDir.resolve("temp").resolve("${serviceName}_$shortUuid")
+        }
 
         val service = Service(
             name = serviceName,
             groupName = groupName,
             port = port,
             state = ServiceState.PREPARING,
-            workingDirectory = runningDir.resolve(serviceName)
+            workingDirectory = workingDirectory
         )
 
         // Ensure template directory exists and JAR is available (auto-download/install if missing)
@@ -171,11 +180,6 @@ class ServiceManager(
             initializeVelocityTemplate(templateDir, jarName)
         }
 
-        // Auto-deploy Nimbus Hub plugin to Velocity proxy template
-        if (software == ServerSoftware.VELOCITY) {
-            deployHubPlugin(templateDir)
-        }
-
         registry.register(service)
         eventBus.emit(NimbusEvent.ServiceStarting(serviceName, groupName, port))
         logger.info("Starting service '{}' on port {}", serviceName, port)
@@ -183,10 +187,19 @@ class ServiceManager(
         return try {
             val workDir = templateManager.prepareService(
                 templateName = group.config.group.template,
-                serviceName = serviceName,
+                targetDir = workingDirectory,
                 templatesDir = templatesDir,
-                runningDir = runningDir
+                preserveExisting = isStatic
             )
+
+            // Apply global templates (always overwrite, even for static services)
+            val isVanillaBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PURPUR, ServerSoftware.VELOCITY)
+            if (isVanillaBased) {
+                templateManager.applyGlobalTemplate(templatesDir.resolve("global"), workDir)
+            }
+            if (software == ServerSoftware.VELOCITY) {
+                templateManager.applyGlobalTemplate(templatesDir.resolve("global_proxy"), workDir)
+            }
 
             val forwardingMode = determineForwardingMode()
             when (software) {
@@ -321,7 +334,10 @@ class ServiceManager(
         processHandles.remove(serviceName)
         portAllocator.release(service.port)
         registry.unregister(serviceName)
-        cleanupWorkingDirectory(service.workingDirectory)
+        val group = groupManager.getGroup(groupName)
+        if (group == null || !group.isStatic) {
+            cleanupWorkingDirectory(service.workingDirectory)
+        }
 
         // Exit code 0 = clean shutdown, not a crash
         if (exitCode == 0) {
@@ -372,7 +388,10 @@ class ServiceManager(
             registry.unregister(name)
             processHandles.remove(name)
 
-            cleanupWorkingDirectory(service.workingDirectory)
+            val group = groupManager.getGroup(service.groupName)
+            if (group == null || !group.isStatic) {
+                cleanupWorkingDirectory(service.workingDirectory)
+            }
 
             // Update Velocity proxy server list and reload
             velocityConfigGen.updateProxyServerList()
@@ -711,28 +730,6 @@ class ServiceManager(
 
         configFile.writeText(result)
         logger.info("Cleaned default server entries from Velocity template")
-    }
-
-    /**
-     * Extracts the embedded Nimbus Hub plugin (nimbus-hub.jar) to the Velocity template's plugins/ dir.
-     * Provides /hub, /lobby, /l commands for players.
-     */
-    private fun deployHubPlugin(templateDir: Path) {
-        val pluginsDir = templateDir.resolve("plugins")
-        val targetFile = pluginsDir.resolve("nimbus-hub.jar")
-        if (targetFile.exists()) return // Already deployed
-
-        val resource = javaClass.classLoader.getResourceAsStream("plugins/nimbus-hub.jar")
-        if (resource == null) {
-            logger.debug("Nimbus Hub plugin not found in resources, skipping auto-deploy")
-            return
-        }
-
-        if (!pluginsDir.exists()) pluginsDir.createDirectories()
-        resource.use { input ->
-            java.nio.file.Files.copy(input, targetFile)
-        }
-        logger.info("Deployed Nimbus Hub plugin to {}", targetFile)
     }
 
     private fun cleanupWorkingDirectory(workDir: Path) {

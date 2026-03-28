@@ -133,9 +133,15 @@ class CreateGroupCommand(
                 w.println("${DIM}Place your server JAR as '$customJarName' in templates/${groupName.lowercase()}/$RESET")
             }
 
-            // Step 4-6: Instances & memory
+            // Step 4: Static or dynamic
+            w.println()
+            w.println("${DIM}Static services keep their data (world, configs) across restarts.$RESET")
+            w.println("${DIM}Dynamic services start fresh from the template every time.$RESET")
+            val isStatic = promptYesNo("Static service", false)
+
+            // Step 5-7: Instances & memory
             val minInstances = promptInt("Min instances", 1)
-            val maxInstances = promptInt("Max instances", 4)
+            val maxInstances = promptInt("Max instances", if (isStatic) 1 else 4)
             val defaultMemory = if (software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) "2G" else "1G"
             val memory = prompt("Memory per instance", defaultMemory)
 
@@ -203,7 +209,7 @@ class CreateGroupCommand(
 
             // Step 10: Write TOML
             w.println()
-            writeGroupToml(groupName, software, version, modloaderVersion, customJarName, minInstances, maxInstances, memory)
+            writeGroupToml(groupName, software, version, modloaderVersion, customJarName, minInstances, maxInstances, memory, isStatic)
             w.println("${GREEN}✓$RESET groups/${groupName.lowercase()}.toml")
 
             // Step 11: Reload
@@ -357,17 +363,18 @@ class CreateGroupCommand(
 
     // -- TOML writer ---------------------------------------------------------
 
-    private fun writeGroupToml(name: String, software: ServerSoftware, version: String, modloaderVersion: String, jarName: String, minInstances: Int, maxInstances: Int, memory: String) {
+    private fun writeGroupToml(name: String, software: ServerSoftware, version: String, modloaderVersion: String, jarName: String, minInstances: Int, maxInstances: Int, memory: String, isStatic: Boolean) {
         Files.createDirectories(groupsDir)
         val templateName = name.lowercase()
         val isLobby = name.contains("lobby", ignoreCase = true)
         val modloaderLine = if (modloaderVersion.isNotEmpty()) "modloader_version = \"$modloaderVersion\"\n" else ""
         val jarNameLine = if (jarName.isNotEmpty() && jarName != "server.jar") "jar_name = \"$jarName\"\n" else ""
+        val groupType = if (isStatic) "STATIC" else "DYNAMIC"
 
         val content = """
             |[group]
             |name = "$name"
-            |type = "DYNAMIC"
+            |type = "$groupType"
             |template = "$templateName"
             |software = "${software.name}"
             |version = "$version"

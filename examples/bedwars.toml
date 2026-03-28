@@ -3,7 +3,7 @@ name = "BedWars"
 type = "DYNAMIC"
 template = "bedwars"
 software = "PAPER"
-version = "1.21.4"
+version = "1.21.11"
 
 [group.resources]
 memory = "2G"

@@ -114,9 +114,15 @@ class ImportCommand(
         val defaultName = info.name.replace(Regex("[^a-zA-Z0-9-]"), "").take(20).ifEmpty { "modpack" }
         val groupName = promptGroupName(w, defaultName) ?: return
 
-        // Step 5: Memory & instances
+        // Step 5: Static or dynamic
+        w.println()
+        w.println("${DIM}Static services keep their data (world, configs) across restarts.$RESET")
+        w.println("${DIM}Dynamic services start fresh from the template every time.$RESET")
+        val isStatic = promptYesNo("Static service", true)
+
+        // Step 6: Memory & instances
         val memory = prompt("Memory per instance", "2G")
-        val minInstances = promptInt("Min instances", 0)
+        val minInstances = promptInt("Min instances", if (isStatic) 1 else 0)
         val maxInstances = promptInt("Max instances", 1)
 
         w.println()
@@ -177,7 +183,7 @@ class ImportCommand(
 
         // Step 11: Write group TOML
         w.println()
-        writeGroupToml(groupName, info, minInstances, maxInstances, memory)
+        writeGroupToml(groupName, info, minInstances, maxInstances, memory, isStatic)
         w.println("${GREEN}✓$RESET groups/${groupName.lowercase()}.toml")
 
         // Step 12: Reload
@@ -243,14 +249,15 @@ class ImportCommand(
 
     // -- TOML writer ---------------------------------------------------------
 
-    private fun writeGroupToml(name: String, info: dev.nimbus.template.ModpackInfo, minInstances: Int, maxInstances: Int, memory: String) {
+    private fun writeGroupToml(name: String, info: dev.nimbus.template.ModpackInfo, minInstances: Int, maxInstances: Int, memory: String, isStatic: Boolean) {
         Files.createDirectories(groupsDir)
         val templateName = name.lowercase()
         val modloaderLine = if (info.modloaderVersion.isNotEmpty()) "modloader_version = \"${info.modloaderVersion}\"\n" else ""
+        val groupType = if (isStatic) "STATIC" else "DYNAMIC"
         val content = """
             |[group]
             |name = "$name"
-            |type = "DYNAMIC"
+            |type = "$groupType"
             |template = "$templateName"
             |software = "${info.modloader.name}"
             |version = "${info.mcVersion}"
