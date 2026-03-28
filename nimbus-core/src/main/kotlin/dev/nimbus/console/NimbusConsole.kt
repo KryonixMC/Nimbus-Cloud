@@ -93,6 +93,10 @@ class NimbusConsole(
             dispatcher.register(CreateGroupCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this))
             dispatcher.register(ImportCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this))
         }
+        if (groupsDir != null) {
+            dispatcher.register(StaticCommand(serviceManager, registry, groupManager, groupsDir))
+            dispatcher.register(DynamicCommand(registry, groupManager, groupsDir))
+        }
         if (api != null) {
             dispatcher.register(ApiCommand(api))
         }

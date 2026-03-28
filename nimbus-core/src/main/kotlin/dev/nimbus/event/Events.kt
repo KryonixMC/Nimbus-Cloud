@@ -16,6 +16,14 @@ sealed class NimbusEvent {
     data class ScaleUp(val groupName: String, val currentInstances: Int, val targetInstances: Int, val reason: String) : NimbusEvent()
     data class ScaleDown(val groupName: String, val serviceName: String, val reason: String) : NimbusEvent()
 
+    // Custom state (set by plugins via SDK)
+    data class ServiceCustomStateChanged(
+        val serviceName: String,
+        val groupName: String,
+        val oldState: String?,
+        val newState: String?
+    ) : NimbusEvent()
+
     // Player (for future use)
     data class PlayerConnected(val playerName: String, val serviceName: String) : NimbusEvent()
     data class PlayerDisconnected(val playerName: String, val serviceName: String) : NimbusEvent()

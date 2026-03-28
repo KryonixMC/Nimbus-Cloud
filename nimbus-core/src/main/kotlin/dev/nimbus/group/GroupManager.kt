@@ -1,6 +1,7 @@
 package dev.nimbus.group
 
 import dev.nimbus.config.GroupConfig
+import dev.nimbus.config.GroupType
 import org.slf4j.LoggerFactory
 
 class GroupManager {
@@ -21,6 +22,19 @@ class GroupManager {
     fun getGroup(name: String): ServerGroup? = groups[name]
 
     fun getAllGroups(): List<ServerGroup> = groups.values.toList()
+
+    /**
+     * Updates a group's type (STATIC/DYNAMIC) at runtime.
+     * Returns true if the group was found and updated.
+     */
+    fun updateGroupType(name: String, type: GroupType): Boolean {
+        val group = groups[name] ?: return false
+        val updatedDef = group.config.group.copy(type = type)
+        val updatedConfig = group.config.copy(group = updatedDef)
+        groups[name] = ServerGroup(updatedConfig)
+        logger.info("Updated group '{}' type to {}", name, type)
+        return true
+    }
 
     fun reloadGroups(configs: List<GroupConfig>) {
         val incoming = configs.associateBy { it.group.name }

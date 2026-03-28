@@ -132,6 +132,16 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("service" to serviceName, "exitCode" to exitCode.toString(), "restartAttempt" to restartAttempt.toString())
         )
+        is NimbusEvent.ServiceCustomStateChanged -> EventMessage(
+            type = "SERVICE_CUSTOM_STATE_CHANGED",
+            timestamp = timestamp.toString(),
+            data = buildMap {
+                put("service", serviceName)
+                put("group", groupName)
+                if (oldState != null) put("oldState", oldState)
+                if (newState != null) put("newState", newState)
+            }
+        )
         is NimbusEvent.ScaleUp -> EventMessage(
             type = "SCALE_UP",
             timestamp = timestamp.toString(),

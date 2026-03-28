@@ -24,6 +24,7 @@ import java.util.stream.Stream;
 public class CloudCommand implements SimpleCommand {
 
     private final NimbusApiClient api;
+    private final dev.nimbus.sdk.NimbusClient sdkClient;
 
     private static final Map<String, String> SUBCOMMAND_PERMISSIONS = Map.ofEntries(
             Map.entry("help",    "nimbus.cloud"),
@@ -37,17 +38,19 @@ public class CloudCommand implements SimpleCommand {
             Map.entry("send",    "nimbus.cloud.send"),
             Map.entry("groups",  "nimbus.cloud.groups"),
             Map.entry("info",    "nimbus.cloud.info"),
+            Map.entry("setstate","nimbus.cloud.setstate"),
             Map.entry("reload",  "nimbus.cloud.reload"),
             Map.entry("shutdown","nimbus.cloud.shutdown")
     );
 
     private static final List<String> SUBCOMMANDS = List.of(
             "help", "list", "status", "start", "stop", "restart",
-            "exec", "players", "send", "groups", "info", "reload", "shutdown"
+            "exec", "players", "send", "groups", "info", "setstate", "reload", "shutdown"
     );
 
-    public CloudCommand(NimbusApiClient api) {
+    public CloudCommand(NimbusApiClient api, dev.nimbus.sdk.NimbusClient sdkClient) {
         this.api = api;
+        this.sdkClient = sdkClient;
     }
 
     @Override
@@ -91,6 +94,7 @@ public class CloudCommand implements SimpleCommand {
             case "send"    -> handleSend(invocation, args);
             case "groups"  -> handleGroups(invocation);
             case "info"    -> handleInfo(invocation, args);
+            case "setstate"-> handleSetState(invocation, args);
             case "reload"  -> handleReload(invocation);
             case "shutdown"-> handleShutdown(invocation);
         }
@@ -136,6 +140,7 @@ public class CloudCommand implements SimpleCommand {
                 new HelpEntry("/cloud exec <service> <cmd>",  "Execute command on service","nimbus.cloud.exec"),
                 new HelpEntry("/cloud players",               "List online players",       "nimbus.cloud.players"),
                 new HelpEntry("/cloud send <player> <target>","Transfer a player",         "nimbus.cloud.send"),
+                new HelpEntry("/cloud setstate <svc> <state>", "Set custom state on service","nimbus.cloud.setstate"),
                 new HelpEntry("/cloud reload",                "Reload group configs",      "nimbus.cloud.reload"),
                 new HelpEntry("/cloud shutdown",              "Shutdown the cloud",        "nimbus.cloud.shutdown")
         );
@@ -176,6 +181,8 @@ public class CloudCommand implements SimpleCommand {
                 String state = svc.get("state").getAsString();
                 int players = svc.get("playerCount").getAsInt();
                 int port = svc.get("port").getAsInt();
+                String customState = svc.has("customState") && !svc.get("customState").isJsonNull()
+                        ? svc.get("customState").getAsString() : null;
 
                 NamedTextColor stateColor = switch (state) {
                     case "READY" -> NamedTextColor.GREEN;
@@ -184,10 +191,21 @@ public class CloudCommand implements SimpleCommand {
                     default -> NamedTextColor.GRAY;
                 };
 
+                var line = Component.text("  " + name, NamedTextColor.WHITE)
+                        .append(Component.text(" [" + state + "]", stateColor));
+
+                if (customState != null) {
+                    NamedTextColor csColor = switch (customState) {
+                        case "WAITING" -> NamedTextColor.AQUA;
+                        case "INGAME" -> NamedTextColor.GOLD;
+                        case "ENDING" -> NamedTextColor.LIGHT_PURPLE;
+                        default -> NamedTextColor.YELLOW;
+                    };
+                    line = line.append(Component.text(" [" + customState + "]", csColor));
+                }
+
                 source.sendMessage(
-                        Component.text("  " + name, NamedTextColor.WHITE)
-                                .append(Component.text(" [" + state + "]", stateColor))
-                                .append(Component.text(" " + players + " players", NamedTextColor.GRAY))
+                        line.append(Component.text(" " + players + " players", NamedTextColor.GRAY))
                                 .append(Component.text(" :" + port, NamedTextColor.DARK_GRAY))
                 );
             }
@@ -429,6 +447,35 @@ public class CloudCommand implements SimpleCommand {
             source.sendMessage(Component.text("  Static:    ", NamedTextColor.GRAY).append(Component.text(isStatic ? "Yes" : "No", NamedTextColor.WHITE)));
             source.sendMessage(Component.empty());
         });
+    }
+
+    private void handleSetState(Invocation invocation, String[] args) {
+        var source = invocation.source();
+        if (args.length < 3) {
+            source.sendMessage(Component.text("Usage: /cloud setstate <service> <state|clear>", NamedTextColor.RED));
+            return;
+        }
+        String service = args[1];
+        String state = args[2];
+
+        if (state.equalsIgnoreCase("clear") || state.equalsIgnoreCase("null")) {
+            sdkClient.clearCustomState(service).thenRun(() -> {
+                source.sendMessage(Component.text("Cleared custom state on " + service, NamedTextColor.GREEN));
+            }).exceptionally(e -> {
+                source.sendMessage(Component.text("Error: " + e.getMessage(), NamedTextColor.RED));
+                return null;
+            });
+        } else {
+            sdkClient.setCustomState(service, state.toUpperCase()).thenRun(() -> {
+                source.sendMessage(
+                        Component.text("Set custom state on " + service + ": ", NamedTextColor.GREEN)
+                                .append(Component.text(state.toUpperCase(), NamedTextColor.WHITE))
+                );
+            }).exceptionally(e -> {
+                source.sendMessage(Component.text("Error: " + e.getMessage(), NamedTextColor.RED));
+                return null;
+            });
+        }
     }
 
     private void handleReload(Invocation invocation) {

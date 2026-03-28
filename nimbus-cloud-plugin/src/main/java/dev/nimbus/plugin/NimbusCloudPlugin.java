@@ -68,8 +68,9 @@ public class NimbusCloudPlugin {
                 return;
             }
 
+            dev.nimbus.sdk.NimbusClient sdkClient = new dev.nimbus.sdk.NimbusClient(config.getApiUrl(), config.getToken());
             NimbusApiClient apiClient = new NimbusApiClient(config.getApiUrl(), config.getToken());
-            CloudCommand cloudCommand = new CloudCommand(apiClient);
+            CloudCommand cloudCommand = new CloudCommand(apiClient, sdkClient);
 
             // Register /cloud and /nimbus
             for (String alias : new String[]{"cloud", "nimbus"}) {

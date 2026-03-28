@@ -23,7 +23,7 @@ class CommandDispatcher {
     // Commands that take a service name as first arg
     private val serviceArgCommands = setOf("stop", "restart", "screen", "exec", "logs", "players")
     // Commands that take a group name as first arg
-    private val groupArgCommands = setOf("start", "info")
+    private val groupArgCommands = setOf("start", "info", "dynamic")
 
     fun register(command: Command) {
         commands[command.name.lowercase()] = command
@@ -91,6 +91,26 @@ class CommandDispatcher {
                 in groupArgCommands -> {
                     val groups = groupManager?.getAllGroups()?.map { it.name } ?: emptyList()
                     groups.filter { it.startsWith(argPrefix, ignoreCase = true) }
+                }
+                "static" -> {
+                    if (parts.size <= 2) {
+                        // Complete subcommand: group or service
+                        listOf("group", "service").filter { it.startsWith(argPrefix, ignoreCase = true) }
+                    } else {
+                        // Complete name depending on subcommand
+                        val sub = parts[1].lowercase()
+                        when (sub) {
+                            "group" -> {
+                                val groups = groupManager?.getAllGroups()?.map { it.name } ?: emptyList()
+                                groups.filter { it.startsWith(argPrefix, ignoreCase = true) }
+                            }
+                            "service" -> {
+                                val services = registry?.getAll()?.map { it.name } ?: emptyList()
+                                services.filter { it.startsWith(argPrefix, ignoreCase = true) }
+                            }
+                            else -> emptyList()
+                        }
+                    }
                 }
                 "api" -> {
                     val subcommands = listOf("start", "stop", "status", "token")

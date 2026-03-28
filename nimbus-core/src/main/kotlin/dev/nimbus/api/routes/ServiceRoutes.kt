@@ -2,6 +2,7 @@ package dev.nimbus.api.routes
 
 import dev.nimbus.api.*
 import dev.nimbus.event.EventBus
+import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
 import dev.nimbus.service.ServiceRegistry
 import dev.nimbus.service.ServiceManager
@@ -43,6 +44,11 @@ fun Route.serviceRoutes(
                     )
                 }
                 services = services.filter { it.state == stateFilter }
+            }
+
+            val customStateParam = call.queryParameters["customState"]
+            if (customStateParam != null) {
+                services = services.filter { it.customState.equals(customStateParam, ignoreCase = true) }
             }
 
             val responses = services.map { it.toResponse() }
@@ -110,6 +116,41 @@ fun Route.serviceRoutes(
             val request = call.receive<ExecRequest>()
             val success = serviceManager.executeCommand(name, request.command)
             call.respond(ExecResponse(success, name, request.command))
+        }
+
+        // PUT /api/services/{name}/state — Set custom state (used by plugins via SDK)
+        put("{name}/state") {
+            val name = call.parameters["name"]!!
+            val service = registry.get(name)
+                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+
+            if (service.state != ServiceState.READY) {
+                return@put call.respond(HttpStatusCode.Conflict, ApiMessage(false, "Service '$name' is not READY (current: ${service.state})"))
+            }
+
+            val request = call.receive<SetCustomStateRequest>()
+            val oldState = service.customState
+            service.customState = request.customState
+
+            eventBus.emit(
+                NimbusEvent.ServiceCustomStateChanged(
+                    serviceName = name,
+                    groupName = service.groupName,
+                    oldState = oldState,
+                    newState = request.customState
+                )
+            )
+
+            call.respond(CustomStateResponse(name, service.customState))
+        }
+
+        // GET /api/services/{name}/state — Get custom state
+        get("{name}/state") {
+            val name = call.parameters["name"]!!
+            val service = registry.get(name)
+                ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+
+            call.respond(CustomStateResponse(name, service.customState))
         }
 
         // GET /api/services/{name}/logs — Get recent log lines (tail-read, not full file)
@@ -181,10 +222,12 @@ private fun dev.nimbus.service.Service.toResponse(): ServiceResponse {
         groupName = groupName,
         port = port,
         state = state.name,
+        customState = customState,
         pid = pid,
         playerCount = playerCount,
         startedAt = startedAt?.toString(),
         restartCount = restartCount,
-        uptime = uptime
+        uptime = uptime,
+        isStatic = isStatic
     )
 }

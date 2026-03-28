@@ -41,22 +41,30 @@ dependencies {
     implementation("io.ktor:ktor-server-status-pages:3.1.1")
 }
 
-// Embed the Velocity cloud plugin JAR as a resource so Nimbus can auto-deploy it
+// Embed the Velocity cloud plugin JAR (shadow, includes SDK) as a resource
 val pluginJar = tasks.register("copyPluginJar", Copy::class) {
-    dependsOn(project(":nimbus-cloud-plugin").tasks.named("jar"))
-    from(project(":nimbus-cloud-plugin").tasks.named("jar").map { (it as Jar).archiveFile })
+    dependsOn(project(":nimbus-cloud-plugin").tasks.named("shadowJar"))
+    from(project(":nimbus-cloud-plugin").tasks.named("shadowJar").map { (it as Jar).archiveFile })
     into(layout.buildDirectory.dir("resources/main/plugins"))
     rename { "nimbus-cloud.jar" }
 }
 
+// Embed the SDK JAR as a resource so Nimbus can auto-deploy it to backend servers
+val sdkJar = tasks.register("copySdkJar", Copy::class) {
+    dependsOn(project(":nimbus-sdk").tasks.named("jar"))
+    from(project(":nimbus-sdk").tasks.named("jar").map { (it as Jar).archiveFile })
+    into(layout.buildDirectory.dir("resources/main/plugins"))
+    rename { "nimbus-sdk.jar" }
+}
+
 tasks.processResources {
-    dependsOn(pluginJar)
+    dependsOn(pluginJar, sdkJar)
 }
 
 tasks.shadowJar {
     archiveClassifier.set("all")
     mergeServiceFiles()
-    dependsOn(pluginJar)
+    dependsOn(pluginJar, sdkJar)
 }
 
 kotlin {

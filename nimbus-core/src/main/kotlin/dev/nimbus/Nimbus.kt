@@ -79,6 +79,9 @@ fun main() = runBlocking {
     // Deploy Nimbus Hub plugin to global_proxy (always overwrite for updates)
     deployHubPlugin(globalProxyTemplateDir)
 
+    // Deploy Nimbus SDK plugin to global (all backend servers: Paper, Purpur, etc.)
+    deploySdkPlugin(globalTemplateDir)
+
     // Deploy bridge config so the plugin can connect to the API
     deployBridgeConfig(globalProxyTemplateDir, config)
 
@@ -264,6 +267,10 @@ private fun deployPlugin(globalProxyDir: NioPath, fileName: String, resourcePath
 
 private fun deployHubPlugin(globalProxyDir: NioPath) {
     deployPlugin(globalProxyDir, "nimbus-cloud.jar", "plugins/nimbus-cloud.jar")
+}
+
+private fun deploySdkPlugin(globalDir: NioPath) {
+    deployPlugin(globalDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
 }
 
 private fun deployBridgeConfig(globalProxyDir: NioPath, config: NimbusConfig) {

@@ -159,6 +159,8 @@ object ConsoleFormatter {
                 "${info("~ GROUP")} ${BOLD}${event.groupName}${RESET} updated"
             is NimbusEvent.GroupDeleted ->
                 "${warn("- GROUP")} ${BOLD}${event.groupName}${RESET} deleted"
+            is NimbusEvent.ServiceCustomStateChanged ->
+                "${info("~ STATE")} ${BOLD}${event.serviceName}${RESET} ${DIM}${event.oldState ?: "-"} → ${event.newState ?: "-"}${RESET}"
             is NimbusEvent.ConfigReloaded ->
                 "${info("↻ CONFIG")} reloaded ${BOLD}${event.groupsLoaded}${RESET} group(s)"
         }

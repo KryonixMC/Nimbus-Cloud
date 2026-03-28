@@ -10,11 +10,13 @@ data class ServiceResponse(
     val groupName: String,
     val port: Int,
     val state: String,
+    val customState: String? = null,
     val pid: Long?,
     val playerCount: Int,
     val startedAt: String?,
     val restartCount: Int,
-    val uptime: String?
+    val uptime: String?,
+    val isStatic: Boolean = false
 )
 
 @Serializable
@@ -169,6 +171,19 @@ data class ExecResponse(
     val success: Boolean,
     val service: String,
     val command: String
+)
+
+// ── Custom State DTOs ───────────────────────────────────────────────
+
+@Serializable
+data class SetCustomStateRequest(
+    val customState: String?
+)
+
+@Serializable
+data class CustomStateResponse(
+    val service: String,
+    val customState: String?
 )
 
 // ── Generic Response ────────────────────────────────────────────────

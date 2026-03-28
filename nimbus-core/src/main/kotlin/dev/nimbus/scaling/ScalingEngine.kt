@@ -64,25 +64,29 @@ class ScalingEngine(
 
             val services = registry.getByGroup(group.name)
             val readyServices = services.filter { it.state == ServiceState.READY }
-            val readyCount = readyServices.size
-            val totalPlayers = readyServices.sumOf { it.playerCount }
+
+            // Services with a customState (e.g. INGAME, ENDING) are not routable —
+            // they can't accept new players, so exclude them from capacity calculations.
+            val routableServices = readyServices.filter { it.customState == null }
+            val routableCount = routableServices.size
+            val totalPlayers = routableServices.sumOf { it.playerCount }
 
             // --- Scale Up ---
             val scaleUpReason = ScalingRule.shouldScaleUp(
                 totalPlayers = totalPlayers,
-                readyInstances = readyCount,
+                readyInstances = routableCount,
                 maxInstances = maxInstances,
                 playersPerInstance = playersPerInstance,
                 scaleThreshold = scaleThreshold
             )
 
             if (scaleUpReason != null) {
-                val targetInstances = readyCount + 1
+                val targetInstances = routableCount + 1
                 logger.info("Scaling up group '${group.name}': $scaleUpReason")
                 eventBus.emit(
                     NimbusEvent.ScaleUp(
                         groupName = group.name,
-                        currentInstances = readyCount,
+                        currentInstances = routableCount,
                         targetInstances = targetInstances,
                         reason = scaleUpReason
                     )
@@ -92,6 +96,9 @@ class ScalingEngine(
 
             // --- Scale Down ---
             for (service in readyServices) {
+                // Never scale down a service with an active custom state (e.g. mid-game)
+                if (service.customState != null) continue
+
                 if (service.playerCount > 0) {
                     // Service has players; remove from idle tracking if present
                     idleSince.remove(service.name)
@@ -105,7 +112,7 @@ class ScalingEngine(
                     servicePlayers = service.playerCount,
                     idleTimeout = idleTimeout,
                     serviceIdleSince = idleStart,
-                    currentInstances = readyCount,
+                    currentInstances = routableCount,
                     minInstances = minInstances
                 )
 

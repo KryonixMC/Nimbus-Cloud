@@ -130,7 +130,8 @@ class ServiceManager(
             groupName = groupName,
             port = port,
             state = ServiceState.PREPARING,
-            workingDirectory = workingDirectory
+            workingDirectory = workingDirectory,
+            isStatic = isStatic
         )
 
         // Ensure template directory exists and JAR is available (auto-download/install if missing)
@@ -237,6 +238,17 @@ class ServiceManager(
             val command = mutableListOf(javaBin, "-Xmx$memory")
             command.addAll(jvmArgs)
 
+            // Inject Nimbus identity so plugins using the SDK can auto-discover their service
+            command.add("-Dnimbus.service.name=$serviceName")
+            command.add("-Dnimbus.service.group=$groupName")
+            command.add("-Dnimbus.service.port=$port")
+            if (config.api.enabled) {
+                command.add("-Dnimbus.api.url=http://127.0.0.1:${config.api.port}")
+                if (config.api.token.isNotBlank()) {
+                    command.add("-Dnimbus.api.token=${config.api.token}")
+                }
+            }
+
             // Build startup command based on software type
             val isModded = software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE, ServerSoftware.FABRIC, ServerSoftware.CUSTOM)
             if (isModded) {
@@ -339,8 +351,7 @@ class ServiceManager(
         processHandles.remove(serviceName)
         portAllocator.release(service.port)
         registry.unregister(serviceName)
-        val group = groupManager.getGroup(groupName)
-        if (group == null || !group.isStatic) {
+        if (!service.isStatic) {
             cleanupWorkingDirectory(service.workingDirectory)
         }
 
@@ -393,8 +404,7 @@ class ServiceManager(
             registry.unregister(name)
             processHandles.remove(name)
 
-            val group = groupManager.getGroup(service.groupName)
-            if (group == null || !group.isStatic) {
+            if (!service.isStatic) {
                 cleanupWorkingDirectory(service.workingDirectory)
             }
 
@@ -602,6 +612,49 @@ class ServiceManager(
         }
 
         logger.info("All services stopped")
+    }
+
+    /**
+     * Converts a running dynamic service to static.
+     * Copies the current working directory to services/static/{name}/ and marks it as static,
+     * so it won't be cleaned up on stop and will be reused on next start.
+     */
+    suspend fun convertToStatic(serviceName: String): Boolean {
+        val service = registry.get(serviceName)
+        if (service == null) {
+            logger.warn("Cannot convert '{}': service not found", serviceName)
+            return false
+        }
+        if (service.isStatic) {
+            logger.warn("Service '{}' is already static", serviceName)
+            return false
+        }
+
+        val servicesDir = Path(config.paths.services)
+        val staticDir = servicesDir.resolve("static").resolve(serviceName)
+
+        return try {
+            withContext(Dispatchers.IO) {
+                staticDir.createDirectories()
+                // Copy current working directory contents to static location
+                Files.walk(service.workingDirectory).use { stream ->
+                    stream.forEach { source ->
+                        val target = staticDir.resolve(service.workingDirectory.relativize(source))
+                        if (Files.isDirectory(source)) {
+                            target.createDirectories()
+                        } else {
+                            Files.copy(source, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                        }
+                    }
+                }
+            }
+            service.isStatic = true
+            logger.info("Converted service '{}' to static (copied to {})", serviceName, staticDir)
+            true
+        } catch (e: Exception) {
+            logger.error("Failed to convert service '{}' to static", serviceName, e)
+            false
+        }
     }
 
     fun getProcessHandle(serviceName: String): ProcessHandle? {
