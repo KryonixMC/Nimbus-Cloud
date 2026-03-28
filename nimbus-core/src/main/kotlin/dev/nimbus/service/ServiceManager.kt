@@ -19,7 +19,6 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -40,7 +39,6 @@ class ServiceManager(
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
 
     private val processHandles = ConcurrentHashMap<String, ProcessHandle>()
-    private val serviceCounters = ConcurrentHashMap<String, AtomicInteger>()
     private val configPatcher = ConfigPatcher()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
     private val softwareResolver = SoftwareResolver()
@@ -103,8 +101,11 @@ class ServiceManager(
         }
 
         val software = group.config.group.software
-        val counter = serviceCounters.computeIfAbsent(groupName) { AtomicInteger(0) }
-        val instanceNumber = counter.incrementAndGet()
+
+        // Always use the lowest available instance number
+        val existing = registry.getByGroup(groupName).map { it.name }.toSet()
+        var instanceNumber = 1
+        while ("$groupName-$instanceNumber" in existing) instanceNumber++
         val serviceName = "$groupName-$instanceNumber"
 
         val port = if (software == ServerSoftware.VELOCITY) {
@@ -297,7 +298,7 @@ class ServiceManager(
             // Monitor for unexpected process exit
             scope.launch {
                 try {
-                    monitorProcess(serviceName, groupName, group.config.group.lifecycle.restartOnCrash, group.config.group.lifecycle.maxRestarts)
+                    monitorProcess(service, processHandle, groupName, group.config.group.lifecycle.restartOnCrash, group.config.group.lifecycle.maxRestarts)
                 } catch (e: Exception) {
                     logger.error("Error monitoring service '{}'", serviceName, e)
                 }
@@ -312,8 +313,8 @@ class ServiceManager(
         }
     }
 
-    private suspend fun monitorProcess(serviceName: String, groupName: String, restartOnCrash: Boolean, maxRestarts: Int) {
-        val handle = processHandles[serviceName] ?: return
+    private suspend fun monitorProcess(service: Service, handle: ProcessHandle, groupName: String, restartOnCrash: Boolean, maxRestarts: Int) {
+        val serviceName = service.name
         // Poll until the process is no longer alive
         withContext(Dispatchers.IO) {
             while (handle.isAlive()) {
@@ -321,10 +322,14 @@ class ServiceManager(
             }
         }
 
-        val service = registry.get(serviceName) ?: return
-
         // If we intentionally stopped it, do nothing
         if (service.state == ServiceState.STOPPING || service.state == ServiceState.STOPPED) {
+            return
+        }
+
+        // Check if this service instance is still the active one (not replaced by a restart)
+        val currentService = registry.get(serviceName)
+        if (currentService !== service) {
             return
         }
 
@@ -416,6 +421,7 @@ class ServiceManager(
         logger.info("Restarting service '{}' in group '{}'", name, groupName)
 
         stopService(name)
+        // Static services reuse the same name automatically (lowest available = the one we just stopped)
         return startService(groupName)
     }
 
