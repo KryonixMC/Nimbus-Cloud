@@ -34,6 +34,24 @@ class SetupWizard(
     private var purpurVersions: SoftwareResolver.VersionList? = null
     private var velocityVersions: SoftwareResolver.VersionList? = null
 
+    // Operating system detection
+    private enum class OperatingSystem(val displayName: String) {
+        LINUX("Linux"),
+        MACOS("macOS"),
+        WINDOWS("Windows"),
+        UNKNOWN("Unknown");
+    }
+
+    private fun detectOs(): OperatingSystem {
+        val osName = System.getProperty("os.name", "").lowercase()
+        return when {
+            "linux" in osName -> OperatingSystem.LINUX
+            "mac" in osName || "darwin" in osName -> OperatingSystem.MACOS
+            "win" in osName -> OperatingSystem.WINDOWS
+            else -> OperatingSystem.UNKNOWN
+        }
+    }
+
     fun isSetupNeeded(): Boolean {
         val groupsDir = baseDir.resolve("config").resolve("groups")
         if (!groupsDir.exists() || !groupsDir.isDirectory()) return true
@@ -50,10 +68,14 @@ class SetupWizard(
 
             val w = terminal.writer()
 
+            // Detect operating system
+            val detectedOs = detectOs()
+
             // Clear screen and print the banner at the top
             w.print("\u001B[2J\u001B[H")
             w.print(ConsoleFormatter.banner(""))
             w.println("  ${ConsoleFormatter.hint("Let's get your cloud ready.")}")
+            w.println("  ${ConsoleFormatter.hint("Detected OS:")} ${ConsoleFormatter.colorize(detectedOs.displayName, CYAN)}")
             w.println()
             w.flush()
 
@@ -223,6 +245,28 @@ class SetupWizard(
             w.println("  ${ConsoleFormatter.successLine("Setup complete!")} ${ConsoleFormatter.hint("${groups.size + 1} group(s) configured.")}")
             w.println(ConsoleFormatter.separator(40))
             w.println()
+
+            // --- Step 6: Start script ---
+            if (detectedOs != OperatingSystem.UNKNOWN) {
+                stepHeader(w, 6, "Start Script")
+                w.println()
+
+                if (detectedOs == OperatingSystem.WINDOWS) {
+                    w.println("  ${ConsoleFormatter.hint("Create a start.bat to launch Nimbus easily.")}")
+                } else {
+                    w.println("  ${ConsoleFormatter.hint("Create a start.sh that runs Nimbus in a screen session.")}")
+                    w.println("  ${ConsoleFormatter.hint("Detach with Ctrl+A,D — reattach with: screen -r nimbus")}")
+                }
+                w.println()
+
+                if (promptYesNo(terminal, "  Create start script?", true)) {
+                    writeStartScript(detectedOs)
+                    val scriptName = if (detectedOs == OperatingSystem.WINDOWS) "start.bat" else "start.sh"
+                    w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} $scriptName")
+                    w.println()
+                }
+                w.println()
+            }
 
             return promptYesNo(terminal, "  Start Nimbus now?", true)
 
@@ -494,5 +538,78 @@ class SetupWizard(
             |args = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"]
         """.trimMargin() + "\n"
         Files.writeString(groupsDir.resolve("$templateName.toml"), content)
+    }
+
+    private fun writeStartScript(os: OperatingSystem) {
+        // Find the Nimbus JAR in the current directory
+        val jarPattern = "nimbus-core-*-all.jar"
+        val jarFile = baseDir.listDirectoryEntries(jarPattern).firstOrNull()
+        val jarName = jarFile?.fileName?.toString() ?: "nimbus-core-*-all.jar"
+
+        when (os) {
+            OperatingSystem.LINUX, OperatingSystem.MACOS -> {
+                val content = """
+                    |#!/bin/bash
+                    |# Nimbus Cloud — Start Script
+                    |# Runs Nimbus inside a screen session for easy detach/reattach.
+                    |#
+                    |# Usage:
+                    |#   ./start.sh          — Start Nimbus in a screen session
+                    |#   screen -r nimbus    — Reattach to the session
+                    |#   Ctrl+A, D           — Detach from the session
+                    |
+                    |SESSION_NAME="nimbus"
+                    |JAR_FILE="$jarName"
+                    |JVM_ARGS="-Xms256M -Xmx256M --enable-native-access=ALL-UNNAMED"
+                    |
+                    |# Check if screen is installed
+                    |if ! command -v screen &> /dev/null; then
+                    |    echo "screen is not installed. Install it with:"
+                    |    echo "  Debian/Ubuntu: sudo apt install screen"
+                    |    echo "  RHEL/CentOS:   sudo yum install screen"
+                    |    echo "  macOS:         brew install screen"
+                    |    echo ""
+                    |    echo "Starting without screen..."
+                    |    java ${'$'}JVM_ARGS -jar "${'$'}JAR_FILE"
+                    |    exit ${'$'}?
+                    |fi
+                    |
+                    |# Check if session already exists
+                    |if screen -list | grep -q "${'$'}SESSION_NAME"; then
+                    |    echo "Nimbus is already running. Reattach with: screen -r ${'$'}SESSION_NAME"
+                    |    exit 1
+                    |fi
+                    |
+                    |echo "Starting Nimbus in screen session '${'$'}SESSION_NAME'..."
+                    |echo "Reattach with: screen -r ${'$'}SESSION_NAME"
+                    |screen -dmS "${'$'}SESSION_NAME" java ${'$'}JVM_ARGS -jar "${'$'}JAR_FILE"
+                    |echo "Nimbus started."
+                """.trimMargin() + "\n"
+
+                val scriptPath = baseDir.resolve("start.sh")
+                Files.writeString(scriptPath, content)
+                scriptPath.toFile().setExecutable(true)
+            }
+            OperatingSystem.WINDOWS -> {
+                val content = """
+                    |@echo off
+                    |:: Nimbus Cloud — Start Script
+                    |title Nimbus Cloud
+                    |
+                    |set JAR_FILE=$jarName
+                    |set JVM_ARGS=-Xms256M -Xmx256M --enable-native-access=ALL-UNNAMED
+                    |
+                    |echo Starting Nimbus...
+                    |java %JVM_ARGS% -jar "%JAR_FILE%"
+                    |
+                    |echo.
+                    |echo Nimbus stopped. Press any key to close.
+                    |pause >nul
+                """.trimMargin() + "\r\n"
+
+                Files.writeString(baseDir.resolve("start.bat"), content)
+            }
+            else -> {} // UNKNOWN — should not reach here
+        }
     }
 }
