@@ -440,6 +440,107 @@ The wizard automatically handles proxy forwarding -- FabricProxy-Lite for Fabric
 
 ---
 
+### `update`
+
+Update a group's server software or Minecraft version. Supports both direct and interactive modes. Includes compatibility checks that prevent incompatible switches (e.g., plugin servers to modded, Forge to Fabric).
+
+**Syntax:** `update <group> [version <ver>] [software <sw> [<ver>]]`
+
+#### Update Minecraft version
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby version 1.21.5
+<span class="t-cyan">ℹ</span> Updating Lobby: 1.21.4 -> 1.21.5
+<span class="t-dim">Downloading paper 1.21.5...</span> <span class="t-green">ok</span>
+<span class="t-green">ok</span> Configs reloaded
+<span class="t-green t-bold">Updated 'Lobby' to version 1.21.5.</span>
+</pre>
+</div>
+
+#### Switch server software
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby software purpur
+<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+<span class="t-dim">Downloading purpur 1.21.4...</span> <span class="t-green">ok</span>
+<span class="t-green">ok</span> Configs reloaded
+<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.4.</span>
+</pre>
+</div>
+
+#### Switch software and version at once
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby software purpur 1.21.5
+<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.5
+<span class="t-dim">Downloading purpur 1.21.5...</span> <span class="t-green">ok</span>
+<span class="t-green">ok</span> Configs reloaded
+<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.5.</span>
+</pre>
+</div>
+
+#### Interactive mode
+
+Running `update <group>` without subcommands opens an interactive wizard:
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus — update wizard</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby
+<span class="t-bold">Update Group: Lobby</span>
+
+<span class="t-dim">Current: PAPER 1.21.4</span>
+
+What to update? <span class="t-dim">[version]</span><span class="t-dim">:</span> <span class="t-bold">software</span>
+<span class="t-dim">Compatible software for PAPER:</span>
+  <span class="t-cyan">purpur</span>
+<span class="t-dim">Fetching available versions...</span> <span class="t-green">ok</span>
+<span class="t-dim">Available: 1.21.4  1.21.3  1.21.1  1.20.6  ...</span>
+Minecraft version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
+
+<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+<span class="t-dim">Downloading purpur 1.21.4...</span> <span class="t-green">ok</span>
+<span class="t-green">ok</span> Configs reloaded
+<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.4.</span>
+</pre>
+</div>
+
+#### Compatibility rules
+
+The `update` command enforces compatibility between server software families to prevent broken servers:
+
+| Switch | Allowed | Reason |
+|--------|---------|--------|
+| Paper ↔ Purpur | Yes | Same plugin API (Purpur is a Paper fork) |
+| Forge ↔ NeoForge | Yes (with warning) | Similar but diverging mod ecosystems |
+| Paper/Purpur → Forge/Fabric/NeoForge | **No** | Plugins and mods are incompatible |
+| Forge/NeoForge → Fabric | **No** | Completely different mod formats |
+| Fabric → Forge/NeoForge | **No** | Completely different mod formats |
+| Any ↔ Velocity | **No** | Proxy vs game server |
+| Any ↔ Custom | **No** | Cannot auto-resolve custom JARs |
+
+::: warning
+Running services are **not** automatically restarted after an update. Restart them manually to apply the changes.
+:::
+
+**Tab completion:** Group names → `version`/`software` → software names (for `software` subcommand).
+
+---
+
 ### `static`
 
 Convert a group or individual service to static mode. Static services preserve their working directory across restarts.
@@ -959,6 +1060,7 @@ Show all available commands or detailed help for a specific command.
   <span class="t-cyan">info</span>          <span class="t-dim">Show group configuration</span>
   <span class="t-cyan">create</span>        <span class="t-dim">Create a new server group</span>
   <span class="t-cyan">import</span>        <span class="t-dim">Import a Modrinth modpack</span>
+  <span class="t-cyan">update</span>        <span class="t-dim">Update software or version</span>
   <span class="t-cyan">static</span>        <span class="t-dim">Set a group or service to static</span>
   <span class="t-cyan">dynamic</span>       <span class="t-dim">Set a group to dynamic mode</span>
   <span class="t-cyan">perms</span>         <span class="t-dim">Manage permissions</span>

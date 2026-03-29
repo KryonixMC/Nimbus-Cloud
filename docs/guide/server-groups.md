@@ -259,6 +259,56 @@ nimbus> import /path/to/modpack.mrpack
 
 It downloads the modpack, installs the modloader and mods, and walks you through group configuration.
 
+## Updating software & versions {#updating-software-versions}
+
+The `update` command lets you change a group's Minecraft version or server software without recreating it. Nimbus handles the JAR download, config update, and reload automatically.
+
+### Update the Minecraft version
+
+```
+nimbus> update Lobby version 1.21.5
+```
+
+For modded servers (Forge, NeoForge, Fabric), Nimbus also resolves the latest matching modloader version automatically.
+
+### Switch server software
+
+```
+nimbus> update Lobby software purpur
+```
+
+You can also switch software and version at the same time:
+
+```
+nimbus> update Lobby software purpur 1.21.5
+```
+
+### Interactive mode
+
+Run `update <group>` without arguments for an interactive wizard that shows available versions and compatible software options:
+
+```
+nimbus> update Lobby
+```
+
+### Compatibility rules
+
+Not all software switches are allowed. Nimbus groups software into families and only allows switches within compatible families:
+
+| Family | Software | Can switch to |
+|--------|----------|---------------|
+| Plugin servers | Paper, Purpur | Each other |
+| Forge family | Forge, NeoForge | Each other (with warning) |
+| Fabric | Fabric | Version changes only |
+| Proxy | Velocity | Version changes only |
+| Custom | Custom | Version changes only |
+
+Switching **between** families (e.g., Paper → Forge, Forge → Fabric) is blocked because plugins and mods are fundamentally incompatible. Create a new group instead.
+
+::: tip
+After updating, restart running services to apply the changes: `restart Lobby-1`
+:::
+
 ## Runtime type changes {#runtime-type-changes}
 
 Convert a dynamic group to static (preserves instance data):
@@ -307,3 +357,4 @@ When Nimbus shuts down (via `shutdown` command or SIGTERM), services stop in a s
 - [Auto-Scaling Guide](/guide/scaling) -- Configure dynamic scaling
 - [Proxy Setup](/guide/proxy-setup) -- Configure the proxy layer
 - [Group Config Reference](/config/groups) -- Full configuration reference
+- [Console Commands](/reference/commands) -- Full command reference including `update`
