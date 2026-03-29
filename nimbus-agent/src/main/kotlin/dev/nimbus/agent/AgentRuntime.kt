@@ -19,7 +19,8 @@ class AgentRuntime(
 ) {
     private val logger = LoggerFactory.getLogger(AgentRuntime::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val processManager = LocalProcessManager(baseDir, scope)
+    private val javaResolver = JavaResolver(config.java.toMap(), baseDir)
+    private val processManager = LocalProcessManager(baseDir, scope, javaResolver)
     private val templateDownloader = TemplateDownloader(
         baseDir.resolve("templates"),
         config.agent.controller.replace("ws://", "http://").replace("wss://", "https://").removeSuffix("/cluster"),
@@ -69,7 +70,7 @@ class AgentRuntime(
                 maxMemory = config.agent.maxMemory,
                 maxServices = config.agent.maxServices,
                 currentServices = processManager.runningCount(),
-                agentVersion = "0.1.0",
+                agentVersion = AgentRuntime::class.java.`package`?.implementationVersion ?: "dev",
                 os = System.getProperty("os.name"),
                 arch = System.getProperty("os.arch")
             )
@@ -223,6 +224,7 @@ class AgentRuntime(
         running = false
         logger.info("Stopping all services...")
         processManager.stopAll()
+        javaResolver.close()
         client.close()
         scope.cancel()
         logger.info("Agent stopped.")

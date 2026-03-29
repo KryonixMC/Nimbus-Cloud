@@ -14,7 +14,8 @@ import kotlin.time.Duration.Companion.seconds
 
 class LocalProcessManager(
     private val baseDir: Path,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val javaResolver: JavaResolver
 ) {
     private val logger = LoggerFactory.getLogger(LocalProcessManager::class.java)
     private val handles = ConcurrentHashMap<String, LocalProcessHandle>()
@@ -285,8 +286,12 @@ class LocalProcessManager(
         }
     }
 
-    private fun buildCommand(msg: ClusterMessage.StartService): List<String> {
-        val cmd = mutableListOf("java", "-Xmx${msg.memory}")
+    private suspend fun buildCommand(msg: ClusterMessage.StartService): List<String> {
+        val javaBin = javaResolver.resolve(msg.javaVersion)
+        if (msg.javaVersion > 0) {
+            logger.info("Service '{}' using Java {} ({})", msg.serviceName, msg.javaVersion, javaBin)
+        }
+        val cmd = mutableListOf(javaBin, "-Xmx${msg.memory}")
         cmd.addAll(msg.jvmArgs)
         cmd.add("-Dnimbus.service.name=${msg.serviceName}")
         cmd.add("-Dnimbus.service.group=${msg.groupName}")

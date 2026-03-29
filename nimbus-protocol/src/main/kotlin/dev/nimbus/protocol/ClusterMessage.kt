@@ -48,7 +48,8 @@ sealed class ClusterMessage {
         val customJarName: String = "",
         val apiUrl: String = "",
         val apiToken: String = "",
-        val nimbusProperties: Map<String, String> = emptyMap()
+        val nimbusProperties: Map<String, String> = emptyMap(),
+        val javaVersion: Int = 0
     ) : ClusterMessage()
 
     @Serializable @SerialName("STOP_SERVICE")
@@ -91,7 +92,7 @@ sealed class ClusterMessage {
         val maxMemory: String,
         val maxServices: Int,
         val currentServices: Int = 0,
-        val agentVersion: String = "0.1.0",
+        val agentVersion: String = "dev",
         val os: String = "",
         val arch: String = ""
     ) : ClusterMessage()

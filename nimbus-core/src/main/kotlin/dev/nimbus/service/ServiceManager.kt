@@ -44,10 +44,8 @@ class ServiceManager(
 
     private val processHandles = ConcurrentHashMap<String, ServiceHandle>()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
-    private val compatibilityChecker = CompatibilityChecker(
-        groupManager, config,
-        JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
-    )
+    private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
+    private val compatibilityChecker = CompatibilityChecker(groupManager, config, javaResolver)
 
     private val serviceFactory = ServiceFactory(
         config = config,
@@ -185,7 +183,8 @@ class ServiceManager(
             isStatic = service.isStatic,
             isModded = isModded,
             apiUrl = if (config.api.enabled) "http://${config.api.bind}:${config.api.port}" else "",
-            apiToken = config.api.token
+            apiToken = config.api.token,
+            javaVersion = javaResolver.requiredJavaVersion(groupConfig.version, groupConfig.software)
         )
     }
 
