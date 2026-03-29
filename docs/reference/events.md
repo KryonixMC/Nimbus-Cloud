@@ -578,6 +578,128 @@ Emitted when the chat format configuration is changed.
 
 ---
 
+## Cluster Events
+
+### NODE_CONNECTED
+
+Emitted when an agent node connects to the controller.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+| `host` | string | Node's remote address |
+
+```json
+{
+  "type": "NODE_CONNECTED",
+  "timestamp": "2025-01-15T08:00:00.000Z",
+  "data": {
+    "nodeId": "node-1",
+    "host": "10.0.0.2"
+  }
+}
+```
+
+::: info
+Cluster events are only emitted when cluster mode is enabled (`cluster.enabled = true`).
+:::
+
+---
+
+### NODE_DISCONNECTED
+
+Emitted when an agent node disconnects from the controller.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+
+```json
+{
+  "type": "NODE_DISCONNECTED",
+  "timestamp": "2025-01-15T09:00:00.000Z",
+  "data": {
+    "nodeId": "node-1"
+  }
+}
+```
+
+---
+
+### NODE_HEARTBEAT
+
+Emitted each time a heartbeat response is received from an agent node.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+| `cpuUsage` | string | CPU usage as a decimal (e.g., `"0.32"` for 32%) |
+| `services` | string | Number of services running on the node |
+
+```json
+{
+  "type": "NODE_HEARTBEAT",
+  "timestamp": "2025-01-15T08:00:05.000Z",
+  "data": {
+    "nodeId": "node-1",
+    "cpuUsage": "0.32",
+    "services": "3"
+  }
+}
+```
+
+---
+
+## Load Balancer Events
+
+### LOAD_BALANCER_STARTED
+
+Emitted when the TCP load balancer starts listening.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bind` | string | Bind address |
+| `port` | string | Listen port |
+| `strategy` | string | Backend selection strategy |
+
+```json
+{
+  "type": "LOAD_BALANCER_STARTED",
+  "timestamp": "2025-01-15T08:00:00.000Z",
+  "data": {
+    "bind": "0.0.0.0",
+    "port": "25565",
+    "strategy": "least-players"
+  }
+}
+```
+
+::: info
+Load balancer events are only emitted when the load balancer is enabled (`loadbalancer.enabled = true`).
+:::
+
+---
+
+### LOAD_BALANCER_STOPPED
+
+Emitted when the TCP load balancer stops.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reason` | string | Reason for stopping |
+
+```json
+{
+  "type": "LOAD_BALANCER_STOPPED",
+  "timestamp": "2025-01-15T20:00:00.000Z",
+  "data": {
+    "reason": "shutdown"
+  }
+}
+```
+
+---
+
 ## System Events
 
 ### CONFIG_RELOADED
@@ -676,6 +798,128 @@ Emitted when the API encounters a startup or runtime error.
   "timestamp": "2025-01-15T08:00:00.000Z",
   "data": {
     "error": "Failed to start: Address already in use"
+  }
+}
+```
+
+---
+
+## Cluster Events
+
+These events are only emitted when `cluster.enabled = true` in `nimbus.toml`.
+
+### NODE_CONNECTED
+
+Emitted when a remote agent node connects and authenticates with the controller.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+| `host` | string | Remote IP address of the node |
+
+```json
+{
+  "type": "NODE_CONNECTED",
+  "timestamp": "2025-01-15T10:00:00.000Z",
+  "data": {
+    "nodeId": "worker-1",
+    "host": "10.0.1.10"
+  }
+}
+```
+
+---
+
+### NODE_DISCONNECTED
+
+Emitted when a remote agent node loses its connection to the controller.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+
+```json
+{
+  "type": "NODE_DISCONNECTED",
+  "timestamp": "2025-01-15T12:00:00.000Z",
+  "data": {
+    "nodeId": "worker-1"
+  }
+}
+```
+
+::: info
+When a node disconnects, its services are not immediately terminated. The controller waits for the node to reconnect within the `node_timeout` window. If the node does not reconnect, services are eventually marked as CRASHED and the scaling engine restarts them on other nodes.
+:::
+
+---
+
+### NODE_HEARTBEAT
+
+Emitted on each heartbeat response from an agent node. Useful for monitoring node health.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `nodeId` | string | Node identifier |
+| `cpuUsage` | string | CPU usage (0.0 - 1.0) |
+| `services` | string | Number of services running on the node |
+
+```json
+{
+  "type": "NODE_HEARTBEAT",
+  "timestamp": "2025-01-15T10:00:05.000Z",
+  "data": {
+    "nodeId": "worker-1",
+    "cpuUsage": "0.42",
+    "services": "3"
+  }
+}
+```
+
+---
+
+## Load Balancer Events
+
+These events are only emitted when `loadbalancer.enabled = true` in `nimbus.toml`.
+
+### LOAD_BALANCER_STARTED
+
+Emitted when the TCP load balancer starts listening for connections.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bind` | string | Bind address |
+| `port` | string | Port number |
+| `strategy` | string | Backend selection strategy |
+
+```json
+{
+  "type": "LOAD_BALANCER_STARTED",
+  "timestamp": "2025-01-15T08:00:00.000Z",
+  "data": {
+    "bind": "0.0.0.0",
+    "port": "25565",
+    "strategy": "least-players"
+  }
+}
+```
+
+---
+
+### LOAD_BALANCER_STOPPED
+
+Emitted when the TCP load balancer shuts down.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reason` | string | Reason for stopping |
+
+```json
+{
+  "type": "LOAD_BALANCER_STOPPED",
+  "timestamp": "2025-01-15T20:00:00.000Z",
+  "data": {
+    "reason": "shutdown"
   }
 }
 ```

@@ -1,6 +1,6 @@
 # Introduction
 
-Nimbus is a lightweight, console-only Minecraft cloud system that manages dynamic server instances from a single JAR. It handles everything from downloading server software to auto-scaling game servers based on player count — no database, no web UI, no bloat.
+Nimbus is a lightweight, console-only Minecraft cloud system that manages dynamic server instances from a single JAR. It handles everything from downloading server software to auto-scaling game servers based on player count — no web UI, no bloat.
 
 <div class="terminal">
   <div class="terminal-header">
@@ -55,8 +55,9 @@ Nimbus takes a different approach:
 
 ## Key Features
 
-- **Single JAR** — One file runs your entire cloud. No external services needed.
-- **Auto-scaling** — Dynamically starts and stops server instances based on player count and configurable thresholds.
+- **Multi-Node Cluster** — [Distribute services across multiple machines](/guide/multi-node). Agent nodes connect via WebSocket with automatic placement, failover, and template distribution. Built-in TCP load balancer for proxy redundancy.
+- **Single JAR** — One file runs your entire cloud. No external services needed. Scale to multi-node when you're ready.
+- **Auto-scaling** — Dynamically starts and stops server instances based on player count and configurable thresholds — across one or many machines.
 - **Software auto-download** — Automatically fetches Paper, Purpur, Velocity, Forge, Fabric, and NeoForge server JARs.
 - **Full modded server support** — Forge, Fabric, NeoForge, and Quilt (via Fabric) all work out of the box. Proxy forwarding mods are [auto-installed](/guide/proxy-setup#auto-forwarding-mods) so players connect through Velocity seamlessly.
 - **Automatic JDK management** — Nimbus [detects installed Java versions](/guide/concepts#automatic-jdk-management) and downloads missing ones from Adoptium automatically. No manual JDK setup needed.
@@ -106,7 +107,9 @@ Nimbus is built from several modules:
 
 | Module | Description |
 |---|---|
-| **nimbus-core** | The main application. Entry point, console, API, scaling, service management. |
+| **nimbus-core** | The main application and cluster controller. Console, API, scaling, service management, load balancer. |
+| **nimbus-agent** | Headless agent that runs on worker nodes. Connects to the controller, runs services locally, streams state back. |
+| **nimbus-protocol** | Shared message definitions for controller-agent communication (internal, not user-facing). |
 | **nimbus-bridge** | Velocity plugin that provides hub commands and connects the proxy to the Nimbus API. Auto-deployed to all proxy instances. |
 | **nimbus-sdk** | Backend server plugin (Paper/Purpur) that connects game servers to the Nimbus API. Auto-deployed to all backend instances. |
 | **nimbus-signs** | Optional plugin for dynamic server-selector signs on lobby servers. |
@@ -114,3 +117,5 @@ Nimbus is built from several modules:
 ## What's Next?
 
 Ready to get started? Head to the [Installation](./installation.md) guide to set up Nimbus, or jump straight to the [Quick Start](./quickstart.md) for a step-by-step walkthrough.
+
+Running multiple machines? Check out the [Multi-Node & Load Balancer](./multi-node.md) guide to distribute your network across a cluster.

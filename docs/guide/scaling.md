@@ -256,8 +256,21 @@ Set this to the **expected peak capacity**, not the absolute maximum. If your Be
 The `scale_threshold` and `players_per_instance` work together. A threshold of 0.8 with 16 players per instance means scaling triggers at 13 players on average per routable server.
 :::
 
+## Multi-node scaling
+
+By default, Nimbus runs all services on a single machine. For larger networks, you can enable **cluster mode** to distribute services across multiple machines with automatic placement, failover, and an optional TCP load balancer.
+
+The scaling engine works the same way in multi-node — it just has more machines to place services on. Remote services report their player counts via heartbeats, so scaling decisions remain accurate. If no remote node is available, dynamic services fall back to running locally on the controller.
+
+**Static services are never distributed** — they always run on the controller because they have persistent data (worlds, configs) in `services/static/`. Only dynamic and proxy services are placed on remote agent nodes.
+
+::: tip
+See the dedicated **[Multi-Node & Load Balancer](/guide/multi-node)** guide for full setup instructions, placement strategies, load balancer configuration, and failure handling.
+:::
+
 ## Next steps
 
 - [Server Groups](/guide/server-groups) -- Group configuration details
 - [SDK](/developer/sdk) -- Setting custom states from game plugins
 - [API Reference](/reference/api) -- REST API for manual control
+- [nimbus.toml Reference](/config/nimbus-toml) -- Load balancer and cluster configuration

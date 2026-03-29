@@ -1,16 +1,20 @@
 package dev.nimbus.console.commands
 
+import dev.nimbus.cluster.NodeManager
 import dev.nimbus.console.Command
 import dev.nimbus.console.ConsoleFormatter
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.group.GroupManager
+import dev.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbus.service.ServiceRegistry
 import dev.nimbus.service.ServiceState
 
 class StatusCommand(
     private val config: NimbusConfig,
     private val registry: ServiceRegistry,
-    private val groupManager: GroupManager
+    private val groupManager: GroupManager,
+    private val nodeManager: NodeManager? = null,
+    private val loadBalancer: TcpLoadBalancer? = null
 ) : Command {
 
     override val name = "status"
@@ -68,5 +72,16 @@ class StatusCommand(
         val maxServices = config.controller.maxServices
         val usedSlots = allServices.size
         println("${ConsoleFormatter.colorize("Capacity:", ConsoleFormatter.DIM)} ${ConsoleFormatter.progressBar(usedSlots, maxServices)} $usedSlots/$maxServices services")
+
+        // Cluster info (if enabled)
+        if (nodeManager != null) {
+            println()
+            println("${ConsoleFormatter.colorize("Cluster:", ConsoleFormatter.DIM)} ${ConsoleFormatter.success("${nodeManager.getOnlineNodeCount()}")} online / ${nodeManager.getNodeCount()} nodes")
+        }
+
+        // Load Balancer info (if enabled)
+        if (loadBalancer != null) {
+            println("${ConsoleFormatter.colorize("Load Balancer:", ConsoleFormatter.DIM)} ${loadBalancer.activeConnections} active / ${loadBalancer.totalConnections} total connections")
+        }
     }
 }

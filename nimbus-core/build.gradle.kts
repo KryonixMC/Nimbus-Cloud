@@ -10,6 +10,9 @@ application {
 }
 
 dependencies {
+    // Protocol module (shared cluster messages)
+    implementation(project(":nimbus-protocol"))
+
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
 

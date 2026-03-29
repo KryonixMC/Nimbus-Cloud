@@ -13,7 +13,7 @@ import java.io.OutputStreamWriter
 import java.nio.file.Path
 import kotlin.time.Duration
 
-class ProcessHandle {
+class ProcessHandle : ServiceHandle {
 
     private val logger = LoggerFactory.getLogger(ProcessHandle::class.java)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -22,7 +22,7 @@ class ProcessHandle {
     private var stdinWriter: BufferedWriter? = null
 
     private val _stdoutLines = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    val stdoutLines: SharedFlow<String> = _stdoutLines.asSharedFlow()
+    override val stdoutLines: SharedFlow<String> = _stdoutLines.asSharedFlow()
 
     private var donePattern = Regex("""Done \(""")
 
@@ -51,7 +51,7 @@ class ProcessHandle {
         }
     }
 
-    suspend fun sendCommand(command: String) {
+    override suspend fun sendCommand(command: String) {
         withContext(Dispatchers.IO) {
             stdinWriter?.let { writer ->
                 writer.write(command)
@@ -62,7 +62,7 @@ class ProcessHandle {
         }
     }
 
-    suspend fun waitForReady(timeout: Duration): Boolean {
+    override suspend fun waitForReady(timeout: Duration): Boolean {
         return try {
             withTimeout(timeout.inWholeMilliseconds) {
                 stdoutLines.first { line -> donePattern.containsMatchIn(line) }
@@ -74,7 +74,7 @@ class ProcessHandle {
         }
     }
 
-    suspend fun stopGracefully(timeout: Duration) {
+    override suspend fun stopGracefully(timeout: Duration) {
         logger.info("Initiating graceful stop with timeout {}", timeout)
         try {
             sendCommand("stop")
@@ -92,28 +92,28 @@ class ProcessHandle {
         }
     }
 
-    fun isAlive(): Boolean = process?.isAlive ?: false
+    override fun isAlive(): Boolean = process?.isAlive ?: false
 
-    fun pid(): Long? = try {
+    override fun pid(): Long? = try {
         process?.pid()
     } catch (_: UnsupportedOperationException) {
         null
     }
 
-    fun exitCode(): Int? = try {
+    override fun exitCode(): Int? = try {
         process?.exitValue()
     } catch (_: IllegalThreadStateException) {
         null
     }
 
-    suspend fun awaitExit(): Int? {
+    override suspend fun awaitExit(): Int? {
         return withContext(Dispatchers.IO) {
             process?.onExit()?.await()
             exitCode()
         }
     }
 
-    fun destroy() {
+    override fun destroy() {
         logger.info("Destroying process handle")
         scope.cancel()
         stdinWriter?.runCatching { close() }

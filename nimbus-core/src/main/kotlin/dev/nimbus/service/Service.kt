@@ -7,6 +7,8 @@ class Service(
     val name: String,
     val groupName: String,
     val port: Int,
+    var host: String = "127.0.0.1",
+    var nodeId: String = "local",
     initialState: ServiceState = ServiceState.PREPARING,
     @Volatile var customState: String? = null,
     var pid: Long? = null,

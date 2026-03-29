@@ -36,7 +36,7 @@ class ConfigPatcher {
         file.writeLines(patched)
     }
 
-    fun patchVelocityConfig(workDir: Path, port: Int, forwardingMode: String = "modern") {
+    fun patchVelocityConfig(workDir: Path, port: Int, forwardingMode: String = "modern", lbProxyProtocol: Boolean = false) {
         val file = workDir.resolve("velocity.toml")
         if (!file.exists()) return
 
@@ -45,6 +45,7 @@ class ConfigPatcher {
                 line.trimStart().startsWith("bind") && !line.contains("bungee") -> "bind = \"0.0.0.0:$port\""
                 line.trimStart().startsWith("player-info-forwarding-mode") -> "player-info-forwarding-mode = \"$forwardingMode\""
                 line.trimStart().startsWith("online-mode") && !line.contains("#") -> "online-mode = true"
+                lbProxyProtocol && line.trimStart().startsWith("haproxy-protocol") -> "haproxy-protocol = true"
                 else -> line
             }
         }

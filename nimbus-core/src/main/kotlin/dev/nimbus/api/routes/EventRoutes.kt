@@ -265,5 +265,35 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("oldVersion" to oldVersion, "newVersion" to newVersion)
         )
+        is NimbusEvent.ClusterStarted -> EventMessage(
+            type = "CLUSTER_STARTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("bind" to bind, "port" to port.toString(), "strategy" to strategy)
+        )
+        is NimbusEvent.NodeConnected -> EventMessage(
+            type = "NODE_CONNECTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("nodeId" to nodeId, "host" to host)
+        )
+        is NimbusEvent.NodeDisconnected -> EventMessage(
+            type = "NODE_DISCONNECTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("nodeId" to nodeId)
+        )
+        is NimbusEvent.NodeHeartbeat -> EventMessage(
+            type = "NODE_HEARTBEAT",
+            timestamp = timestamp.toString(),
+            data = mapOf("nodeId" to nodeId, "cpuUsage" to cpuUsage.toString(), "services" to services.toString())
+        )
+        is NimbusEvent.LoadBalancerStarted -> EventMessage(
+            type = "LOAD_BALANCER_STARTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("bind" to bind, "port" to port.toString(), "strategy" to strategy)
+        )
+        is NimbusEvent.LoadBalancerStopped -> EventMessage(
+            type = "LOAD_BALANCER_STOPPED",
+            timestamp = timestamp.toString(),
+            data = mapOf("reason" to reason)
+        )
     }
 }

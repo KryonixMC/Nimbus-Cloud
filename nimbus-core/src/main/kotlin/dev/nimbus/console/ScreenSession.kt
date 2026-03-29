@@ -1,6 +1,6 @@
 package dev.nimbus.console
 
-import dev.nimbus.service.ProcessHandle
+import dev.nimbus.service.ServiceHandle
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 import org.jline.terminal.Terminal
@@ -18,7 +18,7 @@ class ScreenSession {
      *
      * Blocks until the user presses Ctrl+Q to detach or the process ends.
      */
-    suspend fun attach(serviceName: String, processHandle: ProcessHandle, terminal: Terminal) {
+    suspend fun attach(serviceName: String, processHandle: ServiceHandle, terminal: Terminal) {
         val writer = terminal.writer()
         writer.println()
         writer.println(ConsoleFormatter.info("Attached to $serviceName") +

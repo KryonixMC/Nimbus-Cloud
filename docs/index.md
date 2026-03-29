@@ -3,30 +3,30 @@ layout: home
 hero:
   name: "Nimbus"
   text: "Minecraft Cloud System"
-  tagline: "Dynamic server management from a single JAR — auto-scaling, modpack support, and a powerful API without the bloat."
+  tagline: "Dynamic server management from a single JAR — auto-scaling, multi-node clusters, and a powerful API without the bloat."
   actions:
     - theme: brand
       text: Get Started
       link: /guide/quickstart
     - theme: alt
-      text: API Reference
-      link: /reference/api
+      text: Multi-Node Setup
+      link: /guide/multi-node
 
 features:
   - icon:
-      src: /icons/package.svg
+      src: /icons/network.svg
       width: 40
       height: 40
-    title: "Modpack Import"
-    details: "Import any Modrinth modpack with a single command. Fabric, Forge, NeoForge — auto-configured with proxy forwarding and concurrent downloads."
-    link: /guide/modpacks
-    linkText: Learn more
+    title: "Multi-Node Cluster"
+    details: "Distribute game servers across machines with automatic placement, failover, and a built-in TCP load balancer."
+    link: /guide/multi-node
+    linkText: Set up a cluster
   - icon:
       src: /icons/trending-up.svg
       width: 40
       height: 40
     title: "Smart Auto-Scaling"
-    details: "Servers spin up and down based on real-time player count. Configurable thresholds, idle timeouts, and custom game states."
+    details: "Instances scale up and down based on player count. Configurable thresholds, idle timeouts, and custom game states."
     link: /guide/scaling
     linkText: How it works
   - icon:
@@ -34,15 +34,31 @@ features:
       width: 40
       height: 40
     title: "Zero-Config Proxy"
-    details: "Velocity proxy auto-managed — forwarding, server list, tab list, MOTD, and chat sync. ViaVersion auto-deployed for mixed versions."
+    details: "Velocity auto-managed — forwarding, server list, MOTD, tab list, and chat sync. ViaVersion for mixed versions."
     link: /guide/proxy-setup
     linkText: Proxy setup
+  - icon:
+      src: /icons/download.svg
+      width: 40
+      height: 40
+    title: "Software Auto-Download"
+    details: "Paper, Purpur, Velocity, Forge, Fabric, and NeoForge — server JARs downloaded and updated automatically."
+    link: /guide/installation
+    linkText: Get started
+  - icon:
+      src: /icons/package.svg
+      width: 40
+      height: 40
+    title: "Modpack Import"
+    details: "Import any Modrinth modpack in one command. Auto-configured with proxy forwarding and concurrent downloads."
+    link: /guide/modpacks
+    linkText: Learn more
   - icon:
       src: /icons/plug.svg
       width: 40
       height: 40
     title: "REST API + WebSocket"
-    details: "Real-time event streams, bidirectional console access, file management, and permission control — all via API."
+    details: "Live event streams, bidirectional console access, file management, and permissions — all via API."
     link: /reference/api
     linkText: API docs
   - icon:
@@ -50,7 +66,7 @@ features:
       width: 40
       height: 40
     title: "Game-Server Ready"
-    details: "Custom game states, smart player routing, permission system, and display signs — built for minigame networks."
+    details: "Custom game states, smart routing, built-in permissions, and server-selector signs for minigame networks."
     link: /guide/concepts
     linkText: Core concepts
   - icon:
@@ -58,7 +74,7 @@ features:
       width: 40
       height: 40
     title: "Lightweight & Fast"
-    details: "Single JAR, no database, no web UI. Coroutine-based async with auto-download of Paper, Purpur, Velocity, and modded servers."
+    details: "Single JAR, no bloat. Coroutine-powered async, interactive console, and runs on just Java 21."
     link: /guide/installation
     linkText: Get started
 ---

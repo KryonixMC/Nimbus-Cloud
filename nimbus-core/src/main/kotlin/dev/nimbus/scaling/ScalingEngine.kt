@@ -72,6 +72,9 @@ class ScalingEngine(
             val services = registry.getByGroup(group.name)
             val readyServices = services.filter { it.state == ServiceState.READY }
 
+            // Count services that are starting up — don't start more while these are pending
+            val pendingCount = services.count { it.state in listOf(ServiceState.PREPARING, ServiceState.STARTING) }
+
             // Services with a customState (e.g. INGAME, ENDING) are not routable —
             // they can't accept new players, so exclude them from capacity calculations.
             val routableServices = readyServices.filter { it.customState == null }
@@ -79,6 +82,9 @@ class ScalingEngine(
             val totalPlayers = routableServices.sumOf { it.playerCount }
 
             // --- Scale Up ---
+            // Don't scale up if we already have services starting
+            if (pendingCount > 0) continue
+
             val scaleUpReason = ScalingRule.shouldScaleUp(
                 totalPlayers = totalPlayers,
                 readyInstances = routableCount,
@@ -157,10 +163,13 @@ class ScalingEngine(
         val readyServices = registry.getAll().filter { it.state == ServiceState.READY }
         if (readyServices.isEmpty()) return
 
+        // Only ping local services; remote services report via heartbeat
+        val localServices = readyServices.filter { it.nodeId == "local" }
+
         coroutineScope {
-            readyServices.map { service ->
+            localServices.map { service ->
                 async(Dispatchers.IO) {
-                    val result = ServerListPing.ping("127.0.0.1", service.port, timeout = 3000)
+                    val result = ServerListPing.ping(service.host, service.port, timeout = 3000)
                     if (result != null) {
                         service.playerCount = result.onlinePlayers
                         logger.debug("Pinged '${service.name}': ${result.onlinePlayers}/${result.maxPlayers} players")

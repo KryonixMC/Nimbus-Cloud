@@ -1,10 +1,13 @@
 package dev.nimbus.service
 
+import dev.nimbus.cluster.NodeManager
+import dev.nimbus.cluster.RemoteServiceHandle
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.config.ServerSoftware
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
+import dev.nimbus.protocol.ClusterMessage
 import dev.nimbus.template.SoftwareResolver
 import dev.nimbus.template.TemplateManager
 import dev.nimbus.velocity.VelocityConfigGen
@@ -15,6 +18,7 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
@@ -30,12 +34,13 @@ class ServiceManager(
     private val groupManager: GroupManager,
     private val eventBus: EventBus,
     private val scope: CoroutineScope,
-    private val softwareResolver: SoftwareResolver
+    private val softwareResolver: SoftwareResolver,
+    private val nodeManager: NodeManager? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
 
-    private val processHandles = ConcurrentHashMap<String, ProcessHandle>()
+    private val processHandles = ConcurrentHashMap<String, ServiceHandle>()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
     private val compatibilityChecker = CompatibilityChecker(
         groupManager, config,
@@ -59,6 +64,24 @@ class ServiceManager(
         val (service, workDir, command, readyPattern, isModded, readyTimeout) = prepared
         val serviceName = service.name
 
+        // Check if we should start on a remote node
+        // Static services always run on the controller (persistent data in services/static/)
+        val group = groupManager.getGroup(groupName)
+        val memory = group?.config?.group?.resources?.memory ?: "1G"
+        val remoteNode = if (service.isStatic) null else nodeManager?.selectNode(memory)
+
+        if (remoteNode != null) {
+            return startRemoteService(service, prepared, remoteNode, group)
+        }
+
+        // Local start (single-node or controller-local)
+        return startLocalService(service, prepared)
+    }
+
+    private suspend fun startLocalService(service: Service, prepared: ServiceFactory.PreparedService): Service? {
+        val (_, workDir, command, readyPattern, isModded, readyTimeout) = prepared
+        val serviceName = service.name
+
         return try {
             val processHandle = ProcessHandle()
             if (readyPattern != null) {
@@ -70,6 +93,7 @@ class ServiceManager(
             service.transitionTo(ServiceState.STARTING)
             service.pid = processHandle.pid()
             service.startedAt = Instant.now()
+            eventBus.emit(NimbusEvent.ServiceStarting(serviceName, service.groupName, service.port))
 
             // Wait for server to become ready
             scope.launch {
@@ -115,7 +139,135 @@ class ServiceManager(
         }
     }
 
-    private suspend fun monitorProcess(service: Service, handle: ProcessHandle, groupName: String, restartOnCrash: Boolean, maxRestarts: Int) {
+    private suspend fun startRemoteService(
+        service: Service,
+        prepared: ServiceFactory.PreparedService,
+        node: dev.nimbus.cluster.NodeConnection,
+        group: dev.nimbus.group.ServerGroup?
+    ): Service? {
+        val serviceName = service.name
+        val groupConfig = group?.config?.group ?: return null
+
+        return try {
+            // Update service with remote node info
+            service.host = node.host
+            service.nodeId = node.nodeId
+
+            // Compute template hash for cache invalidation
+            val templatesDir = Path(config.paths.templates)
+            val templateDir = templatesDir.resolve(groupConfig.template)
+            val templateHash = computeTemplateHash(templateDir)
+
+            // Determine forwarding
+            val forwardingMode = compatibilityChecker.determineForwardingMode()
+            val forwardingSecret = try {
+                val secretFile = templatesDir.resolve("proxy").resolve("forwarding.secret")
+                if (secretFile.exists()) secretFile.toFile().readText().trim() else ""
+            } catch (_: Exception) { "" }
+
+            // Build the StartService message
+            val startMsg = ClusterMessage.StartService(
+                serviceName = serviceName,
+                groupName = service.groupName,
+                port = service.port,
+                templateName = groupConfig.template,
+                templateHash = templateHash,
+                software = groupConfig.software.name,
+                version = groupConfig.version,
+                memory = groupConfig.resources.memory,
+                jvmArgs = groupConfig.jvm.args,
+                jarName = softwareResolver.jarFileName(groupConfig.software),
+                modloaderVersion = groupConfig.modloaderVersion,
+                readyPattern = groupConfig.readyPattern,
+                readyTimeoutSeconds = if (groupConfig.software in listOf(
+                        dev.nimbus.config.ServerSoftware.FORGE,
+                        dev.nimbus.config.ServerSoftware.NEOFORGE,
+                        dev.nimbus.config.ServerSoftware.FABRIC
+                    )) 180 else 60,
+                forwardingMode = forwardingMode,
+                forwardingSecret = forwardingSecret,
+                isStatic = service.isStatic,
+                isModded = groupConfig.software in listOf(
+                    dev.nimbus.config.ServerSoftware.FORGE,
+                    dev.nimbus.config.ServerSoftware.NEOFORGE,
+                    dev.nimbus.config.ServerSoftware.FABRIC
+                ),
+                apiUrl = if (config.api.enabled) "http://${config.api.bind}:${config.api.port}" else "",
+                apiToken = config.api.token
+            )
+
+            // Create remote handle
+            val remoteHandle = RemoteServiceHandle(serviceName, node)
+            val readyPattern = prepared.readyPattern
+            if (readyPattern != null) {
+                remoteHandle.setReadyPattern(readyPattern)
+            }
+            node.remoteHandles[serviceName] = remoteHandle
+            processHandles[serviceName] = remoteHandle
+
+            // Send start command to agent
+            node.send(startMsg)
+
+            service.transitionTo(ServiceState.STARTING)
+            service.startedAt = Instant.now()
+            eventBus.emit(NimbusEvent.ServiceStarting(serviceName, service.groupName, service.port, node.nodeId))
+
+            logger.info("Service '{}' starting on remote node '{}'", serviceName, node.nodeId)
+
+            // Monitor remote handle for ready/exit
+            scope.launch {
+                try {
+                    val ready = remoteHandle.waitForReady(prepared.readyTimeout)
+                    if (ready) {
+                        service.transitionTo(ServiceState.READY)
+                        eventBus.emit(NimbusEvent.ServiceReady(serviceName, service.groupName))
+                        logger.info("Remote service '{}' is ready on node '{}'", serviceName, node.nodeId)
+                        velocityConfigGen.updateProxyServerList()
+                        reloadVelocity()
+                    } else {
+                        logger.warn("Remote service '{}' did not become ready within timeout", serviceName)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Error waiting for remote service '{}' to be ready", serviceName, e)
+                }
+            }
+
+            // Monitor for exit
+            scope.launch {
+                try {
+                    monitorProcess(
+                        service, remoteHandle, service.groupName,
+                        group.config.group.lifecycle.restartOnCrash,
+                        group.config.group.lifecycle.maxRestarts
+                    )
+                } catch (e: Exception) {
+                    logger.error("Error monitoring remote service '{}'", serviceName, e)
+                }
+            }
+
+            service
+        } catch (e: Exception) {
+            logger.error("Failed to start remote service '{}' on node '{}'", serviceName, node.nodeId, e)
+            processHandles.remove(serviceName)
+            portAllocator.release(service.port)
+            registry.unregister(serviceName)
+            null
+        }
+    }
+
+    private fun computeTemplateHash(templateDir: Path): String {
+        if (!templateDir.exists()) return ""
+        val digest = MessageDigest.getInstance("SHA-256")
+        Files.walk(templateDir).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.sorted().forEach { file ->
+                digest.update(templateDir.relativize(file).toString().toByteArray())
+                digest.update(Files.readAllBytes(file))
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private suspend fun monitorProcess(service: Service, handle: ServiceHandle, groupName: String, restartOnCrash: Boolean, maxRestarts: Int) {
         val serviceName = service.name
         handle.awaitExit()
 
@@ -132,7 +284,6 @@ class ServiceManager(
 
         val exitCode = handle.exitCode() ?: -1
 
-        // Clean up the instance
         handle.destroy()
         processHandles.remove(serviceName)
         portAllocator.release(service.port)
@@ -328,7 +479,7 @@ class ServiceManager(
         }
     }
 
-    fun getProcessHandle(serviceName: String): ProcessHandle? {
+    fun getProcessHandle(serviceName: String): ServiceHandle? {
         return processHandles[serviceName]
     }
 

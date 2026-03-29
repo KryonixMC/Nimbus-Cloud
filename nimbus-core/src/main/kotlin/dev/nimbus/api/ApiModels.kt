@@ -9,6 +9,8 @@ data class ServiceResponse(
     val name: String,
     val groupName: String,
     val port: Int,
+    val host: String = "127.0.0.1",
+    val nodeId: String = "local",
     val state: String,
     val customState: String? = null,
     val pid: Long?,
@@ -464,6 +466,51 @@ data class ChatResponse(
 data class ChatUpdateRequest(
     val format: String? = null,
     val enabled: Boolean? = null
+)
+
+// ── Node / Cluster DTOs ────────────────────────────────────────────
+
+@Serializable
+data class NodeResponse(
+    val nodeId: String,
+    val host: String,
+    val maxMemory: String,
+    val maxServices: Int,
+    val currentServices: Int,
+    val cpuUsage: Double,
+    val memoryUsedMb: Long,
+    val memoryTotalMb: Long,
+    val isConnected: Boolean,
+    val agentVersion: String,
+    val os: String,
+    val arch: String,
+    val services: List<String>
+)
+
+@Serializable
+data class NodeListResponse(
+    val nodes: List<NodeResponse>,
+    val total: Int
+)
+
+@Serializable
+data class LoadBalancerResponse(
+    val enabled: Boolean,
+    val bind: String,
+    val port: Int,
+    val strategy: String,
+    val proxyProtocol: Boolean,
+    val totalConnections: Long,
+    val activeConnections: Int,
+    val backends: List<LbBackendResponse>
+)
+
+@Serializable
+data class LbBackendResponse(
+    val name: String,
+    val host: String,
+    val port: Int,
+    val playerCount: Int
 )
 
 // ── Event DTOs (for WebSocket) ──────────────────────────────────────

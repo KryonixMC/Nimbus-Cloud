@@ -20,6 +20,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/introduction' },
+      { text: 'Multi-Node', link: '/guide/multi-node' },
       { text: 'Config', link: '/config/nimbus-toml' },
       { text: 'Reference', link: '/reference/commands' },
       { text: 'Developer', link: '/developer/architecture' },
@@ -43,6 +44,12 @@ export default defineConfig({
             { text: 'Proxy Setup', link: '/guide/proxy-setup' },
             { text: 'Server Groups', link: '/guide/server-groups' },
             { text: 'Scaling', link: '/guide/scaling' },
+          ],
+        },
+        {
+          text: 'Advanced',
+          items: [
+            { text: 'Multi-Node & Load Balancer', link: '/guide/multi-node' },
           ],
         },
       ],

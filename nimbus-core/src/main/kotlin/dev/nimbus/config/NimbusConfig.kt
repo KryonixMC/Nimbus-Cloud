@@ -11,7 +11,9 @@ data class NimbusConfig(
     val paths: PathsConfig = PathsConfig(),
     val api: ApiConfig = ApiConfig(),
     val java: JavaConfig = JavaConfig(),
-    val database: DatabaseConfig = DatabaseConfig()
+    val database: DatabaseConfig = DatabaseConfig(),
+    val loadbalancer: LoadBalancerConfig = LoadBalancerConfig(),
+    val cluster: ClusterConfig = ClusterConfig()
 )
 
 @Serializable
@@ -87,3 +89,33 @@ data class JavaConfig(
         if (java21.isNotEmpty()) put(21, java21)
     }
 }
+
+@Serializable
+data class LoadBalancerConfig(
+    val enabled: Boolean = false,
+    val bind: String = "0.0.0.0",
+    val port: Int = 25565,
+    val strategy: String = "least-players",
+    @SerialName("proxy_protocol")
+    val proxyProtocol: Boolean = false,
+    @SerialName("connection_timeout")
+    val connectionTimeout: Int = 5000,
+    @SerialName("buffer_size")
+    val bufferSize: Int = 16384
+)
+
+@Serializable
+data class ClusterConfig(
+    val enabled: Boolean = false,
+    val token: String = "",
+    @SerialName("agent_port")
+    val agentPort: Int = 8443,
+    @SerialName("bind")
+    val bind: String = "0.0.0.0",
+    @SerialName("heartbeat_interval")
+    val heartbeatInterval: Long = 5000,
+    @SerialName("node_timeout")
+    val nodeTimeout: Long = 15000,
+    @SerialName("placement_strategy")
+    val placementStrategy: String = "least-services"
+)

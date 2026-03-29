@@ -1,11 +1,13 @@
 package dev.nimbus.api
 
 import dev.nimbus.api.routes.*
+import dev.nimbus.cluster.NodeManager
 import dev.nimbus.config.ApiConfig
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
+import dev.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbus.permissions.PermissionManager
 import dev.nimbus.service.ServiceManager
 import dev.nimbus.service.ServiceRegistry
@@ -42,7 +44,10 @@ class NimbusApi(
     private val scope: CoroutineScope,
     private val baseDir: Path,
     private val groupsDir: Path,
-    private val configPath: Path
+    private val configPath: Path,
+    private val nodeManager: NodeManager? = null,
+    private val loadBalancer: TcpLoadBalancer? = null,
+    private val templatesDir: Path = baseDir.resolve("templates")
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -198,11 +203,14 @@ class NimbusApi(
                 proxySyncRoutes(proxySyncManager, eventBus)
                 fileRoutes(scopeRoots, readOnlyScopes, maxUploadBytes)
                 configRoutes(config, configPath)
+                if (nodeManager != null || loadBalancer != null) {
+                    clusterRoutes(nodeManager, loadBalancer, registry)
+                }
             }
 
-            // WebSocket routes handle their own auth via ?token= query parameter
-            // (WebSocket clients can't set Bearer headers during handshake)
+            // Routes with their own auth (query param token, not Bearer)
             eventRoutes(eventBus, registry, serviceManager, token)
+            templateRoutes(templatesDir, config.cluster.token)
 
             if (token.isNotBlank()) {
                 authenticate("api-token") {

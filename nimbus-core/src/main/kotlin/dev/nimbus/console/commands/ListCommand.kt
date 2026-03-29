@@ -5,7 +5,8 @@ import dev.nimbus.console.ConsoleFormatter
 import dev.nimbus.service.ServiceRegistry
 
 class ListCommand(
-    private val registry: ServiceRegistry
+    private val registry: ServiceRegistry,
+    private val clusterEnabled: Boolean = false
 ) : Command {
 
     override val name = "list"
@@ -24,17 +25,36 @@ class ListCommand(
             return
         }
 
-        val headers = listOf("NAME", "GROUP", "STATE", "PORT", "PLAYERS", "PID", "UPTIME")
+        val headers = if (clusterEnabled) {
+            listOf("NAME", "GROUP", "STATE", "HOST", "PORT", "PLAYERS", "NODE", "PID", "UPTIME")
+        } else {
+            listOf("NAME", "GROUP", "STATE", "PORT", "PLAYERS", "PID", "UPTIME")
+        }
+
         val rows = services.sortedBy { it.name }.map { svc ->
-            listOf(
-                ConsoleFormatter.colorize(svc.name, ConsoleFormatter.BOLD),
-                svc.groupName,
-                ConsoleFormatter.coloredState(svc.state),
-                svc.port.toString(),
-                svc.playerCount.toString(),
-                (svc.pid?.toString() ?: "-"),
-                ConsoleFormatter.formatUptime(svc.startedAt)
-            )
+            if (clusterEnabled) {
+                listOf(
+                    ConsoleFormatter.colorize(svc.name, ConsoleFormatter.BOLD),
+                    svc.groupName,
+                    ConsoleFormatter.coloredState(svc.state),
+                    svc.host,
+                    svc.port.toString(),
+                    svc.playerCount.toString(),
+                    svc.nodeId,
+                    (svc.pid?.toString() ?: "-"),
+                    ConsoleFormatter.formatUptime(svc.startedAt)
+                )
+            } else {
+                listOf(
+                    ConsoleFormatter.colorize(svc.name, ConsoleFormatter.BOLD),
+                    svc.groupName,
+                    ConsoleFormatter.coloredState(svc.state),
+                    svc.port.toString(),
+                    svc.playerCount.toString(),
+                    (svc.pid?.toString() ?: "-"),
+                    ConsoleFormatter.formatUptime(svc.startedAt)
+                )
+            }
         }
 
         println(ConsoleFormatter.header("Services"))

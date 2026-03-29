@@ -43,6 +43,24 @@ name = "nimbus"
 username = ""
 password = ""
 
+[loadbalancer]
+enabled = false
+bind = "0.0.0.0"
+port = 25565
+strategy = "least-players"
+proxy_protocol = false
+connection_timeout = 5000
+buffer_size = 16384
+
+[cluster]
+enabled = false
+token = ""
+agent_port = 8443
+bind = "0.0.0.0"
+heartbeat_interval = 5000
+node_timeout = 15000
+placement_strategy = "least-services"
+
 [java]
 java_8 = ""
 java_11 = ""
@@ -218,6 +236,77 @@ SQLite is recommended for single-node setups. Use MySQL or PostgreSQL if you nee
 
 ::: info
 The database stores permission groups, player assignments, and cloud metrics (service events, scaling events, player sessions). All tables are created automatically on first launch.
+:::
+
+---
+
+## `[loadbalancer]`
+
+TCP load balancer configuration. When enabled, Nimbus binds a Layer-4 TCP proxy on the configured port and distributes incoming connections across all running Velocity proxy instances.
+
+::: info
+The load balancer is **disabled by default**. Single-node setups do not need it. Enable it when running multiple Velocity proxy instances (e.g., for redundancy or multi-node setups).
+:::
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable the TCP load balancer. When enabled, player connections arrive at the LB port and are forwarded to a backend Velocity proxy. |
+| `bind` | String | `"0.0.0.0"` | Bind address for the load balancer listener. |
+| `port` | Int | `25565` | Port to listen on. Typically `25565` (the Minecraft default) so players connect directly to the LB. |
+| `strategy` | String | `"least-players"` | Backend selection strategy. `"least-players"` routes to the proxy with the fewest players; `"round-robin"` distributes evenly. |
+| `proxy_protocol` | Boolean | `false` | Send HAProxy PROXY protocol v2 headers to backend Velocity instances, preserving real client IPs. Velocity must have `haproxy-protocol = true` in its config. |
+| `connection_timeout` | Int | `5000` | Timeout in milliseconds for connecting to a backend proxy. |
+| `buffer_size` | Int | `16384` | TCP relay buffer size in bytes. |
+
+```toml
+[loadbalancer]
+enabled = true
+bind = "0.0.0.0"
+port = 25565
+strategy = "least-players"
+proxy_protocol = true
+```
+
+::: warning
+When the load balancer is enabled, Velocity proxies are allocated backend ports (30000+) instead of 25565. The LB owns port 25565. Make sure your firewall allows connections to the LB port.
+:::
+
+---
+
+## `[cluster]`
+
+Multi-node cluster configuration. When enabled, Nimbus acts as a controller that accepts connections from remote agent nodes. Agents run services on behalf of the controller, allowing you to distribute Minecraft servers across multiple machines.
+
+::: info
+Cluster mode is **disabled by default**. Single-node setups do not need it. All features are gated behind `enabled = true` and existing single-node installations are completely unaffected.
+:::
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable cluster mode. When enabled, Nimbus accepts agent WebSocket connections and can place services on remote nodes. |
+| `token` | String | `""` | Shared secret token for authenticating agents. Agents must present this token when connecting. |
+| `agent_port` | Int | `8443` | WebSocket port for agent connections. Agents connect to this port on the controller. |
+| `bind` | String | `"0.0.0.0"` | Bind address for the cluster WebSocket endpoint (served via the existing API server). |
+| `heartbeat_interval` | Long | `5000` | Interval in milliseconds between heartbeat requests sent to agents. |
+| `node_timeout` | Long | `15000` | Time in milliseconds after which a node is considered disconnected if no heartbeat response is received. |
+| `placement_strategy` | String | `"least-services"` | Strategy for placing new services on nodes. `"least-services"` places on the node running the fewest services; `"least-memory"` uses the node with the most free memory. |
+
+```toml
+[cluster]
+enabled = true
+token = "my-cluster-secret"
+agent_port = 8443
+heartbeat_interval = 5000
+node_timeout = 15000
+placement_strategy = "least-services"
+```
+
+::: warning
+The cluster token grants remote nodes the ability to run services on behalf of the controller. Use a strong, randomly generated token and keep it secret.
+:::
+
+::: tip
+You can manage all cluster and load balancer settings from the console using the `cluster` command instead of editing this file manually. See [Commands Reference — cluster](/reference/commands#cluster).
 :::
 
 ---

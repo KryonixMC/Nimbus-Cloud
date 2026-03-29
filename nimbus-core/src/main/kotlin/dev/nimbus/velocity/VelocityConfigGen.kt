@@ -35,7 +35,7 @@ class VelocityConfigGen(
             .sortedBy { it.name }
 
         val serverEntries = backendServices.joinToString("\n") { service ->
-            """${service.name} = "127.0.0.1:${service.port}""""
+            """${service.name} = "${service.host}:${service.port}""""
         }
 
         // Try list — lobby servers preferred

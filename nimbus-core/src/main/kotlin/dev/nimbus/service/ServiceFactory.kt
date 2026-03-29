@@ -148,8 +148,7 @@ class ServiceFactory(
             portAllocator.release(port)
             return null
         }
-        eventBus.emit(NimbusEvent.ServiceStarting(serviceName, groupName, port))
-        logger.info("Starting service '{}' on port {}", serviceName, port)
+        logger.info("Preparing service '{}' on port {}", serviceName, port)
 
         return try {
             val workDir = templateManager.prepareService(
@@ -356,4 +355,5 @@ class ServiceFactory(
         configFile.writeText(result)
         logger.info("Cleaned default server entries from Velocity template")
     }
+
 }

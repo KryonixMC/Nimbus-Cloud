@@ -6,7 +6,7 @@ sealed class NimbusEvent {
     val timestamp: Instant = Instant.now()
 
     // Service lifecycle
-    data class ServiceStarting(val serviceName: String, val groupName: String, val port: Int) : NimbusEvent()
+    data class ServiceStarting(val serviceName: String, val groupName: String, val port: Int, val nodeId: String = "local") : NimbusEvent()
     data class ServiceReady(val serviceName: String, val groupName: String) : NimbusEvent()
     data class ServiceStopping(val serviceName: String) : NimbusEvent()
     data class ServiceStopped(val serviceName: String) : NimbusEvent()
@@ -56,6 +56,16 @@ sealed class NimbusEvent {
     data class MotdUpdated(val line1: String, val line2: String, val maxPlayers: Int, val playerCountOffset: Int) : NimbusEvent()
     data class PlayerTabUpdated(val uuid: String, val format: String?) : NimbusEvent()
     data class ChatFormatUpdated(val format: String, val enabled: Boolean) : NimbusEvent()
+
+    // Cluster
+    data class ClusterStarted(val bind: String, val port: Int, val strategy: String) : NimbusEvent()
+    data class NodeConnected(val nodeId: String, val host: String) : NimbusEvent()
+    data class NodeDisconnected(val nodeId: String) : NimbusEvent()
+    data class NodeHeartbeat(val nodeId: String, val cpuUsage: Double, val services: Int) : NimbusEvent()
+
+    // Load Balancer
+    data class LoadBalancerStarted(val bind: String, val port: Int, val strategy: String) : NimbusEvent()
+    data class LoadBalancerStopped(val reason: String = "shutdown") : NimbusEvent()
 
     // Config
     data class ConfigReloaded(val groupsLoaded: Int) : NimbusEvent()

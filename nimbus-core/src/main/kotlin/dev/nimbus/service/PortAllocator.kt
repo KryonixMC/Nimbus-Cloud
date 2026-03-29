@@ -6,7 +6,8 @@ import java.util.Collections
 
 class PortAllocator(
     private val proxyPort: Int = 25565,
-    private val backendBasePort: Int = 30000
+    private val backendBasePort: Int = 30000,
+    private val lbEnabled: Boolean = false
 ) {
 
     private val logger = LoggerFactory.getLogger(PortAllocator::class.java)
@@ -16,6 +17,10 @@ class PortAllocator(
      * Allocates the fixed proxy port (25565).
      */
     fun allocateProxyPort(): Int {
+        if (lbEnabled) {
+            // LB owns 25565; proxies get backend ports
+            return allocateBackendPort()
+        }
         synchronized(allocatedPorts) {
             allocatedPorts.add(proxyPort)
         }

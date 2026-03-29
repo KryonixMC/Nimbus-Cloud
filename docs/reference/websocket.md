@@ -174,6 +174,68 @@ asyncio.run(console_session())
 
 ---
 
+## Cluster Stream
+
+### `ws://host:port/cluster`
+
+WebSocket endpoint for agent node connections. Used by `nimbus-agent` to communicate with the controller in cluster mode. This endpoint is only available when `cluster.enabled = true`.
+
+### Authentication
+
+The first message from the agent must be an `AUTH_REQUEST`:
+
+```json
+{
+  "type": "AUTH_REQUEST",
+  "nodeName": "node-1",
+  "token": "my-cluster-secret",
+  "maxMemory": "8G",
+  "maxServices": 10,
+  "agentVersion": "0.1.0",
+  "os": "Linux",
+  "arch": "amd64"
+}
+```
+
+The controller responds with:
+
+```json
+{
+  "type": "AUTH_RESPONSE",
+  "success": true,
+  "nodeId": "node-1"
+}
+```
+
+If authentication fails, the connection is closed with code `1008` (Policy Violation).
+
+### Message Flow
+
+After authentication, the WebSocket carries bidirectional messages between controller and agent:
+
+**Controller to Agent:**
+- `HEARTBEAT_REQUEST` -- periodic health check
+- `START_SERVICE` -- start a service on the agent
+- `STOP_SERVICE` -- stop a service on the agent
+- `SEND_COMMAND` -- execute a command on a service's stdin
+
+**Agent to Controller:**
+- `HEARTBEAT_RESPONSE` -- CPU, memory, and service status
+- `SERVICE_STATE_CHANGED` -- service lifecycle updates (STARTING, READY, STOPPED, CRASHED)
+- `SERVICE_STDOUT` -- stdout lines from running services
+- `SERVICE_PLAYER_COUNT` -- player count updates
+- `COMMAND_RESULT` -- result of a sent command
+- `TEMPLATE_REQUEST` -- request to download a template
+- `LOG_MESSAGE` -- agent log messages
+
+All messages are JSON-encoded. The protocol is defined in the `nimbus-protocol` module.
+
+::: warning
+This endpoint is not intended for external clients. It uses a custom protocol between the controller and agent. Use the `/api/events` WebSocket for monitoring cluster state from external systems.
+:::
+
+---
+
 ## Configuration
 
 WebSocket settings are configured in Nimbus's Ktor server:
@@ -227,3 +289,51 @@ connectWithRetry('ws://localhost:8080/api/events?token=your-secret');
 ::: tip
 The `/api/health` REST endpoint can be used to check if the API is available before attempting a WebSocket connection.
 :::
+
+---
+
+## Cluster WebSocket
+
+### `ws://host:port/cluster`
+
+Used by nimbus-agent instances to connect to the controller. This endpoint is only active when `cluster.enabled = true`.
+
+::: info
+This endpoint is for the agent-to-controller communication protocol. You do not need to use it directly -- the `nimbus-agent` JAR handles the connection automatically.
+:::
+
+### Protocol
+
+1. Agent connects and sends an `AUTH_REQUEST` message with its cluster token, node name, and resource info
+2. Controller validates the token and responds with `AUTH_RESPONSE`
+3. If accepted, the agent enters a message loop exchanging heartbeats, service state changes, and commands
+4. If the connection drops, the agent automatically attempts reconnection
+
+### Message Types
+
+All messages are JSON with a `type` discriminator field. Messages are defined in the `nimbus-protocol` module.
+
+**Controller to Agent:**
+
+| Type | Description |
+|------|-------------|
+| `AUTH_RESPONSE` | Accept/reject authentication |
+| `START_SERVICE` | Start a service on the agent |
+| `STOP_SERVICE` | Stop a service on the agent |
+| `SEND_COMMAND` | Send a console command to a service |
+| `HEARTBEAT_REQUEST` | Request resource usage info |
+| `TEMPLATE_INFO` | Template download info |
+| `SHUTDOWN_AGENT` | Request graceful agent shutdown |
+
+**Agent to Controller:**
+
+| Type | Description |
+|------|-------------|
+| `AUTH_REQUEST` | Authenticate with the controller |
+| `HEARTBEAT_RESPONSE` | CPU, memory, and service status |
+| `SERVICE_STATE_CHANGED` | Service state transition |
+| `SERVICE_STDOUT` | Stdout line from a service |
+| `SERVICE_PLAYER_COUNT` | Player count update |
+| `COMMAND_RESULT` | Result of a command execution |
+| `TEMPLATE_REQUEST` | Request a template download |
+| `LOG_MESSAGE` | Agent log message |

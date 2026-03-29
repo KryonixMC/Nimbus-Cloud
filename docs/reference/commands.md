@@ -1006,6 +1006,93 @@ Show the configured API token (partially masked).
 
 ---
 
+### `nodes`
+
+Show connected cluster nodes. Only available when cluster mode is enabled (`cluster.enabled = true`).
+
+**Syntax:** `nodes [node-name]`
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> nodes
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Cluster Nodes</span> ─────────────────────────────────</span>
+<span class="t-bold t-bright-cyan">NODE        HOST          STATUS    CPU    MEMORY         SERVICES</span>
+<span class="t-dim">──────────────────────────────────────────────────────────────────────</span>
+<span class="t-bold">node-1</span>      10.0.0.2      <span class="t-green">online</span>    32%    4096/8192MB    3/10
+<span class="t-bold">node-2</span>      10.0.0.3      <span class="t-green">online</span>    18%    2048/8192MB    2/10
+<span class="t-dim">2/2 online</span>
+</pre>
+</div>
+
+Provide a node name for detailed information:
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> nodes node-1
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Node: node-1</span> ──────────────────────────────────</span>
+  <span class="t-dim">Host:</span>       10.0.0.2
+  <span class="t-dim">Status:</span>     <span class="t-green">online</span>
+  <span class="t-dim">CPU:</span>        32.4%
+  <span class="t-dim">Memory:</span>     4096MB / 8192MB
+  <span class="t-dim">Services:</span>   3 / 10
+  <span class="t-dim">Version:</span>    0.1.0
+  <span class="t-dim">OS:</span>         Linux amd64
+  <span class="t-dim">Running:</span>    Lobby-1, BedWars-1, BedWars-2
+</pre>
+</div>
+
+::: info
+If no nodes are connected, the command prints a warning. Use this to verify agents are properly connected to the controller.
+:::
+
+**Tab completion:** Node names.
+
+---
+
+### `lb`
+
+Manage the TCP load balancer. This command works independently of cluster mode — you can use a load balancer with multiple local Velocity proxies without enabling cluster mode.
+
+**Syntax:** `lb [enable|disable|strategy <name>]`
+
+With no arguments, shows status and backend proxy table:
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> lb
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Load Balancer</span> ─────────────────────────────────</span>
+  Status:     <span class="t-green">ENABLED</span>
+  Bind:       0.0.0.0:25565
+  Strategy:   least-players
+  Active:     36 connections
+  Total:      1,247 connections
+
+<span class="t-bold t-bright-cyan">BACKEND         HOST          PORT    PLAYERS  STATE</span>
+<span class="t-dim">──────────────────────────────────────────────────────────</span>
+<span class="t-bold">Proxy-1</span>         127.0.0.1     30010   18       <span class="t-green">● READY</span>
+<span class="t-bold">Proxy-2</span>         10.0.0.2      30010   18       <span class="t-green">● READY</span>
+</pre>
+</div>
+
+| Subcommand | Description |
+|---|---|
+| `lb enable` | Enable the load balancer (saves to config, restart required) |
+| `lb disable` | Disable the load balancer |
+| `lb strategy <name>` | Set strategy: `least-players` or `round-robin` |
+
+**Tab completion:** `enable`, `disable`, `strategy` → strategy names.
+
+---
+
 ### `shutdown`
 
 Gracefully shut down all services in order: game servers first, then lobbies, then proxies.
@@ -1066,6 +1153,9 @@ Show all available commands or detailed help for a specific command.
   <span class="t-cyan">perms</span>         <span class="t-dim">Manage permissions</span>
   <span class="t-cyan">reload</span>       <span class="t-dim">Reload group configurations</span>
   <span class="t-cyan">api</span>           <span class="t-dim">Manage the REST API</span>
+  <span class="t-cyan">cluster</span>       <span class="t-dim">Manage cluster mode & load balancer</span>
+  <span class="t-cyan">nodes</span>         <span class="t-dim">Show connected cluster nodes</span>
+  <span class="t-cyan">lb</span>            <span class="t-dim">Show load balancer status</span>
   <span class="t-cyan">status</span>        <span class="t-dim">Show network status overview</span>
   <span class="t-cyan">shutdown</span>      <span class="t-dim">Graceful shutdown and exit</span>
   <span class="t-cyan">clear</span>         <span class="t-dim">Clear the console</span>
@@ -1088,3 +1178,136 @@ Usage: start &lt;group&gt;
 ::: tip
 You can also type `?` as a shorthand for `help`.
 :::
+
+---
+
+## Cluster & Load Balancer
+
+These commands manage multi-node cluster mode. The `cluster` command works regardless of whether cluster mode is currently enabled — it's how you enable it. The `nodes` command is only available when cluster mode is active. The `lb` command is documented above under [Service Management](#lb) — it's independent of cluster mode.
+
+### `cluster`
+
+Manage cluster mode and load balancer settings from the console without editing config files. Changes are saved to `nimbus.toml` and take effect after restart.
+
+**Syntax:** `cluster <status|enable|disable|token|lb> [subcommand] [args]`
+
+#### `cluster status`
+
+Show cluster and load balancer status.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> cluster status
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Cluster</span> ──────────────────────────────────────</span>
+  <span class="t-dim">Mode:</span>         <span class="t-green">enabled</span>
+  <span class="t-dim">Agent Port:</span>   8443
+  <span class="t-dim">Strategy:</span>     least-services
+  <span class="t-dim">Nodes:</span>        2 connected
+</pre>
+</div>
+
+#### `cluster enable`
+
+Enable cluster mode. Generates an auth token if none exists and saves the config.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> cluster enable
+<span class="t-green">✓ Cluster mode enabled.</span> <span class="t-dim">Token generated. Restart to activate.</span>
+</pre>
+</div>
+
+#### `cluster disable`
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> cluster disable
+<span class="t-yellow">⚠ Cluster mode disabled.</span> <span class="t-dim">Restart to apply.</span>
+</pre>
+</div>
+
+#### `cluster token`
+
+Show the current cluster auth token (partially masked).
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> cluster token
+<span class="t-cyan">ℹ</span> Cluster Token: <span class="t-dim">abc1****xyz9</span>
+</pre>
+</div>
+
+#### `cluster token regenerate`
+
+Generate a new cluster token. All agents will need to be updated with the new token.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> cluster token regenerate
+<span class="t-yellow">⚠ New token generated.</span> <span class="t-dim">Update all agents with the new token!</span>
+</pre>
+</div>
+
+**Tab completion:** `status`, `enable`, `disable`, `token` → `regenerate`.
+
+---
+
+### `nodes`
+
+Show connected cluster nodes and their resource usage. Only available when `cluster.enabled = true`.
+
+**Syntax:** `nodes [node-name]`
+
+Without arguments, shows a summary table of all nodes. With a node name, shows detailed info including CPU, memory, running services, and agent version.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> nodes
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Cluster Nodes</span> ──────────────────────────────────────</span>
+<span class="t-bold t-bright-cyan">NODE            HOST            STATUS    CPU     MEMORY          SERVICES</span>
+<span class="t-dim">──────────────────────────────────────────────────────────────────────────────</span>
+<span class="t-bold">worker-1</span>        10.0.1.10       <span class="t-green">online</span>    42%     3200/8192MB     3/10
+<span class="t-bold">worker-2</span>        10.0.1.11       <span class="t-green">online</span>    28%     2100/8192MB     2/10
+<span class="t-dim">2/2 online</span>
+</pre>
+</div>
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> nodes worker-1
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Node: worker-1</span> ─────────────────────────────────</span>
+  Host:       10.0.1.10
+  Status:     <span class="t-green">online</span>
+  CPU:        42.3%
+  Memory:     3200MB / 8192MB
+  Services:   3 / 10
+  Version:    0.1.0
+  OS:         Linux amd64
+  Running:    Lobby-2, BedWars-1, BedWars-2
+</pre>
+</div>
+
+**Tab completion:** Node names.
+
+See [`lb`](#lb) in the Service Management section above — the load balancer is independent of cluster mode.

@@ -1,11 +1,13 @@
 package dev.nimbus.console
 
 import dev.nimbus.api.NimbusApi
+import dev.nimbus.cluster.NodeManager
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.console.commands.*
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
+import dev.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbus.permissions.PermissionManager
 import dev.nimbus.service.CompatibilityChecker
 import dev.nimbus.service.ServiceManager
@@ -36,7 +38,10 @@ class NimbusConsole(
     private val softwareResolver: SoftwareResolver? = null,
     private val api: NimbusApi? = null,
     private val permissionManager: PermissionManager? = null,
-    private val proxySyncManager: dev.nimbus.proxy.ProxySyncManager? = null
+    private val proxySyncManager: dev.nimbus.proxy.ProxySyncManager? = null,
+    private val nodeManager: NodeManager? = null,
+    private val loadBalancer: TcpLoadBalancer? = null,
+    private val configPath: Path? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(NimbusConsole::class.java)
@@ -77,8 +82,8 @@ class NimbusConsole(
         val helpCommand = HelpCommand(dispatcher)
 
         dispatcher.register(helpCommand)
-        dispatcher.register(StatusCommand(config, registry, groupManager))
-        dispatcher.register(ListCommand(registry))
+        dispatcher.register(StatusCommand(config, registry, groupManager, nodeManager, loadBalancer))
+        dispatcher.register(ListCommand(registry, clusterEnabled = nodeManager != null))
         dispatcher.register(GroupsCommand(groupManager, registry))
         dispatcher.register(InfoCommand(groupManager, registry))
         dispatcher.register(StartCommand(serviceManager, groupManager))
@@ -107,6 +112,13 @@ class NimbusConsole(
         }
         if (permissionManager != null) {
             dispatcher.register(PermsCommand(permissionManager, eventBus))
+        }
+        if (nodeManager != null) {
+            dispatcher.register(NodesCommand(nodeManager, registry))
+        }
+        if (configPath != null) {
+            dispatcher.register(LbCommand(config, configPath, loadBalancer, registry, groupManager))
+            dispatcher.register(ClusterCommand(config, configPath, nodeManager, registry))
         }
         dispatcher.register(ClearCommand(terminal))
         dispatcher.register(ShutdownCommand(serviceManager, registry))

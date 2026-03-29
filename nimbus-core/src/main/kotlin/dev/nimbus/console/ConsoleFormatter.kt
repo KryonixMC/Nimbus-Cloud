@@ -127,8 +127,10 @@ object ConsoleFormatter {
     fun formatEvent(event: NimbusEvent): String {
         val time = "${DIM}[${timeFormatter.format(event.timestamp)}]$RESET"
         val message = when (event) {
-            is NimbusEvent.ServiceStarting ->
-                "${warn("▲ STARTING")} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName}, port=${event.port})${RESET}"
+            is NimbusEvent.ServiceStarting -> {
+                val nodeInfo = if (event.nodeId != "local") ", node=${event.nodeId}" else ""
+                "${warn("▲ STARTING")} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName}, port=${event.port}$nodeInfo)${RESET}"
+            }
             is NimbusEvent.ServiceReady ->
                 "${success("● READY")} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName})${RESET}"
             is NimbusEvent.ServiceStopping ->
@@ -146,9 +148,9 @@ object ConsoleFormatter {
             is NimbusEvent.PlayerDisconnected ->
                 "${error("−")} ${BOLD}${event.playerName}${RESET} left ${CYAN}${event.serviceName}${RESET}"
             is NimbusEvent.ApiStarted ->
-                "${success("◆ API")} started on ${BOLD}${event.bind}:${event.port}${RESET}"
+                "${colorize("◆ API", BRIGHT_CYAN)} started on ${BOLD}${event.bind}:${event.port}${RESET}"
             is NimbusEvent.ApiStopped ->
-                "${info("◇ API")} stopped ${DIM}(${event.reason})${RESET}"
+                "${colorize("◇ API", CYAN)} stopped ${DIM}(${event.reason})${RESET}"
             is NimbusEvent.ApiWarning ->
                 "${warn("◆ API")} ${event.message}"
             is NimbusEvent.ApiError ->
@@ -185,6 +187,18 @@ object ConsoleFormatter {
                 "${info("~ CHAT")} chat format updated ${DIM}(enabled=${event.enabled})${RESET}"
             is NimbusEvent.ConfigReloaded ->
                 "${info("↻ CONFIG")} reloaded ${BOLD}${event.groupsLoaded}${RESET} group(s)"
+            is NimbusEvent.ClusterStarted ->
+                "${colorize("◆ CLUSTER", MAGENTA)} started on ${BOLD}${event.bind}:${event.port}${RESET} ${DIM}(${event.strategy})${RESET}"
+            is NimbusEvent.NodeConnected ->
+                "${colorize("◆ NODE", MAGENTA)} ${BOLD}${event.nodeId}${RESET} connected from ${DIM}${event.host}${RESET}"
+            is NimbusEvent.NodeDisconnected ->
+                "${warn("◇ NODE")} ${BOLD}${event.nodeId}${RESET} disconnected"
+            is NimbusEvent.NodeHeartbeat ->
+                "${colorize("♥ NODE", DIM)} ${event.nodeId} ${DIM}cpu=${String.format("%.0f", event.cpuUsage * 100)}% services=${event.services}${RESET}"
+            is NimbusEvent.LoadBalancerStarted ->
+                "${colorize("◆ LB", BRIGHT_BLUE)} started on ${BOLD}${event.bind}:${event.port}${RESET} ${DIM}(${event.strategy})${RESET}"
+            is NimbusEvent.LoadBalancerStopped ->
+                "${colorize("◇ LB", BLUE)} stopped ${DIM}(${event.reason})${RESET}"
         }
         return "$time $message"
     }

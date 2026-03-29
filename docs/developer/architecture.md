@@ -4,15 +4,17 @@ This page covers Nimbus's internal architecture for developers who want to under
 
 ## Module structure
 
-Nimbus is organized into four modules:
+Nimbus is organized into six modules:
 
 ```
 nimbus-core (Controller)
 ├── api/           → Ktor REST + WebSocket server
+├── cluster/       → NodeManager, NodeConnection, PlacementStrategy, ClusterWebSocketHandler
 ├── config/        → TOML configuration loading
 ├── console/       → JLine3 interactive REPL
 ├── event/         → Coroutine-based EventBus
 ├── group/         → Server group state management
+├── loadbalancer/  → Layer-4 TCP load balancer for Velocity proxies
 ├── scaling/       → Auto-scaling engine + Velocity updater
 ├── service/       → Service lifecycle, process management
 ├── template/      → Template copying, software download
@@ -21,6 +23,17 @@ nimbus-core (Controller)
 ├── display/       → Sign/NPC display configs
 ├── proxy/         → Proxy sync (tab list, MOTD, chat format)
 └── velocity/      → Velocity config generation
+
+nimbus-protocol (Shared Protocol)
+├── ClusterMessage        → Sealed class for all controller ↔ agent messages
+└── ServiceHandle         → Interface for local and remote service process handles
+
+nimbus-agent (Agent Node)
+├── NimbusAgent           → Entry point, connects to controller
+├── AgentConfig           → TOML config (controller host, token, resources)
+├── ControllerConnection  → WebSocket client, message dispatch
+├── LocalServiceManager   → Launches/stops JVM processes on the agent
+└── TemplateSync          → Downloads and caches templates from controller
 
 nimbus-bridge (Velocity Plugin)
 ├── CloudCommand          → /cloud subcommands (status, list, start, stop, etc.)
@@ -68,12 +81,16 @@ When Nimbus starts (`Nimbus.kt` → `nimbusMain()`), components are initialized 
 9. ServiceManager         → Wire up all dependencies
 10. ScalingEngine         → Start periodic scaling loop
 11. NimbusApi             → Create (but don't start) Ktor server
-12. Shutdown hook         → Register SIGTERM/SIGINT handler
-13. NimbusConsole.init()  → Banner, event listener
-14. Api.start()           → Start Ktor HTTP server
-15. VelocityUpdater       → Start periodic update check (first check after 60s)
-16. startMinimumInstances → Start min_instances for all groups
-17. Console.start()       → JLine3 REPL (blocks until shutdown)
+12. NodeManager           → If cluster.enabled: init cluster coordination
+13. ClusterServer         → If cluster.enabled: separate Ktor server on agent_port for agent WebSocket connections
+14. TcpLoadBalancer       → If loadbalancer.enabled: init Layer-4 TCP proxy
+14. Shutdown hook         → Register SIGTERM/SIGINT handler
+15. NimbusConsole.init()  → Banner, event listener
+16. Api.start()           → Start Ktor HTTP server (+ /cluster WS if cluster enabled)
+17. LoadBalancer.start()  → If enabled: start TCP listener on LB port
+18. VelocityUpdater       → Start periodic update check (first check after 60s)
+19. startMinimumInstances → Start min_instances for all groups
+20. Console.start()       → JLine3 REPL (blocks until shutdown)
 ```
 
 ::: info
@@ -136,15 +153,23 @@ Events are modeled as a `sealed class NimbusEvent`:
 | Proxy sync | `TabListUpdated`, `MotdUpdated`, `PlayerTabUpdated`, `ChatFormatUpdated` |
 | Config | `ConfigReloaded` |
 | API | `ApiStarted`, `ApiStopped`, `ApiWarning`, `ApiError` |
+| Cluster | `NodeConnected`, `NodeDisconnected`, `NodeHeartbeat` |
+| Load balancer | `LoadBalancerStarted`, `LoadBalancerStopped` |
 
 Events are broadcast via the REST API's WebSocket endpoint (`/api/events`) so external systems and plugins can react to them.
 
 ## Process management
 
-Each running service is wrapped in a `ProcessHandle` that manages:
+Each running service is wrapped in a `ServiceHandle` interface that abstracts process management across local and remote nodes:
 
-- **JVM subprocess** -- Started via `ProcessBuilder` with inherited environment
-- **stdout/stderr** -- Captured asynchronously for ready detection and logging
+- **`ProcessHandle`** -- Local JVM subprocess started via `ProcessBuilder` with inherited environment
+- **`RemoteServiceHandle`** -- Proxy for services running on remote agent nodes, communicating via the cluster WebSocket protocol
+
+**Static services always run on the controller.** They have persistent data (worlds, configs) stored in `services/static/` and are never placed on remote nodes. Dynamic and proxy services can be distributed across any node.
+
+Both implementations provide:
+
+- **stdout/stderr** -- Captured asynchronously via `SharedFlow<String>` for ready detection and logging
 - **Ready detection** -- Regex matching against stdout (default pattern: `Done`)
 - **Graceful shutdown** -- Sends `stop` command via stdin, then waits, then force-kills
 
@@ -196,12 +221,16 @@ When Nimbus shuts down:
 
 ```
 1. Cancel scaling engine job
-2. Stop REST API server
-3. Stop all services (via ServiceManager.stopAll()):
+2. Send graceful shutdown to all agents (if cluster enabled, wait up to 30s)
+3. Stop TCP load balancer (if enabled)
+4. Stop REST API server
+5. Disconnect cluster nodes (if enabled)
+6. Stop all local services (via ServiceManager.stopAll()):
    a. Dynamic (game) services first
    b. Static backend (lobby) services
    c. Proxy services last
-4. Cancel coroutine scope
+7. Stop cluster WebSocket server (if enabled)
+8. Cancel coroutine scope
 ```
 
 This order ensures players are moved to lobbies before lobbies shut down, and proxies stay alive as long as possible to handle redirects.
@@ -218,6 +247,8 @@ This order ensures players are moved to lobbies before lobbies shut down, and pr
 | HTTP server | Ktor (CIO) | Lightweight, coroutine-native |
 | HTTP client | Ktor Client (CIO) | Server JAR downloads |
 | SDK client | Java HttpClient | Zero dependencies for Paper/Velocity plugins |
+| Cluster protocol | kotlinx-serialization JSON | Typed messages between controller and agents |
+| Load balancer | Java NIO (ServerSocketChannel) | Non-blocking TCP proxy with zero dependencies |
 
 The core design principle is **no frameworks** -- no Spring, no dependency injection containers. Components are wired directly in `Nimbus.kt`, making the startup path explicit and debuggable.
 

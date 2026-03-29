@@ -241,6 +241,8 @@ private fun dev.nimbus.service.Service.toResponse(): ServiceResponse {
         name = name,
         groupName = groupName,
         port = port,
+        host = host,
+        nodeId = nodeId,
         state = state.name,
         customState = customState,
         pid = pid,

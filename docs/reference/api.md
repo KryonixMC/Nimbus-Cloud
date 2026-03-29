@@ -1294,3 +1294,132 @@ Initiate a graceful shutdown. The response is sent before shutdown begins.
 ::: warning
 This will stop all services and terminate the Nimbus process. The shutdown order is: game servers, then lobbies, then proxies.
 :::
+
+---
+
+## Cluster & Load Balancer
+
+These endpoints are only available when their respective features are enabled in `nimbus.toml`.
+
+### GET /api/nodes
+
+List all connected cluster nodes. Returns `404` if cluster mode is not enabled.
+
+**Response:**
+
+```json
+{
+  "nodes": [
+    {
+      "nodeId": "worker-1",
+      "host": "10.0.1.10",
+      "maxMemory": "8G",
+      "maxServices": 10,
+      "currentServices": 3,
+      "cpuUsage": 0.42,
+      "memoryUsedMb": 3200,
+      "memoryTotalMb": 8192,
+      "isConnected": true,
+      "agentVersion": "0.1.0",
+      "os": "Linux",
+      "arch": "amd64",
+      "services": ["Lobby-2", "BedWars-1", "BedWars-2"]
+    }
+  ],
+  "total": 1
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Node list returned |
+| 404 | Cluster mode not enabled |
+
+---
+
+### GET /api/loadbalancer
+
+Get load balancer status including backend proxy list. Returns `404` if the load balancer is not enabled.
+
+**Response:**
+
+```json
+{
+  "enabled": true,
+  "bind": "0.0.0.0",
+  "port": 25565,
+  "strategy": "least-players",
+  "proxyProtocol": true,
+  "totalConnections": 1247,
+  "activeConnections": 36,
+  "backends": [
+    {
+      "name": "Proxy-1",
+      "host": "127.0.0.1",
+      "port": 30010,
+      "players": 18,
+      "state": "READY"
+    }
+  ]
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Load balancer status returned |
+| 404 | Load balancer not enabled |
+
+---
+
+### GET /api/templates/{name}/download
+
+Download a template as a ZIP archive. Used internally by agent nodes for template distribution. Authenticated via a `token` query parameter matching the cluster token.
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `token` | Yes | Cluster authentication token |
+
+**Example:**
+
+```bash
+curl -o template.zip \
+  "http://controller:8080/api/templates/lobby/download?token=my-cluster-secret"
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Template archive returned (`application/zip`) |
+| 401 | Invalid token |
+| 404 | Template not found |
+
+---
+
+### GET /api/templates/{name}/hash
+
+Get the SHA-256 hash of a template's contents. Used by agents to check if their local template copy is up to date before downloading. Authenticated via a `token` query parameter.
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `token` | Yes | Cluster authentication token |
+
+**Example:**
+
+```bash
+curl "http://controller:8080/api/templates/lobby/hash?token=my-cluster-secret"
+```
+
+**Response:** Plain text SHA-256 hash string.
+
+```
+a1b2c3d4e5f6...
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Hash returned (plain text) |
+| 401 | Invalid token |
+| 404 | Template not found |

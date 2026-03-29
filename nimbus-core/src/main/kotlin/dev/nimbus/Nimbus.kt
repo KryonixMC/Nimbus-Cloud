@@ -1,14 +1,19 @@
 package dev.nimbus
 
 import dev.nimbus.api.NimbusApi
+import dev.nimbus.cluster.ClusterWebSocketHandler
+import dev.nimbus.cluster.NodeManager
 import dev.nimbus.config.ConfigLoader
 import dev.nimbus.config.NimbusConfig
 import dev.nimbus.console.NimbusConsole
 import dev.nimbus.database.DatabaseManager
 import dev.nimbus.database.MetricsCollector
 import dev.nimbus.event.EventBus
+import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
+import dev.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbus.permissions.PermissionManager
+import dev.nimbus.protocol.ClusterMessage
 import dev.nimbus.scaling.ScalingEngine
 import dev.nimbus.scaling.VelocityUpdater
 import java.security.SecureRandom
@@ -164,7 +169,7 @@ fun nimbusMain() = runBlocking {
     databaseManager.init()
 
     val registry = ServiceRegistry()
-    val portAllocator = PortAllocator()
+    val portAllocator = PortAllocator(lbEnabled = config.loadbalancer.enabled)
     val templateManager = TemplateManager()
     val groupManager = GroupManager()
     val permissionManager = PermissionManager(databaseManager)
@@ -192,6 +197,23 @@ fun nimbusMain() = runBlocking {
 
     logger.info("Found ${groupConfigs.size} groups: ${groupConfigs.joinToString { it.group.name }}")
 
+    // ── Cluster mode ───────────────────────────────────
+    val nodeManager: NodeManager? = if (config.cluster.enabled) {
+        NodeManager(config.cluster, registry, eventBus, scope)
+    } else null
+
+    val heartbeatJob: Job? = nodeManager?.startHeartbeatLoop()
+
+    // ── Load Balancer ──────────────────────────────────
+    val loadBalancer: TcpLoadBalancer? = if (config.loadbalancer.enabled) {
+        TcpLoadBalancer(config.loadbalancer, registry, groupManager, scope)
+    } else null
+
+    val lbJob: Job? = loadBalancer?.start()
+    if (loadBalancer != null) {
+        logger.info("TCP Load Balancer started on {}:{}", config.loadbalancer.bind, config.loadbalancer.port)
+    }
+
     // Create service manager
     val serviceManager = ServiceManager(
         config = config,
@@ -201,7 +223,8 @@ fun nimbusMain() = runBlocking {
         groupManager = groupManager,
         eventBus = eventBus,
         scope = scope,
-        softwareResolver = softwareResolver
+        softwareResolver = softwareResolver,
+        nodeManager = nodeManager
     )
 
     // Start scaling engine
@@ -216,6 +239,15 @@ fun nimbusMain() = runBlocking {
     val scalingJob = scalingEngine.start()
     logger.info("Scaling engine started (interval: {}ms)", config.controller.heartbeatInterval)
 
+    // Create cluster WebSocket handler and dedicated server (if cluster enabled)
+    val clusterWsHandler: ClusterWebSocketHandler? = if (nodeManager != null) {
+        ClusterWebSocketHandler(config.cluster, nodeManager, registry, eventBus)
+    } else null
+
+    val clusterServer: dev.nimbus.cluster.ClusterServer? = if (clusterWsHandler != null) {
+        dev.nimbus.cluster.ClusterServer(config.cluster, clusterWsHandler, templatesDir, eventBus, scope)
+    } else null
+
     // Create REST API (started after console.init() so events are visible)
     val api = NimbusApi(
         config = config,
@@ -229,7 +261,10 @@ fun nimbusMain() = runBlocking {
         scope = scope,
         baseDir = baseDir,
         groupsDir = groupsDir,
-        configPath = configPath
+        configPath = configPath,
+        nodeManager = nodeManager,
+        loadBalancer = loadBalancer,
+        templatesDir = templatesDir
     )
 
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)
@@ -238,6 +273,17 @@ fun nimbusMain() = runBlocking {
         if (!shutdownStarted.compareAndSet(false, true)) return@Thread
         runBlocking {
             logger.info("Shutdown signal received, stopping all services...")
+            lbJob?.cancel()
+            heartbeatJob?.cancel()
+            clusterServer?.stop()
+            // Send ShutdownAgent to all nodes
+            if (nodeManager != null) {
+                for (node in nodeManager.getAllNodes()) {
+                    try {
+                        runBlocking { node.send(ClusterMessage.ShutdownAgent()) }
+                    } catch (_: Exception) {}
+                }
+            }
             metricsJobs.forEach { it.cancel() }
             scalingJob.cancel()
             api.stop()
@@ -263,12 +309,28 @@ fun nimbusMain() = runBlocking {
         softwareResolver = softwareResolver,
         api = api,
         permissionManager = permissionManager,
-        proxySyncManager = proxySyncManager
+        proxySyncManager = proxySyncManager,
+        nodeManager = nodeManager,
+        loadBalancer = loadBalancer,
+        configPath = configPath
     )
     console.init()
 
     // Start REST API after console init so the event is visible
     api.start()
+
+    // Start cluster WebSocket server on dedicated agent_port (if cluster enabled)
+    clusterServer?.start()
+    if (clusterServer != null) {
+        scope.launch {
+            eventBus.emit(NimbusEvent.ClusterStarted(config.cluster.bind, config.cluster.agentPort, config.cluster.placementStrategy))
+        }
+    }
+    if (loadBalancer != null) {
+        scope.launch {
+            eventBus.emit(NimbusEvent.LoadBalancerStarted(config.loadbalancer.bind, config.loadbalancer.port, config.loadbalancer.strategy))
+        }
+    }
 
     // Check for compatibility issues and print warnings to console
     console.printCompatWarnings(serviceManager.checkCompatibility())
@@ -293,6 +355,17 @@ fun nimbusMain() = runBlocking {
 
     // Console exited (shutdown command), clean up
     if (shutdownStarted.compareAndSet(false, true)) {
+        lbJob?.cancel()
+        heartbeatJob?.cancel()
+        clusterServer?.stop()
+        // Send ShutdownAgent to all nodes
+        if (nodeManager != null) {
+            for (node in nodeManager.getAllNodes()) {
+                try {
+                    node.send(ClusterMessage.ShutdownAgent())
+                } catch (_: Exception) {}
+            }
+        }
         metricsJobs.forEach { it.cancel() }
         updaterJob.cancel()
         scalingJob.cancel()
