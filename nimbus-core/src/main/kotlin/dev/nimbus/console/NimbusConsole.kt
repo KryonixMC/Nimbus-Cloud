@@ -7,6 +7,7 @@ import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
 import dev.nimbus.permissions.PermissionManager
+import dev.nimbus.service.CompatibilityChecker
 import dev.nimbus.service.ServiceManager
 import dev.nimbus.service.ServiceRegistry
 import dev.nimbus.template.SoftwareResolver
@@ -145,15 +146,15 @@ class NimbusConsole(
     /**
      * Prints compatibility warnings directly to the console terminal.
      */
-    fun printCompatWarnings(warnings: List<ServiceManager.CompatWarning>) {
+    fun printCompatWarnings(warnings: List<CompatibilityChecker.CompatWarning>) {
         if (warnings.isEmpty()) return
         val w = terminal.writer()
 
         for (warning in warnings) {
             val (icon, color) = when (warning.level) {
-                ServiceManager.CompatWarning.Level.ERROR -> "[!]" to ConsoleFormatter.RED
-                ServiceManager.CompatWarning.Level.WARN -> "[!]" to ConsoleFormatter.YELLOW
-                ServiceManager.CompatWarning.Level.INFO -> "[i]" to ConsoleFormatter.CYAN
+                CompatibilityChecker.CompatWarning.Level.ERROR -> "[!]" to ConsoleFormatter.RED
+                CompatibilityChecker.CompatWarning.Level.WARN -> "[!]" to ConsoleFormatter.YELLOW
+                CompatibilityChecker.CompatWarning.Level.INFO -> "[i]" to ConsoleFormatter.CYAN
             }
 
             w.print("$color$icon${ConsoleFormatter.RESET} ")

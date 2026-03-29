@@ -33,6 +33,9 @@ class ScalingEngine(
     /** Tracks when each service became empty (for idle timeout). Keyed by service name. */
     private val idleSince = ConcurrentHashMap<String, Instant>()
 
+    /** Tracks consecutive zero-player readings per service to avoid acting on transient empties. */
+    private val consecutiveZeroReadings = ConcurrentHashMap<String, Int>()
+
     /**
      * Starts the scaling loop. Runs periodically every [checkIntervalMs].
      * @return a [Job] that can be cancelled to stop the engine.
@@ -106,10 +109,15 @@ class ScalingEngine(
                 if (service.playerCount > 0) {
                     // Service has players; remove from idle tracking if present
                     idleSince.remove(service.name)
+                    consecutiveZeroReadings.remove(service.name)
                     continue
                 }
 
-                // Service is empty — track idle start if not already tracked
+                // Require consecutive zero readings before tracking as idle
+                val zeroCount = consecutiveZeroReadings.merge(service.name, 1) { old, _ -> old + 1 } ?: 0
+                if (zeroCount < 2) continue  // Skip first zero reading
+
+                // Service is confirmed empty — track idle start
                 val idleStart = idleSince.computeIfAbsent(service.name) { Instant.now() }
 
                 val scaleDownReason = ScalingRule.shouldScaleDown(
@@ -138,6 +146,7 @@ class ScalingEngine(
         // Clean up idleSince entries for services that no longer exist (manually stopped, crashed, etc.)
         val activeServiceNames = registry.getAll().map { it.name }.toSet()
         idleSince.keys.removeAll { it !in activeServiceNames }
+        consecutiveZeroReadings.keys.removeAll { it !in activeServiceNames }
     }
 
     /**

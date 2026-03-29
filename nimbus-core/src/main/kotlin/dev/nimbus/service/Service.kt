@@ -3,16 +3,39 @@ package dev.nimbus.service
 import java.nio.file.Path
 import java.time.Instant
 
-data class Service(
+class Service(
     val name: String,
     val groupName: String,
     val port: Int,
-    var state: ServiceState = ServiceState.PREPARING,
-    var customState: String? = null,
+    initialState: ServiceState = ServiceState.PREPARING,
+    @Volatile var customState: String? = null,
     var pid: Long? = null,
-    var playerCount: Int = 0,
+    @Volatile var playerCount: Int = 0,
     var startedAt: Instant? = null,
     var restartCount: Int = 0,
     var workingDirectory: Path,
     var isStatic: Boolean = false
-)
+) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(Service::class.java)
+
+    @Volatile
+    private var _state: ServiceState = initialState
+    val state: ServiceState get() = _state
+
+    fun transitionTo(newState: ServiceState): Boolean {
+        val allowed = when (_state) {
+            ServiceState.PREPARING -> setOf(ServiceState.STARTING, ServiceState.STOPPED)
+            ServiceState.STARTING -> setOf(ServiceState.READY, ServiceState.CRASHED, ServiceState.STOPPED)
+            ServiceState.READY -> setOf(ServiceState.STOPPING, ServiceState.CRASHED)
+            ServiceState.STOPPING -> setOf(ServiceState.STOPPED)
+            ServiceState.STOPPED -> emptySet()
+            ServiceState.CRASHED -> setOf(ServiceState.PREPARING)
+        }
+        if (newState !in allowed) {
+            logger.warn("Invalid state transition for '{}': {} -> {}", name, _state, newState)
+            return false
+        }
+        _state = newState
+        return true
+    }
+}

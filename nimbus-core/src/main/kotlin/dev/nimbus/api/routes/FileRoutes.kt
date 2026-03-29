@@ -236,6 +236,16 @@ private suspend fun resolveScopePath(
         return null
     }
 
+    // Additionally resolve symlinks to prevent symlink-based path traversal
+    if (resolved.exists()) {
+        val realPath = resolved.toRealPath()
+        val realRoot = root.toRealPath()
+        if (!realPath.startsWith(realRoot)) {
+            call.respond(HttpStatusCode.Forbidden, ApiMessage(false, "Path outside of scope"))
+            return null
+        }
+    }
+
     return scopeName to resolved
 }
 

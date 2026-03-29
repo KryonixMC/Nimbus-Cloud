@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
 import java.io.BufferedWriter
 import java.io.OutputStreamWriter
@@ -38,10 +39,14 @@ class ProcessHandle {
         stdinWriter = BufferedWriter(OutputStreamWriter(process!!.outputStream))
 
         scope.launch {
-            process!!.inputStream.bufferedReader().useLines { lines ->
-                for (line in lines) {
-                    _stdoutLines.emit(line)
+            try {
+                process!!.inputStream.bufferedReader().useLines { lines ->
+                    for (line in lines) {
+                        _stdoutLines.emit(line)
+                    }
                 }
+            } catch (e: Exception) {
+                logger.warn("stdout reader terminated: {}", e.message)
             }
         }
     }
@@ -99,6 +104,13 @@ class ProcessHandle {
         process?.exitValue()
     } catch (_: IllegalThreadStateException) {
         null
+    }
+
+    suspend fun awaitExit(): Int? {
+        return withContext(Dispatchers.IO) {
+            process?.onExit()?.await()
+            exitCode()
+        }
     }
 
     fun destroy() {

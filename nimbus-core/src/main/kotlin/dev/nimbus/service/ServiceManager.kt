@@ -5,7 +5,6 @@ import dev.nimbus.config.ServerSoftware
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
 import dev.nimbus.group.GroupManager
-import dev.nimbus.template.ConfigPatcher
 import dev.nimbus.template.SoftwareResolver
 import dev.nimbus.template.TemplateManager
 import dev.nimbus.velocity.VelocityConfigGen
@@ -17,13 +16,10 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.seconds
 
 class ServiceManager(
@@ -33,274 +29,55 @@ class ServiceManager(
     private val templateManager: TemplateManager,
     private val groupManager: GroupManager,
     private val eventBus: EventBus,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val softwareResolver: SoftwareResolver
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
 
     private val processHandles = ConcurrentHashMap<String, ProcessHandle>()
-    private val configPatcher = ConfigPatcher()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
-    private val softwareResolver = SoftwareResolver()
-    private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
+    private val compatibilityChecker = CompatibilityChecker(
+        groupManager, config,
+        JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
+    )
 
-    /**
-     * Determines forwarding mode based on all configured groups.
-     * If ANY backend group uses a version < 1.13, legacy (BungeeCord) forwarding is required.
-     * Forge servers also default to legacy forwarding unless they have a Velocity forwarding mod.
-     * Otherwise, modern (Velocity) forwarding is used for better security.
-     */
-    /**
-     * Checks if an MC version is pre-1.13 (needs legacy forwarding).
-     * Supports both old (1.x.x) and new (26.x) versioning schemes.
-     */
-    private fun isLegacyVersion(mcVersion: String): Boolean {
-        val parts = mcVersion.split(".")
-        val major = parts.getOrNull(0)?.toIntOrNull() ?: return false
-        if (major >= 2) return false // New scheme (26.x+) is always modern
-        val minor = parts.getOrNull(1)?.toIntOrNull() ?: return false
-        return minor < 13
-    }
-
-    /**
-     * Returns the nogui flag for a given MC version.
-     * 1.14+ uses "--nogui", 1.7-1.13 uses "nogui", pre-1.7 uses nothing.
-     * New scheme (26.x+) always uses "--nogui".
-     */
-    private fun noguiFlag(mcVersion: String): String? {
-        val parts = mcVersion.split(".")
-        val major = parts.getOrNull(0)?.toIntOrNull() ?: return "--nogui"
-        if (major >= 2) return "--nogui"
-        val minor = parts.getOrNull(1)?.toIntOrNull() ?: return "--nogui"
-        return when {
-            minor >= 14 -> "--nogui"
-            minor >= 7 -> "nogui"
-            else -> null
-        }
-    }
-
-    fun determineForwardingMode(): String {
-        val hasLegacyServer = groupManager.getAllGroups().any { group ->
-            group.config.group.software != ServerSoftware.VELOCITY &&
-                isLegacyVersion(group.config.group.version)
-        }
-        return if (hasLegacyServer) "legacy" else "modern"
-    }
+    private val serviceFactory = ServiceFactory(
+        config = config,
+        registry = registry,
+        portAllocator = portAllocator,
+        templateManager = templateManager,
+        groupManager = groupManager,
+        softwareResolver = softwareResolver,
+        compatibilityChecker = compatibilityChecker,
+        eventBus = eventBus,
+        velocityConfigGen = velocityConfigGen
+    )
 
     suspend fun startService(groupName: String): Service? {
-        val group = groupManager.getGroup(groupName)
-        if (group == null) {
-            logger.warn("Cannot start service: group '{}' not found", groupName)
-            return null
-        }
-
-        // Early check (non-atomic) for fast rejection — atomic check happens at register time
-        val currentCount = registry.countByGroup(groupName)
-        if (currentCount >= group.maxInstances) {
-            logger.warn("Cannot start service: group '{}' already at max instances ({}/{})", groupName, currentCount, group.maxInstances)
-            return null
-        }
-
-        val software = group.config.group.software
-
-        // Always use the lowest available instance number
-        val existing = registry.getByGroup(groupName).map { it.name }.toSet()
-        var instanceNumber = 1
-        while ("$groupName-$instanceNumber" in existing) instanceNumber++
-        val serviceName = "$groupName-$instanceNumber"
-
-        val port = if (software == ServerSoftware.VELOCITY) {
-            portAllocator.allocateProxyPort()
-        } else {
-            portAllocator.allocateBackendPort()
-        }
-
-        val templatesDir = Path(config.paths.templates)
-        val servicesDir = Path(config.paths.services)
-        val isStatic = group.isStatic
-
-        val workingDirectory = if (isStatic) {
-            servicesDir.resolve("static").resolve(serviceName)
-        } else {
-            val shortUuid = UUID.randomUUID().toString().replace("-", "").take(8)
-            servicesDir.resolve("temp").resolve("${serviceName}_$shortUuid")
-        }
-
-        val service = Service(
-            name = serviceName,
-            groupName = groupName,
-            port = port,
-            state = ServiceState.PREPARING,
-            workingDirectory = workingDirectory,
-            isStatic = isStatic
-        )
-
-        // Ensure template directory exists and JAR is available (auto-download/install if missing)
-        val templateDir = templatesDir.resolve(group.config.group.template)
-        if (!templateDir.exists()) {
-            templateDir.createDirectories()
-        }
-
-        val jarAvailable = softwareResolver.ensureJarAvailable(
-            software,
-            group.config.group.version,
-            templateDir,
-            modloaderVersion = group.config.group.modloaderVersion,
-            customJarName = group.config.group.jarName
-        )
-        if (!jarAvailable) {
-            logger.error("Cannot start service '{}': failed to obtain server JAR for {} {}", serviceName, software, group.config.group.version)
-            portAllocator.release(port)
-            return null
-        }
-
-        // Auto-deploy proxy forwarding mods for modded servers
-        if (software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) {
-            softwareResolver.ensureForwardingMod(software, group.config.group.version, templateDir)
-        } else if (software == ServerSoftware.FABRIC) {
-            softwareResolver.ensureFabricProxyMod(templateDir, group.config.group.version)
-        }
-
-        // Auto-create eula.txt for all game servers
-        if (software != ServerSoftware.VELOCITY) {
-            val eulaFile = templateDir.resolve("eula.txt")
-            if (!eulaFile.exists()) {
-                eulaFile.writeText("eula=true\n")
-                logger.info("Created eula.txt in template '{}'", group.config.group.template)
-            }
-        }
-
-        // Pre-initialize Fabric template: run launcher once to download vanilla server
-        if (software == ServerSoftware.FABRIC && !templateDir.resolve(".fabric").exists()) {
-            logger.info("Initializing Fabric template (downloading vanilla server)...")
-            initializeFabricTemplate(templateDir)
-        }
-
-        // Initialize Velocity template if velocity.toml doesn't exist yet
-        val jarName = softwareResolver.jarFileName(software)
-        if (software == ServerSoftware.VELOCITY && !templateDir.resolve("velocity.toml").exists()) {
-            logger.info("Initializing Velocity template (first run generates config files)...")
-            initializeVelocityTemplate(templateDir, jarName)
-        }
-
-        // Atomic check-and-register to prevent exceeding max instances under concurrent starts
-        if (!registry.registerIfUnderLimit(service, group.maxInstances)) {
-            logger.warn("Cannot start service: group '{}' reached max instances (concurrent start race avoided)", groupName)
-            portAllocator.release(port)
-            return null
-        }
-        eventBus.emit(NimbusEvent.ServiceStarting(serviceName, groupName, port))
-        logger.info("Starting service '{}' on port {}", serviceName, port)
+        val prepared = serviceFactory.prepare(groupName) ?: return null
+        val (service, workDir, command, readyPattern, isModded, readyTimeout) = prepared
+        val serviceName = service.name
 
         return try {
-            val workDir = templateManager.prepareService(
-                templateName = group.config.group.template,
-                targetDir = workingDirectory,
-                templatesDir = templatesDir,
-                preserveExisting = isStatic
-            )
-
-            // Apply global templates (always overwrite, even for static services)
-            val isVanillaBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PURPUR, ServerSoftware.VELOCITY)
-            if (isVanillaBased) {
-                templateManager.applyGlobalTemplate(templatesDir.resolve("global"), workDir)
-            }
-            if (software == ServerSoftware.VELOCITY) {
-                templateManager.applyGlobalTemplate(templatesDir.resolve("global_proxy"), workDir)
-            }
-
-            val forwardingMode = determineForwardingMode()
-            when (software) {
-                ServerSoftware.VELOCITY -> configPatcher.patchVelocityConfig(workDir, port, forwardingMode)
-                else -> {
-                    configPatcher.patchServerProperties(workDir, port)
-
-                    val isPaperBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PURPUR)
-                    val velocityTemplateDir = templatesDir.resolve("proxy")
-
-                    if (isPaperBased) {
-                        if (forwardingMode == "modern") {
-                            val minor = group.config.group.version.split(".").getOrNull(1)?.toIntOrNull() ?: 99
-                            if (minor >= 13 && velocityTemplateDir.resolve("forwarding.secret").exists()) {
-                                configPatcher.patchPaperForVelocity(workDir, velocityTemplateDir)
-                            }
-                        } else {
-                            configPatcher.patchSpigotForBungeeCord(workDir)
-                            logger.info("Using legacy (BungeeCord) forwarding for '{}' (pre-1.13 servers detected)", serviceName)
-                        }
-                    } else if (software == ServerSoftware.FABRIC) {
-                        configPatcher.patchFabricProxyLite(workDir, velocityTemplateDir, forwardingMode)
-                    } else if (software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) {
-                        configPatcher.patchForgeProxy(workDir, velocityTemplateDir, forwardingMode)
-                    }
-                }
-            }
-
-            val memory = group.config.group.resources.memory
-            val jvmArgs = group.config.group.jvm.args
-            val javaBin = javaResolver.resolve(group.config.group.version, software, group.config.group.javaPath)
-            val requiredJava = javaResolver.requiredJavaVersion(group.config.group.version, software)
-            logger.info("Service '{}' using Java {} ({})", serviceName, requiredJava, javaBin)
-            val command = mutableListOf(javaBin, "-Xmx$memory")
-            command.addAll(jvmArgs)
-
-            // Inject Nimbus identity so plugins using the SDK can auto-discover their service
-            command.add("-Dnimbus.service.name=$serviceName")
-            command.add("-Dnimbus.service.group=$groupName")
-            command.add("-Dnimbus.service.port=$port")
-            if (config.api.enabled) {
-                command.add("-Dnimbus.api.url=http://127.0.0.1:${config.api.port}")
-                if (config.api.token.isNotBlank()) {
-                    command.add("-Dnimbus.api.token=${config.api.token}")
-                }
-            }
-
-            // Build startup command based on software type
-            val isModded = software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE, ServerSoftware.FABRIC, ServerSoftware.CUSTOM)
-            if (isModded) {
-                // Resolve args from the working dir (where the process actually runs)
-                val startArgs = softwareResolver.getModdedStartCommand(software, workDir, group.config.group.jarName)
-                command.addAll(startArgs)
-            } else {
-                command.add("-jar")
-                command.add(jarName)
-            }
-
-            // Add nogui flag
-            if (software != ServerSoftware.VELOCITY) {
-                if (isModded) {
-                    command.add("nogui")
-                } else {
-                    val flag = noguiFlag(group.config.group.version)
-                    if (flag != null) command.add(flag)
-                }
-            }
-
             val processHandle = ProcessHandle()
-
-            // Set custom readiness pattern for modded servers
-            val customPattern = group.config.group.readyPattern
-            if (customPattern.isNotEmpty()) {
-                processHandle.setReadyPattern(Regex(customPattern))
-            } else if (software == ServerSoftware.FORGE || software == ServerSoftware.NEOFORGE) {
-                processHandle.setReadyPattern(Regex("""Done \(|For help, type"""))
+            if (readyPattern != null) {
+                processHandle.setReadyPattern(readyPattern)
             }
-
             processHandle.start(workDir, command)
             processHandles[serviceName] = processHandle
 
-            service.state = ServiceState.STARTING
+            service.transitionTo(ServiceState.STARTING)
             service.pid = processHandle.pid()
             service.startedAt = Instant.now()
 
-            // Wait for server to become ready (modded servers need more time)
-            val readyTimeout = if (isModded) 180.seconds else 60.seconds
+            // Wait for server to become ready
             scope.launch {
                 try {
                     val ready = processHandle.waitForReady(readyTimeout)
                     if (ready) {
-                        service.state = ServiceState.READY
-                        eventBus.emit(NimbusEvent.ServiceReady(serviceName, groupName))
+                        service.transitionTo(ServiceState.READY)
+                        eventBus.emit(NimbusEvent.ServiceReady(serviceName, service.groupName))
                         logger.info("Service '{}' is ready", serviceName)
                         // Update Velocity proxy server list and reload
                         velocityConfigGen.updateProxyServerList()
@@ -314,9 +91,14 @@ class ServiceManager(
             }
 
             // Monitor for unexpected process exit
+            val group = groupManager.getGroup(service.groupName)
             scope.launch {
                 try {
-                    monitorProcess(service, processHandle, groupName, group.config.group.lifecycle.restartOnCrash, group.config.group.lifecycle.maxRestarts)
+                    monitorProcess(
+                        service, processHandle, service.groupName,
+                        group?.config?.group?.lifecycle?.restartOnCrash ?: false,
+                        group?.config?.group?.lifecycle?.maxRestarts ?: 0
+                    )
                 } catch (e: Exception) {
                     logger.error("Error monitoring service '{}'", serviceName, e)
                 }
@@ -325,7 +107,9 @@ class ServiceManager(
             service
         } catch (e: Exception) {
             logger.error("Failed to start service '{}'", serviceName, e)
-            portAllocator.release(port)
+            processHandles[serviceName]?.destroy()
+            processHandles.remove(serviceName)
+            portAllocator.release(service.port)
             registry.unregister(serviceName)
             null
         }
@@ -333,12 +117,7 @@ class ServiceManager(
 
     private suspend fun monitorProcess(service: Service, handle: ProcessHandle, groupName: String, restartOnCrash: Boolean, maxRestarts: Int) {
         val serviceName = service.name
-        // Poll until the process is no longer alive
-        withContext(Dispatchers.IO) {
-            while (handle.isAlive()) {
-                Thread.sleep(1000)
-            }
-        }
+        handle.awaitExit()
 
         // If we intentionally stopped it, do nothing
         if (service.state == ServiceState.STOPPING || service.state == ServiceState.STOPPED) {
@@ -364,14 +143,14 @@ class ServiceManager(
 
         // Exit code 0 = clean shutdown, not a crash
         if (exitCode == 0) {
-            service.state = ServiceState.STOPPED
+            service.transitionTo(ServiceState.STOPPED)
             logger.info("Service '{}' exited cleanly (code 0)", serviceName)
             eventBus.emit(NimbusEvent.ServiceStopped(serviceName))
             return
         }
 
         // Non-zero exit = actual crash
-        service.state = ServiceState.CRASHED
+        service.transitionTo(ServiceState.CRASHED)
         logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
         eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount))
 
@@ -395,7 +174,7 @@ class ServiceManager(
 
         return try {
             eventBus.emit(NimbusEvent.ServiceStopping(name))
-            service.state = ServiceState.STOPPING
+            service.transitionTo(ServiceState.STOPPING)
             logger.info("Stopping service '{}'", name)
 
             val handle = processHandles[name]
@@ -405,7 +184,7 @@ class ServiceManager(
             }
 
             portAllocator.release(service.port)
-            service.state = ServiceState.STOPPED
+            service.transitionTo(ServiceState.STOPPED)
             eventBus.emit(NimbusEvent.ServiceStopped(name))
 
             registry.unregister(name)
@@ -442,124 +221,9 @@ class ServiceManager(
         return startService(groupName)
     }
 
-    /**
-     * Checks for compatibility issues between configured groups.
-     * Returns a list of warning messages to display in the console.
-     */
-    fun checkCompatibility(): List<CompatWarning> {
-        val warnings = mutableListOf<CompatWarning>()
-        val allGroups = groupManager.getAllGroups()
-        val forwardingMode = determineForwardingMode()
+    fun checkCompatibility() = compatibilityChecker.checkCompatibility()
 
-        val legacyGroups = allGroups.filter { group ->
-            group.config.group.software != ServerSoftware.VELOCITY &&
-                isLegacyVersion(group.config.group.version)
-        }
-
-        val modernOnlyGroups = allGroups.filter { group ->
-            group.config.group.software in listOf(ServerSoftware.FABRIC, ServerSoftware.NEOFORGE)
-        }
-
-        // Legacy + Fabric/NeoForge conflict
-        if (legacyGroups.isNotEmpty() && modernOnlyGroups.isNotEmpty()) {
-            val legacy = legacyGroups.joinToString(", ") { "${it.name} (${it.config.group.software} ${it.config.group.version})" }
-            val modern = modernOnlyGroups.joinToString(", ") { "${it.name} (${it.config.group.software} ${it.config.group.version})" }
-            warnings.add(CompatWarning(
-                CompatWarning.Level.ERROR,
-                "Forwarding mode conflict!",
-                "Pre-1.13 servers force legacy forwarding: $legacy\n" +
-                "These require modern forwarding and WILL NOT WORK: $modern\n" +
-                "Fix: Upgrade pre-1.13 servers to 1.13+ or remove them."
-            ))
-        }
-
-        // Mixed version info
-        val mcVersions = allGroups
-            .filter { it.config.group.software != ServerSoftware.VELOCITY }
-            .map { it.config.group.version }
-            .distinct()
-        if (mcVersions.size > 1) {
-            val versions = mcVersions.joinToString(", ")
-            warnings.add(CompatWarning(
-                CompatWarning.Level.INFO,
-                "Multiple MC versions: $versions (forwarding: $forwardingMode)",
-                if (forwardingMode == "legacy") "Via plugins (ViaVersion/ViaBackwards) recommended for cross-version support." else ""
-            ))
-        }
-
-        // Forge/NeoForge without proxy mod
-        for (g in allGroups.filter { it.config.group.software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE) }) {
-            val templateDir = java.nio.file.Path.of(config.paths.templates).resolve(g.config.group.template)
-            val modsDir = templateDir.resolve("mods")
-            val hasProxyMod = modsDir.toFile().listFiles()?.any {
-                val name = it.name.lowercase()
-                name.contains("proxy-compatible") || name.contains("bungeeforge") || name.contains("neovelocity")
-            } ?: false
-            if (!hasProxyMod) {
-                warnings.add(CompatWarning(
-                    CompatWarning.Level.WARN,
-                    "Group '${g.name}' (${g.config.group.software}) has no proxy forwarding mod",
-                    "Players cannot connect via Velocity. Nimbus will try to auto-install on next start."
-                ))
-            }
-        }
-
-        // Fabric without FabricProxy-Lite
-        for (g in allGroups.filter { it.config.group.software == ServerSoftware.FABRIC }) {
-            val templateDir = java.nio.file.Path.of(config.paths.templates).resolve(g.config.group.template)
-            val modsDir = templateDir.resolve("mods")
-            val hasProxyMod = modsDir.toFile().listFiles()?.any {
-                val name = it.name.lowercase()
-                name.contains("fabricproxy") || name.contains("proxy-lite")
-            } ?: false
-            if (!hasProxyMod) {
-                warnings.add(CompatWarning(
-                    CompatWarning.Level.WARN,
-                    "Group '${g.name}' (FABRIC) has no FabricProxy-Lite mod",
-                    "Players cannot connect via Velocity. Nimbus will try to auto-install on next start."
-                ))
-            }
-        }
-
-        // Java version checks
-        val detected = javaResolver.getDetectedVersions()
-        val backendGroups = allGroups.filter { it.config.group.software != ServerSoftware.VELOCITY }
-
-        val missingJavas = backendGroups.mapNotNull { g ->
-            val min = javaResolver.requiredJavaVersion(g.config.group.version, g.config.group.software)
-            val max = javaResolver.maxJavaVersion(g.config.group.version, g.config.group.software)
-            val hasCompatible = detected.keys.any { it >= min && (max == null || it <= max) }
-            if (!hasCompatible) {
-                val range = if (max != null) "Java $min-$max" else "Java $min+"
-                "${g.name} ($range needed)"
-            } else null
-        }
-
-        if (missingJavas.isNotEmpty()) {
-            warnings.add(CompatWarning(
-                CompatWarning.Level.WARN,
-                "Missing Java versions — will auto-download on first start",
-                "No compatible Java found locally for: ${missingJavas.joinToString(", ")}\n" +
-                "Detected: ${if (detected.isEmpty()) "none" else detected.keys.sorted().joinToString(", ") { "Java $it" }}\n" +
-                "Nimbus will download the correct JDK automatically from Adoptium."
-            ))
-        }
-
-        if (detected.isNotEmpty()) {
-            val javaInfo = detected.entries.sortedBy { it.key }.joinToString(", ") { "Java ${it.key}" }
-            warnings.add(CompatWarning(
-                CompatWarning.Level.INFO,
-                "Java: $javaInfo",
-                ""
-            ))
-        }
-
-        return warnings
-    }
-
-    data class CompatWarning(val level: Level, val title: String, val detail: String) {
-        enum class Level { INFO, WARN, ERROR }
-    }
+    fun determineForwardingMode() = compatibilityChecker.determineForwardingMode()
 
     suspend fun startMinimumInstances() {
         logger.info("Starting minimum instances for all groups")
@@ -700,102 +364,6 @@ class ServiceManager(
         } catch (e: Exception) {
             logger.warn("Failed to reload Velocity: {}", e.message)
         }
-    }
-
-    /**
-     * Runs Fabric server launcher once in the template dir to download vanilla server JAR
-     * and create .fabric/ cache directory. This prevents each instance from re-downloading.
-     */
-    private suspend fun initializeFabricTemplate(templateDir: Path) {
-        try {
-            logger.info("Running Fabric launcher to download vanilla server...")
-            val process = withContext(Dispatchers.IO) {
-                ProcessBuilder("java", "-jar", "server.jar", "nogui")
-                    .directory(templateDir.toFile())
-                    .redirectErrorStream(true)
-                    .start()
-            }
-            // Wait for the Fabric launcher to download vanilla server and start up
-            // Once we see "Done" or eula prompt, kill it — we just needed the download
-            withContext(Dispatchers.IO) {
-                val reader = process.inputStream.bufferedReader()
-                val startTime = System.currentTimeMillis()
-                val timeout = 120_000L // 2 minutes max
-                while (process.isAlive && System.currentTimeMillis() - startTime < timeout) {
-                    if (reader.ready()) {
-                        val line = reader.readLine() ?: break
-                        // Stop once Fabric has downloaded what it needs
-                        if (line.contains("You need to agree to the EULA") || line.contains("Done (") || line.contains("Stopping server")) {
-                            break
-                        }
-                    } else {
-                        Thread.sleep(200)
-                    }
-                }
-                if (process.isAlive) process.destroyForcibly()
-            }
-
-            if (templateDir.resolve(".fabric").exists()) {
-                logger.info("Fabric template initialized — vanilla server downloaded")
-            } else {
-                logger.warn("Fabric initialization may not have completed — .fabric/ directory not found")
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to initialize Fabric template: {}", e.message, e)
-        }
-    }
-
-    /**
-     * Runs Velocity once in the template dir to generate velocity.toml, forwarding.secret, etc.
-     * Velocity exits after generating configs -- we wait for it to finish.
-     */
-    private suspend fun initializeVelocityTemplate(templateDir: Path, jarName: String) {
-        try {
-            val process = withContext(Dispatchers.IO) {
-                ProcessBuilder("java", "-jar", jarName)
-                    .directory(templateDir.toFile())
-                    .redirectErrorStream(true)
-                    .start()
-            }
-            // Wait up to 15 seconds for Velocity to generate its config and exit
-            withContext(Dispatchers.IO) {
-                process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
-                if (process.isAlive) process.destroyForcibly()
-            }
-
-            if (templateDir.resolve("velocity.toml").exists()) {
-                logger.info("Velocity template initialized successfully")
-                // Remove Velocity's default server entries (lobby, factions, minigames, etc.)
-                // Nimbus manages the [servers] section dynamically via VelocityConfigGen
-                cleanDefaultVelocityServers(templateDir)
-            } else {
-                logger.warn("Velocity config was not generated -- proxy may fail to start")
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to initialize Velocity template: {}", e.message, e)
-        }
-    }
-
-    /**
-     * Removes Velocity's default server entries from velocity.toml.
-     * Velocity generates default servers (lobby, factions, minigames) on first run.
-     * Nimbus manages servers dynamically -- these defaults cause ghost entries and confuse the hub plugin.
-     */
-    private fun cleanDefaultVelocityServers(templateDir: Path) {
-        val configFile = templateDir.resolve("velocity.toml")
-        if (!configFile.exists()) return
-
-        val content = configFile.readText()
-
-        // Replace [servers] with an empty section (Nimbus fills this at runtime)
-        val cleanServers = "[servers]\ntry = []\n"
-        val cleanForcedHosts = "[forced-hosts]\n"
-
-        var result = velocityConfigGen.replaceTOMLSection(content, "servers", cleanServers)
-        result = velocityConfigGen.replaceTOMLSection(result, "forced-hosts", cleanForcedHosts)
-
-        configFile.writeText(result)
-        logger.info("Cleaned default server entries from Velocity template")
     }
 
     private fun cleanupWorkingDirectory(workDir: Path) {
