@@ -19,6 +19,7 @@ class LocalProcessHandle {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var process: Process? = null
+    private var adoptedHandle: ProcessHandle? = null
     private var stdinWriter: BufferedWriter? = null
 
     private val _stdoutLines = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -92,10 +93,10 @@ class LocalProcessHandle {
         }
     }
 
-    fun isAlive(): Boolean = process?.isAlive ?: false
+    fun isAlive(): Boolean = process?.isAlive ?: adoptedHandle?.isAlive ?: false
 
     fun pid(): Long? = try {
-        process?.pid()
+        process?.pid() ?: adoptedHandle?.pid()
     } catch (_: UnsupportedOperationException) {
         null
     }
@@ -108,7 +109,11 @@ class LocalProcessHandle {
 
     suspend fun awaitExit(): Int? {
         return withContext(Dispatchers.IO) {
-            process?.onExit()?.await()
+            if (process != null) {
+                process?.onExit()?.await()
+            } else if (adoptedHandle != null) {
+                adoptedHandle?.onExit()?.await()
+            }
             exitCode()
         }
     }
@@ -118,5 +123,35 @@ class LocalProcessHandle {
         scope.cancel()
         stdinWriter?.runCatching { close() }
         process?.destroyForcibly()
+        adoptedHandle?.destroyForcibly()
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(LocalProcessHandle::class.java)
+
+        /**
+         * Adopts an existing OS process by PID. Returns null if the process is not alive
+         * or its command line does not contain the expected service name marker.
+         *
+         * Adopted handles have no stdin access — commands cannot be sent to them.
+         * Stdout is also unavailable (the pipe is lost). These are acceptable tradeoffs
+         * for crash recovery.
+         */
+        fun adopt(pid: Long, serviceName: String): LocalProcessHandle? {
+            val osHandle = ProcessHandle.of(pid).orElse(null) ?: return null
+            if (!osHandle.isAlive) return null
+
+            // Verify this is actually a Nimbus-managed process
+            val cmdLine = osHandle.info().commandLine().orElse("")
+            if (!cmdLine.contains("nimbus.service.name=$serviceName")) {
+                logger.warn("PID {} exists but is not service '{}' — skipping adoption", pid, serviceName)
+                return null
+            }
+
+            val handle = LocalProcessHandle()
+            handle.adoptedHandle = osHandle
+            logger.info("Adopted process PID {} for service '{}'", pid, serviceName)
+            return handle
+        }
     }
 }

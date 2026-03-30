@@ -20,7 +20,8 @@ class AgentRuntime(
     private val logger = LoggerFactory.getLogger(AgentRuntime::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val javaResolver = JavaResolver(config.java.toMap(), baseDir)
-    private val processManager = LocalProcessManager(baseDir, scope, javaResolver)
+    private val stateStore = AgentStateStore(baseDir)
+    private val processManager = LocalProcessManager(baseDir, scope, javaResolver, stateStore)
     private val templateDownloader = TemplateDownloader(
         baseDir.resolve("templates"),
         config.agent.controller.replace("ws://", "http://").replace("wss://", "https://").removeSuffix("/cluster"),
@@ -32,6 +33,7 @@ class AgentRuntime(
 
     @Volatile private var running = true
     private val shutdownStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var recoveredServices: List<LocalProcessManager.RecoveredService> = emptyList()
 
     suspend fun start() {
         // Ensure directories
@@ -42,10 +44,17 @@ class AgentRuntime(
             if (!it.exists()) it.createDirectories()
         }
 
-        // Clean temp
+        // Recover persisted services before cleaning temp
+        val (recovered, protectedDirs) = processManager.recoverServices()
+        recoveredServices = recovered
+
+        // Clean temp, but skip directories of recovered services
         if (tempDir.exists()) {
-            tempDir.toFile().deleteRecursively()
-            tempDir.createDirectories()
+            tempDir.toFile().listFiles()?.forEach { dir ->
+                if (dir.isDirectory && dir.toPath().toAbsolutePath() !in protectedDirs) {
+                    dir.deleteRecursively()
+                }
+            }
         }
 
         // Connection loop with reconnection
@@ -84,6 +93,23 @@ class AgentRuntime(
                 throw Exception("Auth rejected: ${authResponse.reason}")
             }
             logger.info("Authenticated with controller as '{}'", config.agent.nodeName)
+
+            // Notify controller about recovered services
+            if (recoveredServices.isNotEmpty()) {
+                for (svc in recoveredServices) {
+                    send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),
+                        ClusterMessage.ServiceStateChanged(
+                            serviceName = svc.serviceName,
+                            groupName = svc.groupName,
+                            state = "READY",
+                            port = svc.port,
+                            pid = svc.pid
+                        )
+                    )))
+                }
+                logger.info("Notified controller about {} recovered service(s)", recoveredServices.size)
+                recoveredServices = emptyList()
+            }
 
             // Message loop
             for (frame in incoming) {

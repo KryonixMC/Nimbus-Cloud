@@ -15,7 +15,8 @@ import kotlin.time.Duration.Companion.seconds
 class LocalProcessManager(
     private val baseDir: Path,
     private val scope: CoroutineScope,
-    private val javaResolver: JavaResolver
+    private val javaResolver: JavaResolver,
+    private val stateStore: AgentStateStore
 ) {
     private val logger = LoggerFactory.getLogger(LocalProcessManager::class.java)
     private val handles = ConcurrentHashMap<String, LocalProcessHandle>()
@@ -62,6 +63,20 @@ class LocalProcessManager(
             workDirs[msg.serviceName] = workDir
             if (msg.isStatic) staticServices.add(msg.serviceName)
 
+            // Persist state for crash recovery
+            stateStore.addService(PersistedService(
+                serviceName = msg.serviceName,
+                groupName = msg.groupName,
+                port = msg.port,
+                pid = handle.pid() ?: 0,
+                workDir = workDir.toAbsolutePath().toString(),
+                isStatic = msg.isStatic,
+                templateName = msg.templateName,
+                software = msg.software,
+                memory = msg.memory,
+                startedAtEpochMs = System.currentTimeMillis()
+            ))
+
             logger.info("Started service '{}' on port {}", msg.serviceName, msg.port)
             true
         } catch (e: Exception) {
@@ -75,6 +90,7 @@ class LocalProcessManager(
         handle.stopGracefully(timeoutSeconds.seconds)
         handle.destroy()
         handles.remove(serviceName)
+        stateStore.removeService(serviceName)
     }
 
     suspend fun sendCommand(serviceName: String, command: String): Boolean {
@@ -113,6 +129,7 @@ class LocalProcessManager(
 
     fun cleanup(serviceName: String, isStatic: Boolean) {
         handles.remove(serviceName)
+        stateStore.removeService(serviceName)
         if (!isStatic) {
             val workDir = workDirs.remove(serviceName)
             if (workDir != null && workDir.exists()) {
@@ -125,6 +142,53 @@ class LocalProcessManager(
         }
     }
 
+    data class RecoveredService(
+        val serviceName: String,
+        val groupName: String,
+        val port: Int,
+        val pid: Long
+    )
+
+    /**
+     * Attempts to recover services from persisted state after an agent restart.
+     * Checks if each persisted process is still alive and adopts it if so.
+     * Returns the set of work directory paths that belong to recovered services
+     * (so the caller can skip cleaning them during temp-dir wipe).
+     */
+    fun recoverServices(): Pair<List<RecoveredService>, Set<Path>> {
+        val state = stateStore.load()
+        if (state.services.isEmpty()) return emptyList<RecoveredService>() to emptySet()
+
+        logger.info("Found {} persisted service(s), attempting recovery...", state.services.size)
+        val recovered = mutableListOf<RecoveredService>()
+        val protectedDirs = mutableSetOf<Path>()
+
+        for (persisted in state.services) {
+            val handle = LocalProcessHandle.adopt(persisted.pid, persisted.serviceName)
+            if (handle != null) {
+                handles[persisted.serviceName] = handle
+                val workDir = Path.of(persisted.workDir)
+                workDirs[persisted.serviceName] = workDir
+                if (persisted.isStatic) staticServices.add(persisted.serviceName)
+                protectedDirs.add(workDir)
+                recovered.add(RecoveredService(
+                    serviceName = persisted.serviceName,
+                    groupName = persisted.groupName,
+                    port = persisted.port,
+                    pid = persisted.pid
+                ))
+                logger.info("Recovered service '{}' (PID {})", persisted.serviceName, persisted.pid)
+            } else {
+                logger.info("Service '{}' (PID {}) is no longer alive — removing from state",
+                    persisted.serviceName, persisted.pid)
+                stateStore.removeService(persisted.serviceName)
+            }
+        }
+
+        logger.info("Recovered {}/{} service(s)", recovered.size, state.services.size)
+        return recovered to protectedDirs
+    }
+
     suspend fun stopAll() {
         for ((name, handle) in handles) {
             try {
@@ -135,6 +199,7 @@ class LocalProcessManager(
             }
         }
         handles.clear()
+        stateStore.clear()
     }
 
     private fun copyTemplate(source: Path, target: Path, preserveExisting: Boolean) {

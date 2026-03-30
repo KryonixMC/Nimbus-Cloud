@@ -185,6 +185,9 @@ class NimbusApi(
                 ))
             }
 
+            // Metrics endpoint is always public (for Prometheus scraping)
+            metricsRoutes(registry, groupManager, nodeManager, loadBalancer, proxySyncManager, startedAt)
+
             // All other routes require auth if token is set
             val scopeRoots = mapOf(
                 "templates" to baseDir.resolve(config.paths.templates).toAbsolutePath(),
