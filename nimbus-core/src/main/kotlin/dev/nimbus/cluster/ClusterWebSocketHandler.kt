@@ -102,12 +102,17 @@ class ClusterWebSocketHandler(
         when (message) {
             is ClusterMessage.HeartbeatResponse -> {
                 node.updateHeartbeat(message)
-                // Update player counts from heartbeat
+                // Update state from heartbeat — but don't overwrite playerCount if SDK reported recently
                 for (sh in message.services) {
                     val service = registry.get(sh.serviceName)
                     if (service != null) {
-                        service.playerCount = sh.playerCount
                         service.customState = sh.customState
+                        // Only update playerCount from heartbeat if agent actually provides real data
+                        // (agents that don't ping send 0, which would overwrite SDK-reported counts)
+                        if (sh.playerCount > 0) {
+                            service.playerCount = sh.playerCount
+                            service.lastPlayerCountUpdate = java.time.Instant.now()
+                        }
                     }
                 }
             }
@@ -140,6 +145,7 @@ class ClusterWebSocketHandler(
                 val service = registry.get(message.serviceName)
                 if (service != null) {
                     service.playerCount = message.playerCount
+                    service.lastPlayerCountUpdate = java.time.Instant.now()
                 }
             }
             is ClusterMessage.CommandResult -> {

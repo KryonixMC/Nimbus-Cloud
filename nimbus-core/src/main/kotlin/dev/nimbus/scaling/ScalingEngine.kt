@@ -41,9 +41,6 @@ class ScalingEngine(
     /** Tracks consecutive zero-player readings per service to avoid acting on transient empties. */
     private val consecutiveZeroReadings = ConcurrentHashMap<String, Int>()
 
-    /** Services whose last ping was successful — only these are eligible for idle tracking. */
-    private val lastPingSucceeded = ConcurrentHashMap<String, Boolean>()
-
     /**
      * Starts the scaling loop. Runs periodically every [checkIntervalMs].
      * @return a [Job] that can be cancelled to stop the engine.
@@ -121,8 +118,9 @@ class ScalingEngine(
                 // Never scale down a service with an active custom state (e.g. mid-game)
                 if (service.customState != null) continue
 
-                // Only consider idle if last ping was successful — failed pings leave playerCount stale
-                if (lastPingSucceeded[service.name] != true) {
+                // Only consider idle if we have a recent confirmed player count (SDK report or SLP ping)
+                val lastUpdate = service.lastPlayerCountUpdate
+                if (lastUpdate == null || Duration.between(lastUpdate, Instant.now()).seconds > 30) {
                     idleSince.remove(service.name)
                     consecutiveZeroReadings.remove(service.name)
                     continue
@@ -170,7 +168,6 @@ class ScalingEngine(
         val activeServiceNames = registry.getAll().map { it.name }.toSet()
         idleSince.keys.removeAll { it !in activeServiceNames }
         consecutiveZeroReadings.keys.removeAll { it !in activeServiceNames }
-        lastPingSucceeded.keys.removeAll { it !in activeServiceNames }
     }
 
     /**
@@ -191,19 +188,17 @@ class ScalingEngine(
                     if (stressTestManager?.isOverridden(service.name) == true) return@async
 
                     // Skip services that report player counts via SDK (more reliable than SLP)
-                    val sdkReport = service.lastSdkPlayerReport
-                    if (sdkReport != null && Duration.between(sdkReport, Instant.now()).seconds < 30) {
-                        lastPingSucceeded[service.name] = true
+                    val lastUpdate = service.lastPlayerCountUpdate
+                    if (lastUpdate != null && Duration.between(lastUpdate, Instant.now()).seconds < 30) {
                         return@async
                     }
 
                     val result = ServerListPing.ping(service.host, service.port, timeout = 3000)
                     if (result != null) {
                         service.playerCount = result.onlinePlayers
-                        lastPingSucceeded[service.name] = true
+                        service.lastPlayerCountUpdate = Instant.now()
                         logger.debug("Pinged '${service.name}': ${result.onlinePlayers}/${result.maxPlayers} players")
                     } else {
-                        lastPingSucceeded[service.name] = false
                         logger.debug("Ping failed for '${service.name}' on port ${service.port}")
                     }
                 }

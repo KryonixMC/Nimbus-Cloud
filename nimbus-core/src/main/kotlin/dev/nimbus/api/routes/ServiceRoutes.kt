@@ -161,7 +161,7 @@ fun Route.serviceRoutes(
 
             val request = call.receive<ReportPlayerCountRequest>()
             service.playerCount = request.playerCount
-            service.lastSdkPlayerReport = java.time.Instant.now()
+            service.lastPlayerCountUpdate = java.time.Instant.now()
 
             call.respond(PlayerCountResponse(name, service.playerCount))
         }
