@@ -103,6 +103,39 @@ Stop a service and start a new instance in its place.
 
 ---
 
+### `purge`
+
+Force-kill a service process, clean up crashed services, or kill a process by PID. Use this when a service is stuck and `stop` doesn't work.
+
+**Syntax:** `purge <service|crashed|pid:<pid>>`
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> purge crashed
+<span class="t-yellow">⚠</span> Purging 2 crashed service(s)...
+<span class="t-green">  Purged 'BedWars-3'</span>
+<span class="t-green">  Purged 'BedWars-5'</span>
+<span class="t-green">✓ Purged 2/2 crashed service(s).</span>
+</pre>
+</div>
+
+| Argument | Description |
+|---|---|
+| `<service>` | Force-kill and remove a specific service |
+| `crashed` | Remove all services in CRASHED state |
+| `pid:<pid>` | Kill any process by its system PID |
+
+::: warning
+`purge` force-kills processes immediately without graceful shutdown. Use `stop` first whenever possible.
+:::
+
+**Tab completion:** Running service names.
+
+---
+
 ### `screen`
 
 Attach to a service's live console output. You can type commands directly into the server.
