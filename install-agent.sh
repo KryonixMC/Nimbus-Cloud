@@ -118,32 +118,73 @@ install_java() {
     fi
 }
 
-# ── Download latest Nimbus Agent ────────────────────────────────
+# ── Download Nimbus Agent ────────────────────────────────────────
 
 download_agent() {
-    info "Fetching latest release from GitHub..."
+    info "Fetching available releases from GitHub..."
 
-    local release_json
-    release_json=$(curl -fsSL "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest" 2>/dev/null) || {
-        error "Failed to fetch release info from GitHub"
+    local releases_json
+    releases_json=$(curl -fsSL "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases?per_page=20" 2>/dev/null) || {
+        error "Failed to fetch releases from GitHub"
         exit 1
     }
 
-    local tag_name
-    tag_name=$(echo "$release_json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+')
-    info "Latest version: ${BOLD}$tag_name${RESET}"
+    # Extract all tag names (including pre-releases)
+    local -a versions
+    mapfile -t versions < <(echo "$releases_json" | grep -oP '"tag_name"\s*:\s*"\K[^"]+')
+
+    if [[ ${#versions[@]} -eq 0 ]]; then
+        error "No releases found on GitHub"
+        exit 1
+    fi
+
+    # Display available versions
+    echo ""
+    info "Available versions:"
+    local i=1
+    for ver in "${versions[@]}"; do
+        local pre=""
+        local is_pre
+        is_pre=$(echo "$releases_json" | grep -A2 "\"tag_name\": \"$ver\"" | grep -oP '"prerelease"\s*:\s*\K(true|false)' | head -1)
+        if [[ "$is_pre" == "true" ]]; then
+            pre=" ${DIM}(pre-release)${RESET}"
+        fi
+        echo -e "    ${CYAN}${i})${RESET}  ${BOLD}${ver}${RESET}${pre}"
+        ((i++))
+    done
+    echo ""
+
+    # Prompt for version selection
+    local selected_idx
+    read -rp "$(echo -e "${CYAN}[nimbus-agent]${RESET} Select version ${DIM}[1]${RESET}: ")" selected_idx
+    selected_idx="${selected_idx:-1}"
+
+    if ! [[ "$selected_idx" =~ ^[0-9]+$ ]] || [[ "$selected_idx" -lt 1 ]] || [[ "$selected_idx" -gt ${#versions[@]} ]]; then
+        error "Invalid selection: $selected_idx"
+        exit 1
+    fi
+
+    local selected_version="${versions[$((selected_idx - 1))]}"
+    info "Selected: ${BOLD}${selected_version}${RESET}"
+
+    # Fetch the specific release to get assets
+    local release_json
+    release_json=$(curl -fsSL "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/tags/$selected_version" 2>/dev/null) || {
+        error "Failed to fetch release $selected_version"
+        exit 1
+    }
 
     # Find the agent JAR asset
     local jar_url
     jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*agent[^"]*\.jar' | head -1)
 
     if [[ -z "$jar_url" ]]; then
-        error "No agent JAR asset found in release $tag_name"
+        error "No agent JAR asset found in release $selected_version"
         exit 1
     fi
 
     sudo mkdir -p "$INSTALL_DIR"
-    info "Downloading Nimbus Agent..."
+    info "Downloading Nimbus Agent ${selected_version}..."
     sudo curl -fsSL -o "$INSTALL_DIR/nimbus-agent.jar" "$jar_url"
     success "Downloaded to $INSTALL_DIR/nimbus-agent.jar"
 }

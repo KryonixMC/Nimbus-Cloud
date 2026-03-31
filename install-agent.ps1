@@ -78,27 +78,51 @@ function Install-Java {
     }
 }
 
-# ── Download latest Nimbus Agent ────────────────────────────────
+# ── Download Nimbus Agent ────────────────────────────────────────
 
 function Install-NimbusAgent {
-    Write-Info "Fetching latest release from GitHub..."
+    Write-Info "Fetching available releases from GitHub..."
 
     try {
-        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest" -UseBasicParsing
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$RepoOwner/$RepoName/releases?per_page=20" -UseBasicParsing
     } catch {
-        Write-Err "Failed to fetch release info from GitHub: $_"
+        Write-Err "Failed to fetch releases from GitHub: $_"
         exit 1
     }
 
-    $tagName = $release.tag_name
-    Write-Info "Latest version: $tagName"
-
-    $jarAsset = $release.assets | Where-Object { $_.name -like "*agent*-all.jar" } | Select-Object -First 1
-    if (-not $jarAsset) {
-        $jarAsset = $release.assets | Where-Object { $_.name -like "*agent*.jar" } | Select-Object -First 1
+    if ($releases.Count -eq 0) {
+        Write-Err "No releases found on GitHub"
+        exit 1
     }
+
+    # Display available versions
+    Write-Host ""
+    Write-Info "Available versions:"
+    $i = 1
+    foreach ($rel in $releases) {
+        Write-Host "    " -NoNewline
+        Write-Host "$i)" -ForegroundColor Cyan -NoNewline
+        Write-Host "  $($rel.tag_name)" -ForegroundColor White -NoNewline
+        if ($rel.prerelease) { Write-Host " (pre-release)" -ForegroundColor DarkGray } else { Write-Host "" }
+        $i++
+    }
+    Write-Host ""
+
+    $selected = Read-Host "[nimbus-agent] Select version [1]"
+    if ([string]::IsNullOrEmpty($selected)) { $selected = "1" }
+
+    $idx = [int]$selected - 1
+    if ($idx -lt 0 -or $idx -ge $releases.Count) {
+        Write-Err "Invalid selection: $selected"
+        exit 1
+    }
+
+    $release = $releases[$idx]
+    Write-Info "Selected: $($release.tag_name)"
+
+    $jarAsset = $release.assets | Where-Object { $_.name -like "*agent*.jar" } | Select-Object -First 1
     if (-not $jarAsset) {
-        Write-Err "No agent JAR asset found in release $tagName"
+        Write-Err "No agent JAR asset found in release $($release.tag_name)"
         exit 1
     }
 
@@ -107,7 +131,7 @@ function Install-NimbusAgent {
     }
 
     $jarPath = Join-Path $InstallDir "nimbus-agent.jar"
-    Write-Info "Downloading Nimbus Agent..."
+    Write-Info "Downloading Nimbus Agent $($release.tag_name)..."
     Invoke-WebRequest -Uri $jarAsset.browser_download_url -OutFile $jarPath -UseBasicParsing
     Write-Success "Downloaded to $jarPath"
 }
