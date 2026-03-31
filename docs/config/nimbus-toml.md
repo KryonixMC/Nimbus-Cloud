@@ -52,6 +52,10 @@ proxy_protocol = false
 connection_timeout = 5000
 buffer_size = 16384
 
+[bedrock]
+enabled = false
+base_port = 19132
+
 [cluster]
 enabled = false
 token = ""
@@ -269,6 +273,62 @@ proxy_protocol = true
 
 ::: warning
 When the load balancer is enabled, Velocity proxies are allocated backend ports (30000+) instead of 25565. The LB owns port 25565. Make sure your firewall allows connections to the LB port.
+:::
+
+---
+
+## `[bedrock]`
+
+Bedrock Edition crossplay support via [Geyser](https://geysermc.org/) + [Floodgate](https://geysermc.org/). When enabled, Bedrock Edition players (mobile, console, Windows 10/11) can join your Java Edition network.
+
+::: info
+Bedrock support is **disabled by default**. When enabled, Nimbus automatically downloads Geyser and Floodgate from the GeyserMC API and deploys them to the appropriate templates.
+:::
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable Bedrock Edition support. Nimbus auto-deploys Geyser (Velocity plugin) and Floodgate (Velocity + backend plugin). |
+| `base_port` | Int | `19132` | Starting UDP port for Bedrock connections. Each proxy instance gets its own port, incrementing from this value (19132, 19133, ...). |
+
+```toml
+[bedrock]
+enabled = true
+base_port = 19132
+```
+
+### How it works
+
+When Bedrock support is enabled, Nimbus:
+
+1. **Downloads Geyser** (Velocity plugin) — Translates Bedrock protocol to Java protocol inside the proxy
+2. **Downloads Floodgate** (Velocity + Paper plugin) — Allows Bedrock players to authenticate via Xbox Live without a Java account
+3. **Manages `key.pem`** — Floodgate's encryption key is generated once and distributed to all proxy and backend instances automatically
+4. **Configures Geyser** — Each proxy instance gets a unique Bedrock UDP port and auto-generated Geyser config
+5. **Allocates UDP ports** — Separate from TCP ports, starting at `base_port`
+
+### Architecture
+
+```
+Bedrock (UDP:19132) ──► Velocity + Geyser + Floodgate ──► Backends + Floodgate
+Java    (TCP:25565) ──►                                ──►
+```
+
+After Geyser translates the connection, backends see all players as normal Java players. No backend configuration changes are needed.
+
+### Plugin deployment
+
+| Plugin | Deployed To | Purpose |
+|--------|-------------|---------|
+| **Geyser** | Proxy (Velocity) | Bedrock → Java protocol translation |
+| **Floodgate** | Proxy + all Paper/Purpur/Folia backends | Xbox Live authentication, Bedrock player identification |
+| **key.pem** | Proxy + all backends | Shared encryption key for Floodgate auth verification |
+
+::: warning
+Floodgate is deployed to **Paper/Purpur/Folia** backends only. Modded servers (Fabric, Forge, NeoForge) do not receive Floodgate automatically — Bedrock players can still connect through the proxy, but backend plugins won't be able to identify them as Bedrock players.
+:::
+
+::: tip
+Bedrock player names are prefixed with `.` by default (e.g., `.BedrockPlayer123`) to avoid name collisions with Java players. This is configured in Floodgate's settings.
 :::
 
 ---

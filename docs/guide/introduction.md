@@ -60,6 +60,7 @@ Nimbus takes a different approach:
 - **Auto-scaling** — Dynamically starts and stops server instances based on player count and configurable thresholds — across one or many machines.
 - **Software auto-download** — Automatically fetches Paper, Purpur, Folia, Velocity, Forge, Fabric, and NeoForge server JARs.
 - **Performance optimization** — Automatically applies [Aikar's JVM flags](https://docs.papermc.io/paper/aikars-flags) and optimized server configs out of the box. Tuned for both standard and large heaps (12G+).
+- **Bedrock Edition support** — Optional [Geyser + Floodgate](/guide/proxy-setup#bedrock-support) integration lets Bedrock players (mobile, console, Windows) join your Java network. Plugins are auto-downloaded and configured.
 - **Full modded server support** — Forge, Fabric, NeoForge, and Quilt (via Fabric) all work out of the box. Proxy forwarding mods are [auto-installed](/guide/proxy-setup#auto-forwarding-mods) so players connect through Velocity seamlessly.
 - **Automatic JDK management** — Nimbus [detects installed Java versions](/guide/concepts#automatic-jdk-management) and downloads missing ones from Adoptium automatically. No manual JDK setup needed.
 - **Velocity auto-patching** — Checks for new Velocity versions [every 6 hours](/guide/proxy-setup#auto-patching) and stages updates automatically. No downtime.

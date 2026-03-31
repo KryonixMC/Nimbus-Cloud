@@ -242,11 +242,16 @@ templates/
   global/
     plugins/
       NimbusSDK.jar          # SDK plugin for all backends
+      ProtocolLib.jar         # Required by SDK
+      floodgate/
+        key.pem              # Shared Floodgate key (if Bedrock enabled)
       ChatFormat.jar          # Shared chat plugin
     server.properties         # Common server settings
   global_proxy/
     plugins/
       NimbusBridge.jar        # Bridge plugin for all proxies
+      Geyser-Velocity.jar     # Bedrock translation (if Bedrock enabled)
+      floodgate-velocity.jar  # Bedrock auth (if Bedrock enabled)
 ```
 
 ::: tip

@@ -19,7 +19,7 @@ Show all running services with status, port, player count, and uptime.
 <span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Services</span> ──────────────────────────────────────</span>
 <span class="t-bold t-bright-cyan">NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME</span>
 <span class="t-dim">──────────────────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">Proxy-1</span>         Proxy       <span class="t-green">● READY</span>          25565   36       48190   2h 15m
+<span class="t-bold">Proxy-1</span>         Proxy       <span class="t-green">● READY</span>          25565/19132   36       48190   2h 15m
 <span class="t-bold">Lobby-1</span>         Lobby       <span class="t-green">● READY</span>          30001   12       48201   2h 15m
 <span class="t-bold">Lobby-2</span>         Lobby       <span class="t-green">● READY</span>          30002   8        48215   1h 42m
 <span class="t-bold">BedWars-1</span>       BedWars     <span class="t-green">● READY</span>          30003   16       48230   0h 55m
@@ -29,7 +29,7 @@ Show all running services with status, port, player count, and uptime.
 </div>
 
 ::: tip
-Filter by group name: `list Lobby` shows only Lobby instances.
+Filter by group name: `list Lobby` shows only Lobby instances. When Bedrock support is enabled, proxy services show both TCP and UDP ports (e.g., `25565/19132`).
 :::
 
 **Tab completion:** Group names.
@@ -887,8 +887,11 @@ Proxy       STATIC    1          1/2      36       <span class="t-green">healthy
 Lobby       DYNAMIC   2          2/4      12       <span class="t-green">healthy</span>
 BedWars     DYNAMIC   2          1/8      24       <span class="t-green">healthy</span>
 <span class="t-dim">Capacity:</span> <span class="t-green">████████░░░░░░░░░░░░░░░░░░░░░░</span> 5/20 services
+<span class="t-dim">Bedrock:</span>  <span class="t-green">enabled</span> (Geyser + Floodgate, base port 19132)
 </pre>
 </div>
+
+The Bedrock line only appears when `[bedrock] enabled = true` is set in `nimbus.toml`.
 
 ---
 

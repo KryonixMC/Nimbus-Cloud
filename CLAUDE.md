@@ -75,6 +75,7 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 - Graceful shutdown order: game servers → lobbies → proxies
 - Shutdown requires confirmation: `shutdown` then `shutdown confirm` within 30s
 - ProtocolLib auto-deployed to backend servers (embedded in JAR, tracked via `.nimbus-plugins`)
+- Bedrock support: Geyser + Floodgate auto-downloaded from GeyserMC API, key.pem centrally managed
 
 ## Code Style
 

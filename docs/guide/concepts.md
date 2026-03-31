@@ -128,7 +128,7 @@ When Nimbus starts a `Lobby` service, it merges templates in order:
 For proxy services, `templates/global_proxy/` is used instead of `templates/global/`.
 
 ::: info Auto-deployed plugins
-Nimbus automatically deploys `nimbus-bridge.jar` to `global_proxy/plugins/` and `nimbus-sdk.jar` to `global/plugins/`. You don't need to manage these manually. If you remove them, Nimbus will skip re-deploying (it tracks what it has deployed).
+Nimbus automatically deploys `nimbus-bridge.jar` to `global_proxy/plugins/` and `nimbus-sdk.jar` + `ProtocolLib.jar` to `global/plugins/`. When [Bedrock support](/guide/proxy-setup#bedrock-support) is enabled, Geyser is deployed to `global_proxy/plugins/` and Floodgate to both `global/plugins/` and `global_proxy/plugins/`. You don't need to manage these manually.
 :::
 
 ### What to Put in Templates
