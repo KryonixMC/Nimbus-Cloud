@@ -14,8 +14,8 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * /nsign command for managing Nimbus signs.
@@ -69,7 +69,6 @@ public class SignCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        // Get the sign the player is looking at
         Block block = player.getTargetBlockExact(5);
         if (block == null || !(block.getState() instanceof Sign)) {
             player.sendMessage(Component.text("Look at a sign first!", NamedTextColor.RED));
@@ -77,10 +76,34 @@ public class SignCommand implements CommandExecutor, TabCompleter {
         }
 
         String target = args[1];
-        boolean isService = target.matches(".*-\\d+$");
+
+        // Determine if target is a group or service by checking against known group names
+        Collection<String> groupNames = Nimbus.cache().getGroupNames();
+        boolean isService = !groupNames.contains(target);
+
+        // Validate: if it looks like a service, check it actually exists
+        if (isService) {
+            NimbusService service = Nimbus.cache().get(target);
+            if (service == null) {
+                player.sendMessage(Component.text("Unknown group or service: " + target, NamedTextColor.RED));
+                return;
+            }
+        }
+
+        // Resolve group name for display config check
+        String groupName = isService ? target.replaceAll("-\\d+$", "") : target;
+
+        // Require display config
+        if (!signManager.hasDisplay(groupName)) {
+            player.sendMessage(Component.text("No display config for ", NamedTextColor.RED)
+                    .append(Component.text(groupName, NamedTextColor.WHITE))
+                    .append(Component.text("!", NamedTextColor.RED)));
+            player.sendMessage(Component.text("Create one at: config/modules/display/" + groupName.toLowerCase() + ".toml", NamedTextColor.GRAY));
+            return;
+        }
 
         RoutingStrategy strategy = RoutingStrategy.LEAST_PLAYERS;
-        if (args.length >= 3) {
+        if (!isService && args.length >= 3) {
             strategy = switch (args[2].toLowerCase()) {
                 case "fill", "fill_first" -> RoutingStrategy.FILL_FIRST;
                 case "random" -> RoutingStrategy.RANDOM;
@@ -88,18 +111,10 @@ public class SignCommand implements CommandExecutor, TabCompleter {
             };
         }
 
-        // Generate ID
         var loc = block.getLocation();
         String id = target.toLowerCase() + "-" + loc.getBlockX() + "-" + loc.getBlockY() + "-" + loc.getBlockZ();
 
-        // Create sign with default lines
-        NimbusSign nSign = new NimbusSign(id, loc, target, isService, strategy,
-                "&1&l★ " + target + " ★",
-                "&8{players} playing",
-                isService ? "&8{state}" : "&8{servers} server(s)",
-                "&2▶ Click to join!",
-                "&4✖ Offline");
-
+        NimbusSign nSign = new NimbusSign(id, loc, target, isService, strategy);
         signManager.addSign(nSign);
 
         player.sendMessage(
@@ -130,7 +145,7 @@ public class SignCommand implements CommandExecutor, TabCompleter {
         signManager.removeSign(block.getLocation());
         player.sendMessage(
                 Component.text("Sign removed: ", NamedTextColor.YELLOW)
-                        .append(Component.text(nSign.getTarget(), NamedTextColor.WHITE))
+                        .append(Component.text(nSign.target(), NamedTextColor.WHITE))
         );
     }
 
@@ -149,10 +164,10 @@ public class SignCommand implements CommandExecutor, TabCompleter {
         }
 
         for (NimbusSign sign : signs) {
-            var loc = sign.getLocation();
+            var loc = sign.location();
             player.sendMessage(
-                    Component.text("  " + sign.getId(), NamedTextColor.WHITE)
-                            .append(Component.text(" → " + sign.getTarget(), NamedTextColor.GREEN))
+                    Component.text("  " + sign.id(), NamedTextColor.WHITE)
+                            .append(Component.text(" → " + sign.target(), NamedTextColor.GREEN))
                             .append(Component.text(" @ " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ(), NamedTextColor.GRAY))
             );
         }
@@ -189,14 +204,11 @@ public class SignCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
-            // Suggest group names + service names from cache
             List<String> suggestions = new ArrayList<>();
             try {
-                // Group names
                 for (String group : Nimbus.cache().getGroupNames()) {
                     suggestions.add(group);
                 }
-                // Service names
                 for (NimbusService service : Nimbus.services()) {
                     suggestions.add(service.getName());
                 }
@@ -205,7 +217,11 @@ public class SignCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 3 && args[0].equalsIgnoreCase("set")) {
-            return filter(List.of("least", "fill", "random"), args[2]);
+            // Only suggest strategy for group targets
+            Collection<String> groups = Nimbus.cache().getGroupNames();
+            if (groups.contains(args[1])) {
+                return filter(List.of("least", "fill", "random"), args[2]);
+            }
         }
 
         return List.of();

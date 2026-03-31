@@ -21,10 +21,8 @@ public class NimbusSignsPlugin extends JavaPlugin {
         signManager = new SignManager(this, signConfig);
         signManager.load();
 
-        // Register events
         getServer().getPluginManager().registerEvents(new SignListener(signManager), this);
 
-        // Register /nsign command
         var cmd = getCommand("nsign");
         if (cmd != null) {
             SignCommand signCommand = new SignCommand(signManager);
@@ -32,11 +30,16 @@ public class NimbusSignsPlugin extends JavaPlugin {
             cmd.setTabCompleter(signCommand);
         }
 
-        // Start update loop
+        // Sync update loop — updateAll() directly modifies sign block states
         int interval = signConfig.getUpdateInterval();
+        getServer().getScheduler().runTaskTimer(this, signManager::updateAll, interval, interval);
+
+        // Periodic display + group cache refresh (every 5 minutes)
+        long refreshInterval = 20L * 60 * 5;
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            signManager.updateAll();
-        }, interval, interval);
+            signManager.refreshDisplays();
+            signManager.refreshGroups();
+        }, refreshInterval, refreshInterval);
 
         getLogger().info("Nimbus Signs loaded — " + signManager.getSignCount() + " sign(s)");
     }

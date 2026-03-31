@@ -12,23 +12,26 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Handles sign interactions:
- * - Right-click → connect to server (cancel sign edit)
+ * - Right-click → connect to server (with cooldown)
  * - Break → remove if Nimbus sign
  */
 public class SignListener implements Listener {
 
+    private static final long COOLDOWN_MS = 2000;
+
     private final SignManager signManager;
+    private final Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
 
     public SignListener(SignManager signManager) {
         this.signManager = signManager;
     }
 
-    /**
-     * Right-click a Nimbus sign → connect to server.
-     * Also cancels the sign edit GUI for Nimbus signs.
-     */
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (!event.getAction().isRightClick()) return;
@@ -39,37 +42,38 @@ public class SignListener implements Listener {
         NimbusSign nSign = signManager.getSign(block.getLocation());
         if (nSign == null) return;
 
-        // Cancel the sign edit GUI
         event.setCancelled(true);
 
         Player player = event.getPlayer();
 
-        if (nSign.isServiceTarget()) {
-            // Direct connect to specific service
-            NimbusService service = Nimbus.services().stream()
-                    .filter(s -> s.getName().equals(nSign.getTarget()))
-                    .findFirst().orElse(null);
+        // Cooldown check
+        long now = System.currentTimeMillis();
+        Long lastClick = cooldowns.get(player.getUniqueId());
+        if (lastClick != null && now - lastClick < COOLDOWN_MS) return;
+        cooldowns.put(player.getUniqueId(), now);
+
+        if (nSign.serviceTarget()) {
+            NimbusService service = Nimbus.cache().get(nSign.target());
 
             if (service == null || !service.isReady()) {
-                player.sendMessage(Component.text(nSign.getTarget() + " is not available.", NamedTextColor.RED));
+                player.sendMessage(Component.text(nSign.target() + " is not available.", NamedTextColor.RED));
                 return;
             }
 
             player.sendMessage(
                     Component.text("Connecting to ", NamedTextColor.GREEN)
-                            .append(Component.text(nSign.getTarget(), NamedTextColor.WHITE))
+                            .append(Component.text(nSign.target(), NamedTextColor.WHITE))
                             .append(Component.text("...", NamedTextColor.GREEN))
             );
-            Nimbus.client().sendPlayer(player.getName(), nSign.getTarget())
+            Nimbus.client().sendPlayer(player.getName(), nSign.target())
                     .exceptionally(e -> {
                         player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
                         return null;
                     });
         } else {
-            // Route to best server in group
-            NimbusService best = Nimbus.bestServer(nSign.getTarget(), nSign.getStrategy());
+            NimbusService best = Nimbus.bestServer(nSign.target(), nSign.strategy());
             if (best == null) {
-                player.sendMessage(Component.text("No " + nSign.getTarget() + " server available.", NamedTextColor.RED));
+                player.sendMessage(Component.text("No " + nSign.target() + " server available.", NamedTextColor.RED));
                 return;
             }
 
@@ -78,7 +82,7 @@ public class SignListener implements Listener {
                             .append(Component.text(best.getName(), NamedTextColor.WHITE))
                             .append(Component.text("...", NamedTextColor.GREEN))
             );
-            Nimbus.route(player.getName(), nSign.getTarget(), nSign.getStrategy())
+            Nimbus.route(player.getName(), nSign.target(), nSign.strategy())
                     .exceptionally(e -> {
                         player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
                         return null;
@@ -86,9 +90,6 @@ public class SignListener implements Listener {
         }
     }
 
-    /**
-     * Breaking a Nimbus sign removes it.
-     */
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         if (!(event.getBlock().getState() instanceof Sign)) return;
@@ -105,7 +106,7 @@ public class SignListener implements Listener {
         signManager.removeSign(event.getBlock().getLocation());
         event.getPlayer().sendMessage(
                 Component.text("Sign removed: ", NamedTextColor.YELLOW)
-                        .append(Component.text(nSign.getTarget(), NamedTextColor.WHITE))
+                        .append(Component.text(nSign.target(), NamedTextColor.WHITE))
         );
     }
 }

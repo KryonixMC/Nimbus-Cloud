@@ -1,18 +1,9 @@
 # Nimbus Signs — Server selector signs for your lobby
-# Signs auto-update with live player counts from the Nimbus cloud.
+# Signs auto-update with live data from the Nimbus cloud.
+# Sign lines are configured in display configs (config/modules/display/<group>.toml).
 
 # How often to refresh signs (in ticks, 20 = 1 second)
 update-interval: 40
-
-# Placeholders you can use in sign lines:
-#   {players}      — player count (total for group, or per service)
-#   {max_players}  — max players
-#   {servers}      — number of running servers in group
-#   {state}        — service state (READY, INGAME, etc.)
-#   {target}       — the target name
-#   {name}         — same as {target}
-#
-# Color codes: use & for colors (&1 = dark blue, &a = green, &l = bold, etc.)
 
 signs:
   # Example: BedWars group sign (routes to best available server)
@@ -24,12 +15,6 @@ signs:
   #     x: 100
   #     y: 65
   #     z: 200
-  #   lines:
-  #     line1: "&1&l★ BedWars ★"
-  #     line2: "&8{players} playing"
-  #     line3: "&8{servers} server(s)"
-  #     line4-available: "&2▶ Click to join!"
-  #     line4-unavailable: "&4✖ No servers"
 
   # Example: Specific service sign (always connects to Survival-1)
   # survival:
@@ -39,9 +24,3 @@ signs:
   #     x: 104
   #     y: 65
   #     z: 200
-  #   lines:
-  #     line1: "&1&l★ Survival ★"
-  #     line2: "&8{players} online"
-  #     line3: "&8{state}"
-  #     line4-available: "&2▶ Click to join!"
-  #     line4-unavailable: "&4✖ Offline"
