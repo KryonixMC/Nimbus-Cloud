@@ -1,4 +1,4 @@
-package dev.nimbus.signs;
+package dev.nimbus.display;
 
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusService;
@@ -97,7 +97,7 @@ public class SignListener implements Listener {
         NimbusSign nSign = signManager.getSign(event.getBlock().getLocation());
         if (nSign == null) return;
 
-        if (!event.getPlayer().hasPermission("nimbus.signs.remove")) {
+        if (!event.getPlayer().hasPermission("nimbus.display.sign")) {
             event.setCancelled(true);
             event.getPlayer().sendMessage(Component.text("No permission.", NamedTextColor.RED));
             return;

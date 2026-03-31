@@ -46,9 +46,16 @@ private fun dev.nimbus.display.DisplayConfig.toResponse(): DisplayResponse {
         ),
         npc = NpcDisplayResponse(
             displayName = display.npc.displayName,
-            item = display.npc.item,
             subtitle = display.npc.subtitle,
-            subtitleOffline = display.npc.subtitleOffline
+            subtitleOffline = display.npc.subtitleOffline,
+            floatingItem = display.npc.floatingItem,
+            statusItems = display.npc.statusItems,
+            inventory = NpcInventoryResponse(
+                title = display.npc.inventory.title,
+                size = display.npc.inventory.size,
+                itemName = display.npc.inventory.itemName,
+                itemLore = display.npc.inventory.itemLore
+            )
         ),
         states = display.states
     )

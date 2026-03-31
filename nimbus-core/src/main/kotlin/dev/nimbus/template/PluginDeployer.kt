@@ -30,6 +30,9 @@ class PluginDeployer(private val baseDir: Path) {
         // Deploy ProtocolLib to global (required by SDK for fake player spawning)
         deployPlugin(globalTemplateDir, "ProtocolLib.jar", "plugins/ProtocolLib.jar")
 
+        // Deploy FancyNpcs to global (required by Display plugin for player NPCs)
+        deployPlugin(globalTemplateDir, "FancyNpcs.jar", "plugins/FancyNpcs.jar")
+
         // Auto-update Nimbus plugins where the user has placed them (templates + static services)
         autoUpdateNimbusPlugins(templatesDir, staticDir)
 
@@ -106,12 +109,12 @@ class PluginDeployer(private val baseDir: Path) {
 
     /**
      * Scans template directories and static service directories for Nimbus plugins
-     * (nimbus-signs.jar, nimbus-npc.jar, etc.) and replaces them with the latest
+     * (nimbus-display.jar, etc.) and replaces them with the latest
      * version from embedded resources. Only updates where the user has already
      * placed the plugin -- does NOT deploy to new locations.
      */
     private fun autoUpdateNimbusPlugins(templatesDir: Path, staticDir: Path) {
-        val nimbusPlugins = listOf("nimbus-signs.jar", "nimbus-perms.jar")
+        val nimbusPlugins = listOf("nimbus-display.jar", "nimbus-perms.jar")
         var updated = 0
 
         // Scan all template directories (except global/global_proxy which are handled separately)
@@ -249,7 +252,7 @@ class PluginDeployer(private val baseDir: Path) {
     }
 
     /**
-     * Extracts optional plugins (SDK, Signs) from the embedded resources
+     * Extracts optional plugins (SDK, Display) from the embedded resources
      * into the plugins/ directory at the Nimbus root. Users can then copy
      * these JARs to their server's plugins/ folder as needed.
      */
@@ -258,7 +261,7 @@ class PluginDeployer(private val baseDir: Path) {
 
         val optionalPlugins = mapOf(
             "nimbus-sdk.jar" to "plugins/nimbus-sdk.jar",
-            "nimbus-signs.jar" to "plugins/nimbus-signs.jar",
+            "nimbus-display.jar" to "plugins/nimbus-display.jar",
             "nimbus-perms.jar" to "plugins/nimbus-perms.jar"
         )
 

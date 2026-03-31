@@ -1,4 +1,4 @@
-package dev.nimbus.signs;
+package dev.nimbus.display;
 
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusDisplay;
@@ -31,12 +31,16 @@ public class SignManager {
 
     // Signs indexed by block position string for O(1) lookup
     private final ConcurrentHashMap<String, NimbusSign> signs = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, NimbusDisplay> displayCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, NimbusGroup> groupCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, NimbusDisplay> displayCache;
+    private final ConcurrentHashMap<String, NimbusGroup> groupCache;
 
-    public SignManager(JavaPlugin plugin, SignConfig config) {
+    public SignManager(JavaPlugin plugin, SignConfig config,
+                       ConcurrentHashMap<String, NimbusDisplay> displayCache,
+                       ConcurrentHashMap<String, NimbusGroup> groupCache) {
         this.plugin = plugin;
         this.config = config;
+        this.displayCache = displayCache;
+        this.groupCache = groupCache;
     }
 
     public void load() {

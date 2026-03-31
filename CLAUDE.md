@@ -20,7 +20,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 - `nimbus-bridge` — Velocity plugin: hub commands + cloud bridge (Java, auto-embedded as resource `nimbus-bridge.jar` during build)
 - `nimbus-sdk` — Paper server SDK (auto-deployed to backend servers)
 - `nimbus-perms` — Paper permissions plugin: builtin or LuckPerms provider (auto-deployed, configurable)
-- `nimbus-signs` — Paper signs plugin for server selectors
+- `nimbus-display` — Paper display plugin: server selector signs + NPCs via FancyNpcs (player skins, entity types, equipment, holograms, floating items, server inventory, look-at, poses)
 
 ## Tech Stack
 

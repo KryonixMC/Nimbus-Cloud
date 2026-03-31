@@ -1,0 +1,56 @@
+# Nimbus Display — Server selector signs and NPCs for your lobby
+# Signs and NPCs auto-update with live data from the Nimbus cloud.
+# Display appearance is configured in display configs (config/modules/display/<group>.toml).
+
+# How often to refresh signs and NPCs (in ticks, 20 = 1 second)
+update-interval: 40
+
+signs:
+  # Example: BedWars group sign (routes to best available server)
+  # bedwars:
+  #   target: BedWars
+  #   strategy: least         # least / fill / random
+  #   location:
+  #     world: world
+  #     x: 100
+  #     y: 65
+  #     z: 200
+
+npcs:
+  # Example: BedWars NPC as fake player with skin
+  # bedwars-npc:
+  #   target: BedWars
+  #   strategy: least              # least / fill / random
+  #   entity_type: PLAYER          # PLAYER = fake player, VILLAGER, ZOMBIE, etc.
+  #   skin: Notch                  # For PLAYER type: player name to copy skin from
+  #   look_at_player: true         # NPC turns head toward nearest player
+  #   left_click: CONNECT          # CONNECT / COMMAND / INVENTORY / NONE
+  #   right_click: INVENTORY
+  #   hologram:                    # Text lines above NPC (placeholders: {name} {players} {max_players} {servers} {state})
+  #     - "&b&lBedWars"
+  #     - "&7{players}/{max_players} online"
+  #     - "&7{state}"
+  #   floating_item: RED_BED       # Item floating above head (material name, omit for none)
+  #   location:
+  #     world: world
+  #     x: 105.5
+  #     y: 65.0
+  #     z: 200.5
+  #     yaw: 90.0
+  #     pitch: 0.0
+
+  # Example: Villager NPC
+  # survival-npc:
+  #   target: Survival
+  #   entity_type: VILLAGER
+  #   look_at_player: true
+  #   left_click: CONNECT
+  #   right_click: INVENTORY
+  #   hologram:
+  #     - "&a&lSurvival"
+  #     - "&7{players} players"
+  #   location:
+  #     world: world
+  #     x: 110.5
+  #     y: 65.0
+  #     z: 200.5

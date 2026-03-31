@@ -341,6 +341,32 @@ public class NimbusClient implements AutoCloseable {
             }
         }
 
+        // Parse NPC status items
+        Map<String, String> statusItems = new java.util.HashMap<>();
+        if (npc.has("statusItems") && npc.get("statusItems").isJsonObject()) {
+            for (var entry : npc.getAsJsonObject("statusItems").entrySet()) {
+                statusItems.put(entry.getKey(), entry.getValue().getAsString());
+            }
+        }
+
+        // Parse NPC inventory config
+        String inventoryTitle = null;
+        int inventorySize = 27;
+        String inventoryItemName = null;
+        java.util.List<String> inventoryItemLore = null;
+        if (npc.has("inventory") && npc.get("inventory").isJsonObject()) {
+            JsonObject inv = npc.getAsJsonObject("inventory");
+            inventoryTitle = getString(inv, "title");
+            if (inv.has("size")) inventorySize = inv.get("size").getAsInt();
+            inventoryItemName = getString(inv, "itemName");
+            if (inv.has("itemLore") && inv.get("itemLore").isJsonArray()) {
+                inventoryItemLore = new java.util.ArrayList<>();
+                for (var el : inv.getAsJsonArray("itemLore")) {
+                    inventoryItemLore.add(el.getAsString());
+                }
+            }
+        }
+
         return new NimbusDisplay(
                 getString(obj, "name"),
                 getString(sign, "line1"),
@@ -349,9 +375,12 @@ public class NimbusClient implements AutoCloseable {
                 getString(sign, "line4Online"),
                 getString(sign, "line4Offline"),
                 getString(npc, "displayName"),
-                getString(npc, "item"),
                 getString(npc, "subtitle"),
                 getString(npc, "subtitleOffline"),
+                getString(npc, "floatingItem"),
+                statusItems,
+                inventoryTitle, inventorySize,
+                inventoryItemName, inventoryItemLore,
                 states
         );
     }

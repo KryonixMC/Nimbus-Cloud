@@ -1,5 +1,6 @@
 package dev.nimbus.sdk;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -19,9 +20,16 @@ public class NimbusDisplay {
 
     // NPC
     private final String npcDisplayName;
-    private final String npcItem;
     private final String npcSubtitle;
     private final String npcSubtitleOffline;
+    private final String npcFloatingItem;
+    private final Map<String, String> statusItems;
+
+    // NPC Inventory
+    private final String inventoryTitle;
+    private final int inventorySize;
+    private final String inventoryItemName;
+    private final List<String> inventoryItemLore;
 
     // State labels
     private final Map<String, String> states;
@@ -29,8 +37,12 @@ public class NimbusDisplay {
     public NimbusDisplay(String name,
                          String signLine1, String signLine2, String signLine3,
                          String signLine4Online, String signLine4Offline,
-                         String npcDisplayName, String npcItem,
+                         String npcDisplayName,
                          String npcSubtitle, String npcSubtitleOffline,
+                         String npcFloatingItem,
+                         Map<String, String> statusItems,
+                         String inventoryTitle, int inventorySize,
+                         String inventoryItemName, List<String> inventoryItemLore,
                          Map<String, String> states) {
         this.name = name;
         this.signLine1 = signLine1;
@@ -39,9 +51,14 @@ public class NimbusDisplay {
         this.signLine4Online = signLine4Online;
         this.signLine4Offline = signLine4Offline;
         this.npcDisplayName = npcDisplayName;
-        this.npcItem = npcItem;
         this.npcSubtitle = npcSubtitle;
         this.npcSubtitleOffline = npcSubtitleOffline;
+        this.npcFloatingItem = npcFloatingItem;
+        this.statusItems = statusItems != null ? statusItems : Map.of();
+        this.inventoryTitle = inventoryTitle;
+        this.inventorySize = inventorySize;
+        this.inventoryItemName = inventoryItemName;
+        this.inventoryItemLore = inventoryItemLore;
         this.states = states;
     }
 
@@ -56,9 +73,16 @@ public class NimbusDisplay {
 
     // NPC
     public String getNpcDisplayName() { return npcDisplayName; }
-    public String getNpcItem() { return npcItem; }
     public String getNpcSubtitle() { return npcSubtitle; }
     public String getNpcSubtitleOffline() { return npcSubtitleOffline; }
+    public String getNpcFloatingItem() { return npcFloatingItem != null ? npcFloatingItem : "GRASS_BLOCK"; }
+    public Map<String, String> getStatusItems() { return statusItems; }
+
+    // NPC Inventory
+    public String getInventoryTitle() { return inventoryTitle != null ? inventoryTitle : "&8» &b&l{name} Servers"; }
+    public int getInventorySize() { return inventorySize > 0 ? inventorySize : 27; }
+    public String getInventoryItemName() { return inventoryItemName != null ? inventoryItemName : "&b{name}"; }
+    public List<String> getInventoryItemLore() { return inventoryItemLore; }
 
     // States
     public Map<String, String> getStates() { return states; }
@@ -67,5 +91,11 @@ public class NimbusDisplay {
     public String resolveState(String rawState) {
         if (rawState == null) return "ONLINE";
         return states.getOrDefault(rawState, rawState);
+    }
+
+    /** Resolve a display state label to its status item material name. */
+    public String resolveStatusItem(String resolvedState) {
+        if (resolvedState == null) return "GRAY_WOOL";
+        return statusItems.getOrDefault(resolvedState, "GRAY_WOOL");
     }
 }

@@ -1,0 +1,29 @@
+name: NimbusDisplay
+version: '${version}'
+main: dev.nimbus.display.NimbusDisplayPlugin
+api-version: '1.20'
+description: Server selector signs and NPCs for Nimbus cloud networks
+author: Nimbus
+depend: [NimbusSDK]
+softdepend: [ProtocolLib, FancyNpcs]
+
+commands:
+  ndisplay:
+    description: Manage Nimbus server selector signs and NPCs
+    permission: nimbus.display.sign
+    usage: /ndisplay <sign|npc|list|reload>
+    aliases: [nimbusdisplay]
+
+permissions:
+  nimbus.display.sign:
+    description: Create and manage Nimbus signs
+    default: op
+  nimbus.display.npc:
+    description: Create and manage Nimbus NPCs
+    default: op
+  nimbus.display.list:
+    description: List all signs and NPCs
+    default: op
+  nimbus.display.reload:
+    description: Reload display config
+    default: op

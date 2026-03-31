@@ -81,7 +81,7 @@ java -jar nimbus-core/build/libs/nimbus-core-<version>-all.jar
 | `nimbus-bridge` | Velocity plugin — hub commands, proxy sync, permissions |
 | `nimbus-sdk` | Paper server SDK — game states, routing, events, player tracking |
 | `nimbus-perms` | Paper permissions plugin — built-in or LuckPerms provider |
-| `nimbus-signs` | Paper signs plugin — server selector signs and NPCs |
+| `nimbus-display` | Paper display plugin — server selector signs and NPCs |
 
 ## Architecture
 

@@ -335,9 +335,19 @@ data class SignDisplayResponse(
 @Serializable
 data class NpcDisplayResponse(
     val displayName: String,
-    val item: String,
     val subtitle: String,
-    val subtitleOffline: String
+    val subtitleOffline: String,
+    val floatingItem: String,
+    val statusItems: Map<String, String>,
+    val inventory: NpcInventoryResponse
+)
+
+@Serializable
+data class NpcInventoryResponse(
+    val title: String,
+    val size: Int,
+    val itemName: String,
+    val itemLore: List<String>
 )
 
 @Serializable

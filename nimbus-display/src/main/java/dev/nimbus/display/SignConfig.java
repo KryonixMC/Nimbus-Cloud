@@ -1,4 +1,4 @@
-package dev.nimbus.signs;
+package dev.nimbus.display;
 
 import dev.nimbus.sdk.RoutingStrategy;
 import org.bukkit.Location;

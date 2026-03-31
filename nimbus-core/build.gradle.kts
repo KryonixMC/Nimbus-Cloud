@@ -102,12 +102,31 @@ val downloadProtocolLib = tasks.register("downloadProtocolLib") {
     }
 }
 
-// Embed the Signs plugin JAR as a resource (extracted at runtime to plugins/)
-val signsJar = tasks.register("copySignsJar", Copy::class) {
-    dependsOn(project(":nimbus-signs").tasks.named("shadowJar"))
-    from(project(":nimbus-signs").tasks.named("shadowJar").map { (it as Jar).archiveFile })
+// Download FancyNpcs and embed as resource for auto-deploy to backend servers
+val fancyNpcsVersion = "2.9.2.349"
+val downloadFancyNpcs = tasks.register("downloadFancyNpcs") {
+    val outputFile = layout.buildDirectory.file("resources/main/plugins/FancyNpcs.jar")
+    outputs.file(outputFile)
+    doLast {
+        val url = "https://hangar.papermc.io/api/v1/projects/Oliver/FancyNpcs/versions/$fancyNpcsVersion/PAPER/download"
+        val target = outputFile.get().asFile
+        target.parentFile.mkdirs()
+        if (!target.exists()) {
+            logger.lifecycle("Downloading FancyNpcs $fancyNpcsVersion...")
+            URI.create(url).toURL().openStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+            logger.lifecycle("Downloaded FancyNpcs to ${target.absolutePath}")
+        }
+    }
+}
+
+// Embed the Display plugin JAR as a resource (extracted at runtime to plugins/)
+val displayJar = tasks.register("copyDisplayJar", Copy::class) {
+    dependsOn(project(":nimbus-display").tasks.named("shadowJar"))
+    from(project(":nimbus-display").tasks.named("shadowJar").map { (it as Jar).archiveFile })
     into(layout.buildDirectory.dir("resources/main/plugins"))
-    rename { "nimbus-signs.jar" }
+    rename { "nimbus-display.jar" }
 }
 
 // Embed the Perms plugin JAR as a resource (extracted at runtime to plugins/)
@@ -119,7 +138,7 @@ val permsJar = tasks.register("copyPermsJar", Copy::class) {
 }
 
 tasks.processResources {
-    dependsOn(pluginJar, sdkJar, signsJar, permsJar, downloadProtocolLib)
+    dependsOn(pluginJar, sdkJar, displayJar, permsJar, downloadProtocolLib, downloadFancyNpcs)
 }
 
 tasks.jar {
@@ -131,7 +150,7 @@ tasks.jar {
 tasks.shadowJar {
     archiveClassifier.set("all")
     mergeServiceFiles()
-    dependsOn(pluginJar, sdkJar, signsJar, permsJar, downloadProtocolLib)
+    dependsOn(pluginJar, sdkJar, displayJar, permsJar, downloadProtocolLib, downloadFancyNpcs)
 }
 
 kotlin {
