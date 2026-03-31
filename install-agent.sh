@@ -240,7 +240,8 @@ create_start_script() {
 
     sudo tee "$INSTALL_DIR/start.sh" >/dev/null <<'SCRIPT'
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+cd "$SCRIPT_DIR"
 
 JAVA_OPTS="-Xms256M -Xmx512M"
 JAVA_OPTS="$JAVA_OPTS -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"

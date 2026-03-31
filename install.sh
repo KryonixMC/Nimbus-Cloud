@@ -218,7 +218,8 @@ create_start_script() {
 
     sudo tee "$INSTALL_DIR/start.sh" >/dev/null <<'SCRIPT'
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+cd "$SCRIPT_DIR"
 
 JAVA_OPTS="-Xms512M -Xmx1G"
 
