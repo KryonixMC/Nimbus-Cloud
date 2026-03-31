@@ -23,7 +23,7 @@ min_instances = 1
 max_instances = 10
 players_per_instance = 40
 scale_threshold = 0.8
-idle_timeout = 300
+idle_timeout = 0
 
 [group.lifecycle]
 stop_on_empty = false
@@ -155,7 +155,6 @@ args = ["-XX:+UseZGC", "-Dcom.mojang.eula.agree=true"]
 # Mode 3: No optimization — fully manual
 [group.jvm]
 optimize = false
-optimize = true
 ```
 
 ---

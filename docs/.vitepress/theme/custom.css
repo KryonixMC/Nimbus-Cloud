@@ -288,6 +288,8 @@
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--vp-c-divider);
+  width: 100%;
+  display: table !important;
 }
 
 .vp-doc th {
@@ -481,7 +483,137 @@
 .nimbus-banner .line-4 { color: #89ddff; }
 .nimbus-banner .line-cloud { color: #565f89; letter-spacing: 3px; }
 
+/* Cursor blink class (only for actual cursor elements) */
+.t-cursor { color: #c0caf5; }
+
 /* Dark mode adjustments for terminal (already dark, minimal changes) */
 .dark .terminal {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
+
+/* ============================================
+   Home Page — Custom Sections
+   ============================================ */
+
+.home-section {
+  max-width: 960px;
+  margin: 4rem auto 0;
+  padding: 0 24px;
+}
+
+.home-section-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--vp-c-brand-3));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.home-section-subtitle {
+  text-align: center;
+  color: var(--vp-c-text-3);
+  font-size: 1.05rem;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+/* Auto-grid (what Nimbus does for you) */
+.auto-grid {
+  margin-top: 24px;
+  padding: 24px;
+  background: var(--vp-c-bg-soft);
+  border-radius: 14px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+.auto-grid-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  margin-bottom: 16px;
+}
+
+.auto-grid-items {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 32px;
+}
+
+@media (max-width: 640px) {
+  .auto-grid-items {
+    grid-template-columns: 1fr;
+  }
+}
+
+.auto-item {
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.6;
+}
+
+.auto-item span {
+  color: #10b981;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+/* Comparison table */
+.comparison-table-wrapper table {
+  width: 100%;
+}
+
+.comparison-table-wrapper th:first-child,
+.comparison-table-wrapper td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Stats strip */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .stats-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat-card {
+  text-align: center;
+  padding: 24px 16px;
+  border-radius: 14px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--vp-c-brand-soft);
+  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.08);
+}
+
+.stat-number {
+  font-size: 2.4rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--vp-c-brand-3));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+  margin-top: 4px;
+  font-weight: 500;
+}
+

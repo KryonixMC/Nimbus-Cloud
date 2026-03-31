@@ -19,7 +19,7 @@ Run `java -version` in your terminal. You should see version 21 or higher:
   </div>
   <pre class="terminal-body">
 <span class="t-dim">$</span> java -version
-<span class="t-white">openjdk version "21.0.2" 2024-01-16</span>
+openjdk version "21.0.2" 2024-01-16
 </pre>
 </div>
 

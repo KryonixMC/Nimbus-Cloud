@@ -9,8 +9,8 @@ hero:
       text: Get Started
       link: /guide/quickstart
     - theme: alt
-      text: Multi-Node Setup
-      link: /guide/multi-node
+      text: API Docs
+      link: /reference/api
 
 features:
   - icon:
@@ -97,6 +97,66 @@ features:
 <span class="t-dim">[12:00:04]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">Lobby-1</span> <span class="t-dim">(port=30000)</span>
 <span class="t-dim">[12:00:08]</span> <span class="t-green">● READY</span>     <span class="t-bold">Lobby-1</span>
 <span class="t-dim">[12:00:15]</span> <span class="t-green">↑ SCALE UP</span>  <span class="t-bold">BedWars</span> 1 → 2
-<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> <span class="t-white">_</span>
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> <span class="t-cursor">_</span>
 </pre>
 </div>
+
+<!-- How Nimbus Compares -->
+<section class="home-section">
+<h2 class="home-section-title">Why Nimbus?</h2>
+<p class="home-section-subtitle">No external dependencies. No complex setup. Just Java 21 and a single JAR.</p>
+
+<div class="comparison-table-wrapper">
+
+| | Nimbus | Manual Setup | Heavy Cloud Systems |
+|---|---|---|---|
+| **Setup time** | Under 5 minutes | Hours to days | 30+ minutes |
+| **Dependencies** | Java 21 only | Java, Velocity, config | Java, Docker, databases, ... |
+| **Proxy management** | Automatic | Manual config | Varies |
+| **Auto-scaling** | Built-in, player-based | Not available | Plugin-dependent |
+| **Multi-node** | Built-in with TCP LB | Not available | Requires setup |
+| **Modpack support** | One-command import | Manual installation | Limited |
+| **API** | REST + WebSocket | None | Varies |
+| **Footprint** | Single JAR (~15MB) | Multiple JARs + scripts | Multiple services |
+
+</div>
+
+<div class="auto-grid">
+  <div class="auto-grid-header">What Nimbus does for you</div>
+  <div class="auto-grid-items">
+    <div class="auto-item"><span>&#10003;</span> Downloads server JARs automatically</div>
+    <div class="auto-item"><span>&#10003;</span> Creates optimized server configs</div>
+    <div class="auto-item"><span>&#10003;</span> Applies Aikar's JVM flags</div>
+    <div class="auto-item"><span>&#10003;</span> Manages the Velocity proxy</div>
+    <div class="auto-item"><span>&#10003;</span> Scales instances by player count</div>
+    <div class="auto-item"><span>&#10003;</span> Stops empty servers automatically</div>
+    <div class="auto-item"><span>&#10003;</span> Auto-restarts on crash</div>
+    <div class="auto-item"><span>&#10003;</span> Deploys plugins to all servers</div>
+    <div class="auto-item"><span>&#10003;</span> Built-in permissions system</div>
+    <div class="auto-item"><span>&#10003;</span> Bedrock crossplay via Geyser</div>
+  </div>
+</div>
+</section>
+
+<!-- Stats Strip -->
+<section class="home-section">
+<div class="stats-strip">
+  <div class="stat-card">
+    <div class="stat-number">9</div>
+    <div class="stat-label">Server platforms</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">1</div>
+    <div class="stat-label">JAR to deploy</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">28</div>
+    <div class="stat-label">Console commands</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">40+</div>
+    <div class="stat-label">API endpoints</div>
+  </div>
+</div>
+</section>
+

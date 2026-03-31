@@ -359,4 +359,4 @@ When Nimbus shuts down (via `shutdown` command or SIGTERM), services stop in a s
 - [Auto-Scaling Guide](/guide/scaling) -- Configure dynamic scaling
 - [Proxy Setup](/guide/proxy-setup) -- Configure the proxy layer
 - [Group Config Reference](/config/groups) -- Full configuration reference
-- [Console Commands](/reference/commands) -- Full command reference including `update`
+- [Console Commands](/guide/commands) -- Full command reference including `update`

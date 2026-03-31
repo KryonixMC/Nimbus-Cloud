@@ -81,15 +81,15 @@ Nimbus takes a different approach:
   </div>
   <pre class="terminal-body">
 <span class="t-cyan t-bold">┌─────────────────────────────────────┐</span>
-<span class="t-cyan t-bold">│</span>       <span class="t-white t-bold">Nimbus Controller</span>              <span class="t-cyan t-bold">│</span>
+<span class="t-cyan t-bold">│</span>       <span class="t-bold">Nimbus Controller</span>              <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">┌─────────┐</span> <span class="t-bright-cyan">┌──────┐</span> <span class="t-bright-cyan">┌──────────┐</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">│</span> <span class="t-white">Console</span>  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> <span class="t-white">API</span>  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> <span class="t-white">Scaling</span>  <span class="t-bright-cyan">│</span> <span class="t-cyan t-bold">│</span>
+<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">│</span> Console  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span>  API  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> Scaling  <span class="t-bright-cyan">│</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">│</span> <span class="t-dim">(JLine)</span>  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span><span class="t-dim">(Ktor)</span><span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> <span class="t-dim">Engine</span>   <span class="t-bright-cyan">│</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">└─────────┘</span> <span class="t-bright-cyan">└──────┘</span> <span class="t-bright-cyan">└──────────┘</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">├─────────────────────────────────────┤</span>
-<span class="t-cyan t-bold">│</span>          <span class="t-white t-bold">Server Groups</span>              <span class="t-cyan t-bold">│</span>
+<span class="t-cyan t-bold">│</span>          <span class="t-bold">Server Groups</span>              <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-green">┌─────────┐</span> <span class="t-green">┌───────┐</span> <span class="t-green">┌────────┐</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-green">│</span> <span class="t-white">Proxy-1</span> <span class="t-green">│</span> <span class="t-green">│</span><span class="t-white">Lobby-1</span><span class="t-green">│</span> <span class="t-green">│</span><span class="t-white">BedWars</span> <span class="t-green">│</span> <span class="t-cyan t-bold">│</span>
+<span class="t-cyan t-bold">│</span>  <span class="t-green">│</span> Proxy-1 <span class="t-green">│</span> <span class="t-green">│</span>Lobby-1<span class="t-green">│</span> <span class="t-green">│</span>BedWars <span class="t-green">│</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-green">│</span><span class="t-dim">(Velocity)</span><span class="t-green">│</span> <span class="t-green">│</span><span class="t-dim">(Paper)</span> <span class="t-green">│</span> <span class="t-green">│</span> <span class="t-dim">1..N</span>   <span class="t-green">│</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">│</span>  <span class="t-green">└─────────┘</span> <span class="t-green">└───────┘</span> <span class="t-green">└────────┘</span> <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">└─────────────────────────────────────┘</span>

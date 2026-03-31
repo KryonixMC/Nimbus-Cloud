@@ -232,7 +232,16 @@ tracker.onTotalPlayersChange(total -> {
 });
 
 int count = tracker.getPlayerCount("BedWars");
+int serviceCount = tracker.getServicePlayerCount("BedWars-1"); // player count for a specific service
 int total = tracker.getTotalPlayers();
+```
+
+### Manual player count reporting
+
+The SDK automatically reports player counts to the controller on join/leave events. If you need to manually trigger a report (e.g., after a custom player tracking change):
+
+```java
+Nimbus.reportPlayerCount();
 ```
 
 ## Events

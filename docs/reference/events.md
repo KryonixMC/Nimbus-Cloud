@@ -34,6 +34,7 @@ Emitted when a service process is launched.
 | `service` | string | Service name (e.g., `Lobby-1`) |
 | `group` | string | Group name (e.g., `Lobby`) |
 | `port` | string | Assigned port number |
+| `nodeId` | string | Node identifier (default: `"local"` for controller) |
 
 ```json
 {
@@ -42,7 +43,8 @@ Emitted when a service process is launched.
   "data": {
     "service": "Lobby-1",
     "group": "Lobby",
-    "port": "30001"
+    "port": "30001",
+    "nodeId": "local"
   }
 }
 ```
@@ -436,6 +438,104 @@ Emitted when a player's group assignments change.
 
 ---
 
+### PERMISSION_TRACK_CREATED
+
+Emitted when a new permission track is created.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `track` | string | Track name |
+| `groups` | string | Ordered list of groups in the track |
+
+```json
+{
+  "type": "PERMISSION_TRACK_CREATED",
+  "timestamp": "2025-01-15T09:45:00.000Z",
+  "data": {
+    "track": "staff",
+    "groups": "helper,moderator,admin"
+  }
+}
+```
+
+---
+
+### PERMISSION_TRACK_DELETED
+
+Emitted when a permission track is deleted.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `track` | string | Track name |
+
+```json
+{
+  "type": "PERMISSION_TRACK_DELETED",
+  "timestamp": "2025-01-15T10:00:00.000Z",
+  "data": {
+    "track": "staff"
+  }
+}
+```
+
+---
+
+### PLAYER_PROMOTED
+
+Emitted when a player is promoted along a permission track.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | string | Player UUID |
+| `player` | string | Player name |
+| `track` | string | Track name |
+| `oldGroup` | string | Previous group on the track |
+| `newGroup` | string | New group on the track |
+
+```json
+{
+  "type": "PLAYER_PROMOTED",
+  "timestamp": "2025-01-15T11:30:00.000Z",
+  "data": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "player": "Steve",
+    "track": "staff",
+    "oldGroup": "helper",
+    "newGroup": "moderator"
+  }
+}
+```
+
+---
+
+### PLAYER_DEMOTED
+
+Emitted when a player is demoted along a permission track.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | string | Player UUID |
+| `player` | string | Player name |
+| `track` | string | Track name |
+| `oldGroup` | string | Previous group on the track |
+| `newGroup` | string | New group on the track |
+
+```json
+{
+  "type": "PLAYER_DEMOTED",
+  "timestamp": "2025-01-15T11:45:00.000Z",
+  "data": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "player": "Steve",
+    "track": "staff",
+    "oldGroup": "moderator",
+    "newGroup": "helper"
+  }
+}
+```
+
+---
+
 ## Proxy Events
 
 ### PROXY_UPDATE_AVAILABLE
@@ -623,6 +723,32 @@ Emitted when maintenance mode is disabled globally or for a specific group.
 ---
 
 ## Cluster Events
+
+### CLUSTER_STARTED
+
+Emitted when the cluster subsystem is initialized and ready to accept agent connections.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bind` | string | Bind address for cluster communication |
+| `port` | string | Port for cluster communication |
+
+```json
+{
+  "type": "CLUSTER_STARTED",
+  "timestamp": "2025-01-15T08:00:00.000Z",
+  "data": {
+    "bind": "0.0.0.0",
+    "port": "9090"
+  }
+}
+```
+
+::: info
+Cluster events are only emitted when cluster mode is enabled (`cluster.enabled = true`).
+:::
+
+---
 
 ### NODE_CONNECTED
 
@@ -878,148 +1004,34 @@ Emitted when the API encounters a startup or runtime error.
 
 ---
 
-## Cluster Events
+## Stress Test Events
 
-These events are only emitted when `cluster.enabled = true` in `nimbus.toml`.
+### STRESS_TEST_UPDATED
 
-### NODE_CONNECTED
-
-Emitted when a remote agent node connects and authenticates with the controller.
+Emitted when a stress test starts, stops, or ramps to a new player target.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `nodeId` | string | Node identifier |
-| `host` | string | Remote IP address of the node |
+| `action` | string | Action performed (`started`, `stopped`, `ramped`) |
+| `targetPlayers` | string | Target number of simulated players (absent when `stopped`) |
+| `currentPlayers` | string | Current number of simulated players |
+| `group` | string? | Target group (absent for all-group tests) |
+| `rampSeconds` | string? | Ramp duration in seconds (absent when not ramping) |
 
 ```json
 {
-  "type": "NODE_CONNECTED",
-  "timestamp": "2025-01-15T10:00:00.000Z",
+  "type": "STRESS_TEST_UPDATED",
+  "timestamp": "2025-01-15T14:00:00.000Z",
   "data": {
-    "nodeId": "worker-1",
-    "host": "10.0.1.10"
+    "action": "started",
+    "targetPlayers": "100",
+    "currentPlayers": "0",
+    "group": "Lobby",
+    "rampSeconds": "30"
   }
 }
 ```
 
----
-
-### NODE_DISCONNECTED
-
-Emitted when a remote agent node loses its connection to the controller.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `nodeId` | string | Node identifier |
-
-```json
-{
-  "type": "NODE_DISCONNECTED",
-  "timestamp": "2025-01-15T12:00:00.000Z",
-  "data": {
-    "nodeId": "worker-1"
-  }
-}
-```
-
-::: info
-When a node disconnects, its services are not immediately terminated. The controller waits for the node to reconnect within the `node_timeout` window. If the node does not reconnect, services are eventually marked as CRASHED and the scaling engine restarts them on other nodes.
+::: tip
+Use this event to build real-time stress test dashboards. The `action` field indicates the lifecycle stage: `started` when a test begins, `ramped` when the target is adjusted mid-test, and `stopped` when the test ends.
 :::
-
----
-
-### NODE_HEARTBEAT
-
-Emitted on each heartbeat response from an agent node. Useful for monitoring node health.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `nodeId` | string | Node identifier |
-| `cpuUsage` | string | CPU usage (0.0 - 1.0) |
-| `services` | string | Number of services running on the node |
-
-```json
-{
-  "type": "NODE_HEARTBEAT",
-  "timestamp": "2025-01-15T10:00:05.000Z",
-  "data": {
-    "nodeId": "worker-1",
-    "cpuUsage": "0.42",
-    "services": "3"
-  }
-}
-```
-
----
-
-## Load Balancer Events
-
-These events are only emitted when `loadbalancer.enabled = true` in `nimbus.toml`.
-
-### LOAD_BALANCER_STARTED
-
-Emitted when the TCP load balancer starts listening for connections.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `bind` | string | Bind address |
-| `port` | string | Port number |
-| `strategy` | string | Backend selection strategy |
-
-```json
-{
-  "type": "LOAD_BALANCER_STARTED",
-  "timestamp": "2025-01-15T08:00:00.000Z",
-  "data": {
-    "bind": "0.0.0.0",
-    "port": "25565",
-    "strategy": "least-players"
-  }
-}
-```
-
----
-
-### LOAD_BALANCER_STOPPED
-
-Emitted when the TCP load balancer shuts down.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `reason` | string | Reason for stopping |
-
-```json
-{
-  "type": "LOAD_BALANCER_STOPPED",
-  "timestamp": "2025-01-15T20:00:00.000Z",
-  "data": {
-    "reason": "shutdown"
-  }
-}
-```
-
----
-
-### LOAD_BALANCER_BACKEND_HEALTH_CHANGED
-
-Emitted when a backend proxy's health status transitions.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `host` | string | Backend host address |
-| `port` | string | Backend port |
-| `oldStatus` | string | Previous status (`HEALTHY` or `UNHEALTHY`) |
-| `newStatus` | string | New status (`HEALTHY` or `UNHEALTHY`) |
-
-```json
-{
-  "type": "LOAD_BALANCER_BACKEND_HEALTH_CHANGED",
-  "timestamp": "2025-01-15T12:30:00.000Z",
-  "data": {
-    "host": "127.0.0.1",
-    "port": "30010",
-    "oldStatus": "HEALTHY",
-    "newStatus": "UNHEALTHY"
-  }
-}
-```

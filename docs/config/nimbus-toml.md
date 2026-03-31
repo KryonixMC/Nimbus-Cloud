@@ -412,7 +412,7 @@ The cluster token grants remote nodes the ability to run services on behalf of t
 :::
 
 ::: tip
-You can manage all cluster and load balancer settings from the console using the `cluster` command instead of editing this file manually. See [Commands Reference — cluster](/reference/commands#cluster).
+You can manage all cluster and load balancer settings from the console using the `cluster` command instead of editing this file manually. See [Commands Reference — cluster](/guide/commands#cluster).
 :::
 
 ---

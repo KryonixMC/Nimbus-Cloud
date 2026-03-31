@@ -4,7 +4,7 @@ This page covers Nimbus's internal architecture for developers who want to under
 
 ## Module structure
 
-Nimbus is organized into six modules:
+Nimbus is organized into seven modules:
 
 ```
 nimbus-core (Controller)
@@ -55,6 +55,13 @@ nimbus-sdk (Paper Plugin)
 ├── NimbusDisplay         → Display config access
 ├── NimbusChatRenderer    → Chat color rendering
 └── RoutingStrategy       → LEAST_PLAYERS, FILL_FIRST, RANDOM
+
+nimbus-perms (Paper Plugin)
+├── NimbusPermsPlugin      → Plugin entry point
+├── NimbusPermProvider     → Built-in permission provider
+├── LuckPermsProvider      → Optional LuckPerms integration
+├── ChatRenderer           → Prefix/suffix chat display
+└── NameTagHandler         → Tab list name tag formatting
 
 nimbus-signs (Paper Plugin)
 ├── SignCommand            → /nsign command

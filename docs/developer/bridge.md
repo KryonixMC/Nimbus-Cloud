@@ -60,8 +60,6 @@ All commands require the base permission `nimbus.cloud`. The `/cloud` command is
 | `/cloud groups` | `nimbus.cloud.groups` | List all configured groups |
 | `/cloud setstate <service> <state>` | `nimbus.cloud.setstate` | Set a service's custom state |
 | `/cloud reload` | `nimbus.cloud.reload` | Reload Nimbus configuration |
-| `/cloud shutdown` | `nimbus.cloud.shutdown` | Shut down the entire network (requires confirmation) |
-
 ### Permission management
 
 | Command | Permission | Description |

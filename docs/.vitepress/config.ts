@@ -20,9 +20,8 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/introduction' },
-      { text: 'Multi-Node', link: '/guide/multi-node' },
       { text: 'Config', link: '/config/nimbus-toml' },
-      { text: 'Reference', link: '/reference/commands' },
+      { text: 'API', link: '/reference/api' },
       { text: 'Developer', link: '/developer/architecture' },
     ],
 
@@ -34,22 +33,26 @@ export default defineConfig({
             { text: 'Introduction', link: '/guide/introduction' },
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Quick Start', link: '/guide/quickstart' },
-            { text: 'Modpack Import', link: '/guide/modpacks' },
+            { text: 'Core Concepts', link: '/guide/concepts' },
+            { text: 'Console Commands', link: '/guide/commands' },
           ],
         },
         {
-          text: 'Core',
+          text: 'Server Setup',
           items: [
-            { text: 'Core Concepts', link: '/guide/concepts' },
-            { text: 'Proxy Setup', link: '/guide/proxy-setup' },
             { text: 'Server Groups', link: '/guide/server-groups' },
+            { text: 'Proxy Setup', link: '/guide/proxy-setup' },
             { text: 'Scaling', link: '/guide/scaling' },
+            { text: 'Modpack Import', link: '/guide/modpacks' },
           ],
         },
         {
           text: 'Advanced',
           items: [
             { text: 'Multi-Node & Load Balancer', link: '/guide/multi-node' },
+            { text: 'Bedrock / Geyser', link: '/guide/bedrock' },
+            { text: 'Permissions', link: '/guide/permissions' },
+            { text: 'Stress Testing', link: '/guide/stress-testing' },
           ],
         },
       ],
@@ -60,16 +63,20 @@ export default defineConfig({
             { text: 'nimbus.toml', link: '/config/nimbus-toml' },
             { text: 'Groups', link: '/config/groups' },
             { text: 'Templates', link: '/config/templates' },
+          ],
+        },
+        {
+          text: 'Modules',
+          items: [
             { text: 'Permissions', link: '/config/permissions' },
-            { text: 'Display', link: '/config/display' },
+            { text: 'Display (Signs & NPCs)', link: '/config/display' },
           ],
         },
       ],
       '/reference/': [
         {
-          text: 'Reference',
+          text: 'API Reference',
           items: [
-            { text: 'Commands', link: '/reference/commands' },
             { text: 'REST API', link: '/reference/api' },
             { text: 'WebSocket', link: '/reference/websocket' },
             { text: 'Events', link: '/reference/events' },
@@ -78,12 +85,25 @@ export default defineConfig({
       ],
       '/developer/': [
         {
-          text: 'Developer',
+          text: 'Overview',
           items: [
             { text: 'Architecture', link: '/developer/architecture' },
-            { text: 'SDK', link: '/developer/sdk' },
-            { text: 'Bridge Plugin', link: '/developer/bridge' },
-            { text: 'Signs Plugin', link: '/developer/signs' },
+          ],
+        },
+        {
+          text: 'Plugins',
+          items: [
+            { text: 'SDK (nimbus-sdk)', link: '/developer/sdk' },
+            { text: 'Bridge (nimbus-bridge)', link: '/developer/bridge' },
+            { text: 'Signs (nimbus-signs)', link: '/developer/signs' },
+            { text: 'Permissions (nimbus-perms)', link: '/developer/perms' },
+          ],
+        },
+        {
+          text: 'Internals',
+          items: [
+            { text: 'Agent (nimbus-agent)', link: '/developer/agent' },
+            { text: 'Protocol (nimbus-protocol)', link: '/developer/protocol' },
           ],
         },
       ],
@@ -94,12 +114,12 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/your-org/nimbus' },
+      { icon: 'github', link: 'https://github.com/jonax1337/Nimbus' },
     ],
 
     footer: {
       message: 'Nimbus Cloud System',
-      copyright: '© 2025 Jonas Laux',
+      copyright: '© 2025-2026 Jonas Laux',
     },
 
     outline: [2, 3],

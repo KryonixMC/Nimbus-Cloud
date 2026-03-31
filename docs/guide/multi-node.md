@@ -16,16 +16,16 @@ If your network runs on **one machine**, you don't — single-node mode handles 
 <span class="t-dim">                        Players</span>
 <span class="t-dim">                           │</span>
 <span class="t-cyan t-bold">                 ┌─────────▼──────────┐</span>
-<span class="t-cyan t-bold">                 │</span>   <span class="t-white t-bold">Load Balancer</span>    <span class="t-cyan t-bold">│</span>  <span class="t-dim">:25565 (optional)</span>
+<span class="t-cyan t-bold">                 │</span>   <span class="t-bold">Load Balancer</span>    <span class="t-cyan t-bold">│</span>  <span class="t-dim">:25565 (optional)</span>
 <span class="t-cyan t-bold">                 └─────────┬──────────┘</span>
 <span class="t-dim">                           │</span>
 <span class="t-cyan t-bold">              ┌────────────▼────────────┐</span>
-<span class="t-cyan t-bold">              │</span>    <span class="t-white t-bold">Nimbus Controller</span>      <span class="t-cyan t-bold">│</span>  <span class="t-dim">nimbus-core</span>
+<span class="t-cyan t-bold">              │</span>    <span class="t-bold">Nimbus Controller</span>      <span class="t-cyan t-bold">│</span>  <span class="t-dim">nimbus-core</span>
 <span class="t-cyan t-bold">              │</span> <span class="t-dim">Groups · Scaling · API</span>    <span class="t-cyan t-bold">│</span>
 <span class="t-cyan t-bold">              └───┬──────────────┬─────┘</span>
 <span class="t-dim">                  │  WebSocket   │</span>
 <span class="t-green t-bold">         ┌────────▼───┐    ┌────▼────────┐</span>
-<span class="t-green t-bold">         │</span> <span class="t-white t-bold">Agent 1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span>   <span class="t-white t-bold">Agent 2</span>   <span class="t-green t-bold">│</span>  <span class="t-dim">nimbus-agent</span>
+<span class="t-green t-bold">         │</span> <span class="t-bold">Agent 1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span>   <span class="t-bold">Agent 2</span>   <span class="t-green t-bold">│</span>  <span class="t-dim">nimbus-agent</span>
 <span class="t-green t-bold">         │</span> <span class="t-dim">Proxy-1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-1</span>   <span class="t-green t-bold">│</span>
 <span class="t-green t-bold">         │</span> <span class="t-dim">Lobby-1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-2</span>   <span class="t-green t-bold">│</span>
 <span class="t-green t-bold">         │</span> <span class="t-dim">Lobby-2</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-3</span>   <span class="t-green t-bold">│</span>
@@ -291,6 +291,6 @@ See [nimbus.toml — Cluster](/config/nimbus-toml#cluster) and [nimbus.toml — 
 ## Next Steps
 
 - [Scaling Guide](/guide/scaling) — How auto-scaling works with multi-node
-- [Commands Reference](/reference/commands) — `nodes`, `lb`, `cluster` commands
+- [Commands Reference](/guide/commands) — `nodes`, `lb`, `cluster` commands
 - [REST API](/reference/api) — `/api/nodes`, `/api/loadbalancer` endpoints
 - [Architecture](/developer/architecture) — Technical deep-dive

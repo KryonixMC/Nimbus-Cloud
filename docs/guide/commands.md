@@ -269,9 +269,8 @@ Show detailed configuration and runtime state for a group.
   <span class="t-dim">Stop on Empty</span>         <span class="t-green">yes</span>
   <span class="t-dim">Restart on Crash</span>      <span class="t-green">yes</span>
   <span class="t-dim">Max Restarts</span>          5
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">JVM Args</span></span>
-  <span class="t-dim">-XX:+UseG1GC</span>
-  <span class="t-dim">-XX:MaxGCPauseMillis=50</span>
+<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">JVM</span></span>
+  <span class="t-dim">Optimize</span>              <span class="t-green">Aikar's Flags + Config Tuning</span>
 <span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Runtime</span></span>
   <span class="t-dim">Running Instances</span>     <span class="t-green">2</span>
   <span class="t-dim">Total Players</span>         <span class="t-bold">24</span>
@@ -287,7 +286,7 @@ Show detailed configuration and runtime state for a group.
 Launch an interactive wizard to create a new server group. Clears the screen and walks through:
 
 1. Group name
-2. Server software (Paper, Purpur, Folia, Forge, NeoForge, Fabric, Custom, or Modpack import)
+2. Server software (Paper, Pufferfish, Purpur, Folia, Forge, NeoForge, Fabric, Custom, or Modpack import)
 3. Minecraft version (with tab completion from live version lists)
 4. Modloader version (for Forge/NeoForge/Fabric only)
 5. Static vs. dynamic mode
@@ -310,14 +309,15 @@ The most common case -- a Paper backend with Via plugin support.
 <span class="t-bold">Create New Group</span>
 Group name: <span class="t-bold">SkyWars</span>
 <span class="t-dim">Available server software:</span>
-  <span class="t-cyan">paper</span>     — Paper (optimized vanilla, plugins)
-  <span class="t-cyan">purpur</span>    — Purpur (Paper fork, extra features)
-  <span class="t-cyan">folia</span>     — Folia (regionized multithreading, 1.19.4+)
-  <span class="t-cyan">forge</span>     — Forge (mods, auto-installs)
-  <span class="t-cyan">neoforge</span>  — NeoForge (modern Forge fork)
-  <span class="t-cyan">fabric</span>    — Fabric (lightweight mods)
-  <span class="t-cyan">modpack</span>   — Import a Modrinth modpack
-  <span class="t-cyan">custom</span>    — Custom JAR (bring your own)
+  <span class="t-cyan">paper</span>       — Paper (optimized vanilla, plugins)
+  <span class="t-cyan">pufferfish</span>  — Pufferfish (Paper fork, performance)
+  <span class="t-cyan">purpur</span>      — Purpur (Paper fork, extra features)
+  <span class="t-cyan">folia</span>       — Folia (regionized multithreading, 1.19.4+)
+  <span class="t-cyan">forge</span>       — Forge (mods, auto-installs)
+  <span class="t-cyan">neoforge</span>    — NeoForge (modern Forge fork)
+  <span class="t-cyan">fabric</span>      — Fabric (lightweight mods)
+  <span class="t-cyan">modpack</span>     — Import a Modrinth modpack
+  <span class="t-cyan">custom</span>      — Custom JAR (bring your own)
 Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">paper</span>
 <span class="t-dim">Fetching available versions...</span> <span class="t-green">✓</span>
 <span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...</span>
@@ -357,14 +357,15 @@ For Fabric, Forge, and NeoForge, the wizard adds a **modloader version** prompt 
 <span class="t-bold">Create New Group</span>
 Group name: <span class="t-bold">Survival</span>
 <span class="t-dim">Available server software:</span>
-  <span class="t-cyan">paper</span>     — Paper (optimized vanilla, plugins)
-  <span class="t-cyan">purpur</span>    — Purpur (Paper fork, extra features)
-  <span class="t-cyan">folia</span>     — Folia (regionized multithreading, 1.19.4+)
-  <span class="t-cyan">forge</span>     — Forge (mods, auto-installs)
-  <span class="t-cyan">neoforge</span>  — NeoForge (modern Forge fork)
-  <span class="t-cyan">fabric</span>    — Fabric (lightweight mods)
-  <span class="t-cyan">modpack</span>   — Import a Modrinth modpack
-  <span class="t-cyan">custom</span>    — Custom JAR (bring your own)
+  <span class="t-cyan">paper</span>       — Paper (optimized vanilla, plugins)
+  <span class="t-cyan">pufferfish</span>  — Pufferfish (Paper fork, performance)
+  <span class="t-cyan">purpur</span>      — Purpur (Paper fork, extra features)
+  <span class="t-cyan">folia</span>       — Folia (regionized multithreading, 1.19.4+)
+  <span class="t-cyan">forge</span>       — Forge (mods, auto-installs)
+  <span class="t-cyan">neoforge</span>    — NeoForge (modern Forge fork)
+  <span class="t-cyan">fabric</span>      — Fabric (lightweight mods)
+  <span class="t-cyan">modpack</span>     — Import a Modrinth modpack
+  <span class="t-cyan">custom</span>      — Custom JAR (bring your own)
 Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">fabric</span>
 <span class="t-dim">Fetching available versions...</span> <span class="t-green">✓</span>
 <span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  ...</span>
@@ -527,9 +528,9 @@ The `update` command enforces compatibility between server software families to 
 
 | Switch | Allowed | Reason |
 |--------|---------|--------|
-| Paper ↔ Purpur ↔ Folia | Yes | Same plugin API family (Paper forks). Note: most plugins won't work on Folia. |
+| Paper ↔ Pufferfish ↔ Purpur ↔ Folia | Yes | Same plugin API family (Paper forks). Note: most plugins won't work on Folia. |
 | Forge ↔ NeoForge | Yes (with warning) | Similar but diverging mod ecosystems |
-| Paper/Purpur → Forge/Fabric/NeoForge | **No** | Plugins and mods are incompatible |
+| Paper/Pufferfish/Purpur → Forge/Fabric/NeoForge | **No** | Plugins and mods are incompatible |
 | Forge/NeoForge → Fabric | **No** | Completely different mod formats |
 | Fabric → Forge/NeoForge | **No** | Completely different mod formats |
 | Any ↔ Velocity | **No** | Proxy vs game server |
@@ -557,7 +558,7 @@ Convert a group or individual service to static mode. Static services preserve t
 <span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> static group BedWars
 <span class="t-green">✓ Group 'BedWars' is now STATIC.</span>
 <span class="t-dim">New services will preserve their working directory across restarts.</span>
-<span class="t-dim">2 running service(s) remain dynamic until restarted.</span>
+<span class="t-yellow">⚠ 2 running service(s) are still dynamic. Use 'static service &lt;name&gt;' to convert them individually.</span>
 </pre>
 </div>
 
@@ -602,7 +603,7 @@ Set a group back to dynamic mode. Dynamic services start fresh from the template
 
 The `perms` command manages Nimbus's built-in permission system. All subcommands support tab completion.
 
-**Syntax:** `perms <group|user|reload> [subcommand] [args]`
+**Syntax:** `perms <group|user|track|audit|reload> [subcommand] [args]`
 
 ### Group Subcommands
 
@@ -778,6 +779,34 @@ Set the display priority (higher = shown first in tab list).
 </pre>
 </div>
 
+#### `perms group setweight <group> <number>`
+
+Set the conflict resolution weight for a group. When a player belongs to multiple groups with conflicting permissions, the group with the higher weight takes precedence.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms group setweight admin 100
+<span class="t-green">✓ Weight for 'admin' set to 100.</span>
+</pre>
+</div>
+
+#### `perms group meta <set|remove|list> <group> [key] [value]`
+
+Manage custom metadata key-value pairs on a permission group.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms group meta set vip display-color gold
+<span class="t-green">✓ Meta 'display-color' set to 'gold' on group 'vip'.</span>
+</pre>
+</div>
+
 ### User Subcommands
 
 #### `perms user list`
@@ -849,6 +878,62 @@ Accepts either player name or UUID.
 </pre>
 </div>
 
+#### `perms user check <name|uuid> <permission>`
+
+Check whether a player has a specific permission and show the resolution chain.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms user check Alex nimbus.admin
+<span class="t-green">✓ Alex HAS 'nimbus.admin' — Resolved via: admin (exact match)</span>
+</pre>
+</div>
+
+#### `perms user promote <name|uuid> <track>`
+
+Promote a player to the next group in a permission track.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms user promote Steve ranks
+<span class="t-green">✓ Promoted Steve: member → vip (track: ranks)</span>
+</pre>
+</div>
+
+#### `perms user demote <name|uuid> <track>`
+
+Demote a player to the previous group in a permission track.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms user demote Steve ranks
+<span class="t-green">✓ Demoted Steve: vip → member (track: ranks)</span>
+</pre>
+</div>
+
+#### `perms user meta <set|remove|list> <name|uuid> [key] [value]`
+
+Manage custom metadata on a player.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms user meta set Alex nickname "TheAdmin"
+<span class="t-green">✓ Meta 'nickname' set to 'TheAdmin' on player 'Alex'.</span>
+</pre>
+</div>
+
 ### `perms reload`
 
 Reload permission data from files.
@@ -860,6 +945,75 @@ Reload permission data from files.
   <pre class="terminal-body">
 <span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms reload
 <span class="t-green">✓ Permissions reloaded.</span>
+</pre>
+</div>
+
+### Track Subcommands
+
+#### `perms track list`
+
+List all permission tracks.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms track list
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Permission Tracks</span> ─────────────────────────────</span>
+<span class="t-bold t-bright-cyan">NAME        GROUPS</span>
+<span class="t-dim">──────────────────────────────────────────────────────</span>
+ranks       member → vip → mvp → admin
+staff       helper → moderator → admin
+<span class="t-dim">2 track(s)</span>
+</pre>
+</div>
+
+#### `perms track create <name> <group1,group2,...>`
+
+Create a new permission track with an ordered list of groups.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms track create ranks member,vip,mvp,admin
+<span class="t-green">✓ Track 'ranks' created with 4 groups.</span>
+</pre>
+</div>
+
+#### `perms track delete <name>`
+
+Delete a permission track.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms track delete ranks
+<span class="t-red">✖ Track 'ranks' deleted.</span>
+</pre>
+</div>
+
+### Audit Subcommand
+
+#### `perms audit [lines]`
+
+Show the permission audit log with recent changes. Defaults to 20 entries.
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus</span>
+  </div>
+  <pre class="terminal-body">
+<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms audit
+<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Permission Audit Log</span> ──────────────────────────</span>
+<span class="t-dim">2026-03-31 14:22:01</span>  <span class="t-green">ADD_PERM</span>     group:vip       nimbus.join.full
+<span class="t-dim">2026-03-31 14:21:45</span>  <span class="t-yellow">SET_PREFIX</span>   group:admin     <span class="t-red">[Admin]</span>
+<span class="t-dim">2026-03-31 14:20:12</span>  <span class="t-cyan">ADD_GROUP</span>    user:Alex       admin
+<span class="t-dim">3 entry(s)</span>
 </pre>
 </div>
 
@@ -1064,7 +1218,7 @@ If no nodes are connected, the command prints a warning. Use this to verify agen
 
 Manage the TCP load balancer. This command works independently of cluster mode — you can use a load balancer with multiple local Velocity proxies without enabling cluster mode.
 
-**Syntax:** `lb [enable|disable|strategy <name>]`
+**Syntax:** `lb [status|enable|disable|strategy <name>]`
 
 With no arguments, shows status and backend proxy table:
 
@@ -1096,7 +1250,7 @@ With no arguments, shows status and backend proxy table:
 | `lb disable` | Disable the load balancer |
 | `lb strategy <name>` | Set strategy: `least-players` or `round-robin` |
 
-**Tab completion:** `enable`, `disable`, `strategy` → strategy names.
+**Tab completion:** `status`, `enable`, `disable`, `strategy` → strategy names.
 
 ---
 
@@ -1159,6 +1313,10 @@ Gracefully shut down all services in order: game servers first, then lobbies, th
 <span class="t-green">✓ All services stopped.</span> <span class="t-dim">Goodbye.</span>
 </pre>
 </div>
+
+::: warning
+Shutdown requires confirmation. Run `shutdown` first, then `shutdown confirm` within 30 seconds.
+:::
 
 ---
 

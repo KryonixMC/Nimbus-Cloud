@@ -91,6 +91,8 @@ curl -H "Authorization: Bearer $TOKEN" \
       "name": "Lobby-1",
       "groupName": "Lobby",
       "port": 30001,
+      "host": "127.0.0.1",
+      "nodeId": "local",
       "state": "READY",
       "customState": null,
       "pid": 48201,
@@ -98,7 +100,8 @@ curl -H "Authorization: Bearer $TOKEN" \
       "startedAt": "2025-01-15T10:30:00Z",
       "restartCount": 0,
       "uptime": "2h 15m 30s",
-      "isStatic": false
+      "isStatic": false,
+      "bedrockPort": null
     }
   ],
   "total": 1
@@ -378,6 +381,34 @@ Send a message to a service (service-to-service messaging via the event bus).
 |-------------|-------------|
 | 200 | Message sent |
 | 404 | Target service not found |
+
+---
+
+### PUT /api/services/{name}/players
+
+Report the current player count for a service. Used internally by the SDK on backend servers to keep the controller's player counts accurate.
+
+**Request Body:**
+
+```json
+{
+  "playerCount": 12
+}
+```
+
+**Response:**
+
+```json
+{
+  "service": "Lobby-1",
+  "playerCount": 12
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Player count updated |
+| 404 | Service not found |
 
 ---
 
@@ -755,6 +786,66 @@ Remove a single permission from a group.
 
 ---
 
+### GET /api/permissions/groups/{name}/meta
+
+Get all metadata key-value pairs for a permission group.
+
+**Response:**
+
+```json
+{
+  "meta": {
+    "chat-color": "gold",
+    "max-homes": "5"
+  }
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Group not found |
+
+---
+
+### PUT /api/permissions/groups/{name}/meta
+
+Set a metadata key-value pair on a permission group.
+
+**Request Body:**
+
+```json
+{
+  "key": "chat-color",
+  "value": "gold"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key set |
+| 404 | Group not found |
+
+---
+
+### DELETE /api/permissions/groups/{name}/meta/{key}
+
+Remove a metadata key from a permission group.
+
+**Example:**
+
+```bash
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/permissions/groups/vip/meta/chat-color
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key removed |
+| 404 | Group not found |
+
+---
+
 ### GET /api/permissions/players/{uuid}
 
 Get a player's permission data, including effective permissions resolved from all groups.
@@ -837,6 +928,61 @@ Remove a permission group from a player.
 
 ---
 
+### GET /api/permissions/players/{uuid}/meta
+
+Get all metadata key-value pairs for a player.
+
+**Response:**
+
+```json
+{
+  "meta": {
+    "nickname": "Steve the Builder",
+    "home-limit": "10"
+  }
+}
+```
+
+---
+
+### PUT /api/permissions/players/{uuid}/meta
+
+Set a metadata key-value pair on a player.
+
+**Request Body:**
+
+```json
+{
+  "key": "nickname",
+  "value": "Steve the Builder"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key set |
+| 404 | Player not found |
+
+---
+
+### DELETE /api/permissions/players/{uuid}/meta/{key}
+
+Remove a metadata key from a player.
+
+**Example:**
+
+```bash
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/permissions/players/550e8400-e29b-41d4-a716-446655440000/meta/nickname
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key removed |
+| 404 | Player not found |
+
+---
+
 ### GET /api/permissions/check/{uuid}/{permission}
 
 Check if a player has a specific permission.
@@ -855,6 +1001,43 @@ curl -H "Authorization: Bearer $TOKEN" \
   "uuid": "550e8400-e29b-41d4-a716-446655440000",
   "permission": "nimbus.admin",
   "allowed": true
+}
+```
+
+---
+
+### GET /api/permissions/audit
+
+Get the permission audit log. Records all permission changes made via the API or console.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 50 | Number of entries to return |
+| `offset` | int | 0 | Offset for pagination |
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/permissions/audit?limit=20&offset=0"
+```
+
+**Response:**
+
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2025-01-15T14:30:00Z",
+      "actor": "api",
+      "action": "user.addgroup",
+      "target": "550e8400-e29b-41d4-a716-446655440000",
+      "details": "Added group 'vip' to 'Steve'"
+    }
+  ],
+  "total": 1
 }
 ```
 
@@ -1423,6 +1606,143 @@ Initiate a graceful shutdown. The response is sent before shutdown begins.
 ::: warning
 This will stop all services and terminate the Nimbus process. The shutdown order is: game servers, then lobbies, then proxies.
 :::
+
+---
+
+### GET /api/metrics
+
+Public endpoint (no authentication required). Exports metrics in Prometheus text exposition format for scraping.
+
+Includes: service counts, player counts (total, by group, by service), group scaling config, cluster node stats, load balancer counters, and maintenance status.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/metrics
+```
+
+**Response:** `text/plain; version=0.0.4`
+
+```
+# HELP nimbus_info Nimbus instance information
+# TYPE nimbus_info gauge
+nimbus_info{version="0.2.0"} 1
+# HELP nimbus_uptime_seconds Seconds since Nimbus started
+# TYPE nimbus_uptime_seconds gauge
+nimbus_uptime_seconds 7200
+# HELP nimbus_services_total Total number of services
+# TYPE nimbus_services_total gauge
+nimbus_services_total 5
+# HELP nimbus_players_total Total players across all services
+# TYPE nimbus_players_total gauge
+nimbus_players_total 36
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Metrics returned |
+
+---
+
+## Stress Testing
+
+Simulates player load across backend servers without real Minecraft clients. Only backend groups receive simulated players (proxy groups are excluded). Each service is capped at its `max_players` config value.
+
+### GET /api/stress
+
+Get the current stress test status.
+
+**Response (inactive):**
+
+```json
+{
+  "active": false
+}
+```
+
+**Response (active):**
+
+```json
+{
+  "active": true,
+  "group": "Lobby",
+  "currentPlayers": 80,
+  "targetPlayers": 100,
+  "totalCapacity": 200,
+  "overflow": 0,
+  "elapsedSeconds": 45,
+  "services": {
+    "Lobby-1": 40,
+    "Lobby-2": 40
+  },
+  "proxyServices": {
+    "Proxy-1": 80
+  }
+}
+```
+
+---
+
+### POST /api/stress/start
+
+Start a new stress test. Fails if a test is already running or the target group is a proxy.
+
+**Request Body:**
+
+```json
+{
+  "players": 100,
+  "group": "Lobby",
+  "rampSeconds": 30
+}
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `players` | Yes | | Number of simulated players (must be > 0) |
+| `group` | No | all backend groups | Target group name |
+| `rampSeconds` | No | `0` | Ramp-up duration in seconds |
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Stress test started |
+| 400 | Invalid player count |
+
+---
+
+### POST /api/stress/stop
+
+Stop the currently running stress test and clean up simulated players.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Stress test stopped |
+| 400 | No stress test is running |
+
+---
+
+### POST /api/stress/ramp
+
+Adjust the target player count of a running stress test.
+
+**Request Body:**
+
+```json
+{
+  "players": 200,
+  "durationSeconds": 60
+}
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `players` | Yes | | New target player count (>= 0) |
+| `durationSeconds` | No | `30` | Duration to ramp over |
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Ramp adjustment started |
+| 400 | Invalid player count or no test running |
 
 ---
 

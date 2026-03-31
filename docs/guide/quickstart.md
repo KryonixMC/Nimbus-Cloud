@@ -64,7 +64,26 @@ Nimbus automatically selects the latest Velocity version. Velocity is backwards-
 </pre>
 </div>
 
-## 4. Choose a Server Template
+## 4. Bedrock & Permissions
+
+The wizard asks about optional features:
+
+<div class="terminal">
+  <div class="terminal-header">
+    <span class="terminal-title">nimbus — setup wizard</span>
+  </div>
+  <pre class="terminal-body">
+  Enable Bedrock Edition? (Geyser + Floodgate) <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
+  Install built-in permissions plugin? <span class="t-dim">(prefix, suffix, groups, tracks)</span> <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
+  <span class="t-green">✓</span> NimbusPerms will be deployed to all backend servers
+</pre>
+</div>
+
+::: tip
+**Bedrock Edition** enables [Geyser + Floodgate](/guide/bedrock) so mobile and console players can join. **NimbusPerms** provides a built-in [permission system](/guide/permissions) with groups, prefixes, and tracks. Both can be enabled later.
+:::
+
+## 5. Choose a Server Template
 
 Pick a template that matches your network layout:
 
@@ -84,7 +103,7 @@ Pick a template that matches your network layout:
 
 For this walkthrough, we'll choose **2** (Lobby + Games). This creates a proxy, lobby, and a game server group — the most common network setup.
 
-## 5. Configure the Lobby
+## 6. Configure the Lobby
 
 The wizard walks you through lobby configuration — server software, version, and memory:
 
@@ -126,7 +145,7 @@ Next, the wizard offers **Via plugin** installation for protocol compatibility:
 Via plugins are installed on **backend servers only**, never on the proxy. This is the recommended setup for Velocity networks.
 :::
 
-## 6. Configure the Game Server
+## 7. Configure the Game Server
 
 Since we chose template 2, the wizard now asks for game server details:
 
@@ -153,7 +172,7 @@ Since we chose template 2, the wizard now asks for game server details:
 When your game server uses the same software and version as the lobby, Nimbus copies the JAR instead of downloading it again.
 :::
 
-## 7. Auto-Download
+## 8. Auto-Download
 
 Nimbus downloads all required server JARs automatically:
 
@@ -177,7 +196,7 @@ Nimbus downloads all required server JARs automatically:
 If a download fails, Nimbus shows a `✗` marker. You can manually place the JAR in the appropriate `templates/<group>/` directory and restart.
 :::
 
-## 8. Configuration Saved
+## 9. Configuration Saved
 
 The wizard writes all configuration files:
 
@@ -198,7 +217,7 @@ The wizard writes all configuration files:
 </pre>
 </div>
 
-## 9. First Boot
+## 10. First Boot
 
 Nimbus starts your services automatically — proxy first, then backends:
 
@@ -217,7 +236,7 @@ Nimbus starts your services automatically — proxy first, then backends:
 
 BedWars instances don't start yet — they scale up automatically when players need them, or you can start one manually with `start BedWars`.
 
-## 10. Connect
+## 11. Connect
 
 Open Minecraft and add a server:
 
@@ -228,7 +247,7 @@ Open Minecraft and add a server:
 If port 25565 is already in use (e.g., by another Minecraft server), Nimbus will fail to bind the proxy. Stop the conflicting server first, or change the proxy port in `config/groups/proxy.toml`.
 :::
 
-## 11. Explore the Console
+## 12. Explore the Console
 
 With Nimbus running, you have a full interactive console. Try these commands:
 
@@ -317,7 +336,7 @@ Lobby       DYNAMIC   1          1/4      0        <span class="t-green">healthy
 All commands support tab completion. Press `Tab` to autocomplete command names and service names.
 :::
 
-## 12. Add More Game Modes
+## 13. Add More Game Modes
 
 Want to add another game server? Use the interactive `create` command:
 
@@ -346,5 +365,5 @@ Now that your network is running:
 
 - **[Core Concepts](./concepts.md)** — Understand groups, services, templates, and scaling
 - **[Configuration](../config/nimbus-toml.md)** — Customize `config/nimbus.toml` and group configs
-- **[Commands](../reference/commands.md)** — Full console command reference
+- **[Commands](commands.md)** — Full console command reference
 - **[API Reference](../reference/api.md)** — REST API and WebSocket documentation

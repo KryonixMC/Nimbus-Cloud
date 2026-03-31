@@ -33,9 +33,13 @@ onMounted(() => {
     observer.observe(terminal)
   }
 
-  // Add typing class to terminal lines for sequential reveal
-  const terminalLines = document.querySelectorAll('.terminal-body > span, .terminal-body > .t-dim, .terminal-body > .t-bold')
-  // We handle terminal line animation via CSS instead
+  // Observe home page custom sections
+  const sections = document.querySelectorAll('.home-section')
+  sections.forEach((el, i) => {
+    el.style.setProperty('--reveal-delay', `${i * 100}ms`)
+    el.classList.add('reveal-target')
+    observer.observe(el)
+  })
 })
 
 onUnmounted(() => {
@@ -206,7 +210,7 @@ onUnmounted(() => {
   51%, 100% { opacity: 0; }
 }
 
-.terminal-body .t-white {
+.terminal-body .t-cursor {
   animation: cursor-blink 1s step-end infinite;
 }
 
@@ -269,7 +273,7 @@ onUnmounted(() => {
     transform: none !important;
     transition: none !important;
   }
-  .terminal-body .t-white {
+  .terminal-body .t-cursor {
     animation: none !important;
   }
   .terminal.revealed,
