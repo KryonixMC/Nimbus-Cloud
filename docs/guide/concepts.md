@@ -51,7 +51,7 @@ restart_on_crash = true
 max_restarts = 5
 
 [group.jvm]
-args = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"]
+optimize = true
 ```
 
 ## Services
@@ -192,6 +192,7 @@ Nimbus auto-downloads server JARs from official APIs. The following platforms ar
 |---|---|---|
 | **Paper** | Minecraft server | PaperMC API |
 | **Purpur** | Minecraft server (Paper fork) | Purpur API |
+| **Folia** | Minecraft server (regionized multithreading) | PaperMC API |
 | **Velocity** | Proxy | PaperMC API |
 | **Custom** | Any | You provide the JAR manually |
 
@@ -204,6 +205,10 @@ Nimbus auto-downloads server JARs from official APIs. The following platforms ar
 | **NeoForge** | Modded Minecraft | Installer from NeoForge Maven | [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) (auto-installed) |
 | **Quilt** | Modded Minecraft | Via Fabric compatibility | FabricProxy-Lite (auto-installed) |
 
+::: warning Folia
+Folia uses regionized multithreading which breaks most Bukkit/Paper plugins. The Nimbus SDK, ProtocolLib, and nimbus-signs are automatically excluded from Folia services. Only Folia-compatible plugins will work.
+:::
+
 Modded servers are first-class citizens in Nimbus. When you create a Forge, Fabric, or NeoForge group, Nimbus:
 
 1. **Downloads the modloader** — Runs the installer automatically (Forge/NeoForge) or fetches the launcher JAR (Fabric)
@@ -214,7 +219,7 @@ Modded servers are first-class citizens in Nimbus. When you create a Forge, Fabr
 You can also import entire modpacks from Modrinth with a single command -- see [Modpack Import](/guide/modpacks).
 
 ::: tip EULA
-Nimbus automatically accepts the Minecraft EULA for Paper and Purpur servers. You don't need to manually edit `eula.txt`.
+Nimbus automatically accepts the Minecraft EULA for Paper, Purpur, and Folia servers. You don't need to manually edit `eula.txt`.
 :::
 
 ### Via Plugins

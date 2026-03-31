@@ -2,9 +2,13 @@
 
 The Nimbus SDK is a Java plugin for Minecraft servers (Paper/Purpur) managed by Nimbus. It provides a simple API for interacting with the cloud system -- setting game states, routing players, tracking services, and listening to events.
 
+::: warning Folia
+The SDK is **not compatible with Folia** servers. Folia's regionized multithreading breaks the SDK's main-thread assumptions. Nimbus automatically excludes the SDK (and ProtocolLib) from Folia services.
+:::
+
 ## Installation
 
-The SDK is **automatically deployed** to all backend servers via the `templates/global/plugins/` directory. You don't need to install it manually.
+The SDK is **automatically deployed** to all Paper and Purpur backend servers via the `templates/global/plugins/` directory. You don't need to install it manually. Folia servers are excluded automatically.
 
 For development, add it as a compile-only dependency in your plugin project:
 

@@ -31,7 +31,7 @@ restart_on_crash = true
 max_restarts = 5
 
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true
 ```
 
 ---
@@ -45,7 +45,7 @@ Core group identity and server software settings.
 | `name` | String | *required* | Group name in PascalCase. Services are named `<Name>-<N>` (e.g., `BedWars-1`). |
 | `type` | Enum | `"DYNAMIC"` | `STATIC` or `DYNAMIC`. See [Static vs Dynamic](#static-vs-dynamic) below. |
 | `template` | String | *required* | Template directory name inside `templates/`. Must not be blank. |
-| `software` | Enum | `"PAPER"` | Server software. One of: `PAPER`, `PURPUR`, `VELOCITY`, `FORGE`, `FABRIC`, `NEOFORGE`, `CUSTOM`. |
+| `software` | Enum | `"PAPER"` | Server software. One of: `PAPER`, `PURPUR`, `FOLIA`, `VELOCITY`, `FORGE`, `FABRIC`, `NEOFORGE`, `CUSTOM`. |
 | `version` | String | `"1.21.4"` | Minecraft version (e.g., `"1.21.4"`, `"1.8.8"`). Must match format `X.Y` or `X.Y.Z`. |
 | `modloader_version` | String | `""` | Modloader version for `FORGE`, `FABRIC`, or `NEOFORGE`. If empty, Nimbus uses the latest stable version. |
 | `jar_name` | String | `""` | Custom JAR filename for `CUSTOM` software. Defaults to `"server.jar"` if empty. |
@@ -126,20 +126,36 @@ Instance lifecycle management.
 
 ## `[group.jvm]`
 
-JVM launch arguments.
+JVM and performance optimization settings.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `args` | List\<String\> | `["-XX:+UseG1GC"]` | Additional JVM arguments passed before the `-jar` flag. Common uses: garbage collector tuning, debug flags, agent JARs. |
+| `optimize` | Boolean | `true` | Enable automatic performance optimization. When enabled with no custom `args`, applies [Aikar's JVM flags](https://docs.papermc.io/paper/aikars-flags) and optimizes `spigot.yml` + `paper-world-defaults.yml` for Paper/Purpur/Folia servers. |
+| `args` | List\<String\> | `[]` | Custom JVM arguments passed before the `-jar` flag. When set alongside `optimize = true`, these args are used instead of Aikar's flags, but config optimization still applies. |
+
+### Performance Optimization
+
+When `optimize = true` (the default), Nimbus automatically:
+
+1. **Aikar's JVM Flags** — Applies optimized G1GC tuning flags that reduce GC pauses and improve throughput. Flags are adjusted automatically for large heaps (12G+). Applied to all server types.
+2. **Config Tuning** (Paper/Purpur/Folia only) — Optimizes `spigot.yml` (merge radius, entity activation ranges) and `paper-world-defaults.yml` (chunk save throttling, explosion optimization, despawn ranges).
+
+Three modes:
 
 ```toml
+# Mode 1: Full auto (default) — Aikar's flags + config tuning
 [group.jvm]
-args = [
-    "-XX:+UseG1GC",
-    "-XX:MaxGCPauseMillis=50",
-    "-XX:+ParallelRefProcEnabled",
-    "-Dcom.mojang.eula.agree=true"
-]
+optimize = true
+
+# Mode 2: Custom JVM flags + config tuning
+[group.jvm]
+optimize = true
+args = ["-XX:+UseZGC", "-Dcom.mojang.eula.agree=true"]
+
+# Mode 3: No optimization — fully manual
+[group.jvm]
+optimize = false
+optimize = true
 ```
 
 ---
@@ -181,7 +197,7 @@ restart_on_crash = true
 max_restarts = 10
 
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true
 ```
 
 ::: tip
@@ -214,7 +230,7 @@ restart_on_crash = true
 max_restarts = 5
 
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true
 ```
 
 ### Game Server (BedWars)
@@ -244,7 +260,7 @@ restart_on_crash = true
 max_restarts = 3
 
 [group.jvm]
-args = ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"]
+optimize = true
 ```
 
 ### Modded Server (Forge)
@@ -271,12 +287,7 @@ restart_on_crash = true
 max_restarts = 3
 
 [group.jvm]
-args = [
-    "-XX:+UseG1GC",
-    "-XX:+UnlockExperimentalVMOptions",
-    "-XX:G1NewSizePercent=30",
-    "-XX:G1MaxNewSizePercent=40"
-]
+optimize = true
 ```
 
 ### Fabric Server
@@ -302,8 +313,38 @@ restart_on_crash = true
 max_restarts = 3
 
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true
 ```
+
+### Folia Server (Regionized Multithreading)
+
+```toml
+[group]
+name = "FoliaLobby"
+type = "STATIC"
+template = "FoliaLobby"
+software = "FOLIA"
+version = "1.21.4"
+
+[group.resources]
+memory = "4G"
+max_players = 200
+
+[group.scaling]
+min_instances = 1
+max_instances = 2
+
+[group.lifecycle]
+restart_on_crash = true
+max_restarts = 3
+
+[group.jvm]
+optimize = true
+```
+
+::: warning Folia Plugin Compatibility
+Folia uses regionized multithreading, which breaks most Bukkit/Paper plugins. The Nimbus SDK and ProtocolLib are **automatically excluded** from Folia services. Only use plugins that explicitly support Folia's threading model.
+:::
 
 ### Custom Server Software
 
@@ -330,7 +371,7 @@ restart_on_crash = true
 max_restarts = 3
 
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true
 ```
 
 ---

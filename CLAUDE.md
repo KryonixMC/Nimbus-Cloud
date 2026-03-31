@@ -68,7 +68,9 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 - Proxy ports: 25565+, backend ports: 30000+
 - Velocity forwarding: `modern` if all backends >=1.13, else `legacy` (BungeeCord)
 - Via plugins (ViaVersion/ViaBackwards) only on backend servers, never on proxy
-- EULA auto-accepted for Paper/Purpur templates
+- EULA auto-accepted for Paper/Purpur/Folia templates
+- Folia: SDK + ProtocolLib auto-excluded (incompatible with regionized threading)
+- Performance optimizer: Aikar's JVM flags + Paper/Purpur/Folia config tuning (optimize=true default)
 - Process ready detection: watches stdout for "Done" pattern
 - Graceful shutdown order: game servers → lobbies → proxies
 - Shutdown requires confirmation: `shutdown` then `shutdown confirm` within 30s

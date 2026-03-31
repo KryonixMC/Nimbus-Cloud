@@ -287,12 +287,12 @@ Show detailed configuration and runtime state for a group.
 Launch an interactive wizard to create a new server group. Clears the screen and walks through:
 
 1. Group name
-2. Server software (Paper, Purpur, Forge, NeoForge, Fabric, Custom, or Modpack import)
+2. Server software (Paper, Purpur, Folia, Forge, NeoForge, Fabric, Custom, or Modpack import)
 3. Minecraft version (with tab completion from live version lists)
 4. Modloader version (for Forge/NeoForge/Fabric only)
 5. Static vs. dynamic mode
 6. Instance counts and memory
-7. Via plugins (ViaVersion/ViaBackwards/ViaRewind -- Paper/Purpur only)
+7. Via plugins (ViaVersion/ViaBackwards/ViaRewind -- Paper/Purpur/Folia only)
 8. Automatic JAR download and template setup
 9. Optional immediate instance start
 
@@ -312,6 +312,7 @@ Group name: <span class="t-bold">SkyWars</span>
 <span class="t-dim">Available server software:</span>
   <span class="t-cyan">paper</span>     — Paper (optimized vanilla, plugins)
   <span class="t-cyan">purpur</span>    — Purpur (Paper fork, extra features)
+  <span class="t-cyan">folia</span>     — Folia (regionized multithreading, 1.19.4+)
   <span class="t-cyan">forge</span>     — Forge (mods, auto-installs)
   <span class="t-cyan">neoforge</span>  — NeoForge (modern Forge fork)
   <span class="t-cyan">fabric</span>    — Fabric (lightweight mods)
@@ -358,6 +359,7 @@ Group name: <span class="t-bold">Survival</span>
 <span class="t-dim">Available server software:</span>
   <span class="t-cyan">paper</span>     — Paper (optimized vanilla, plugins)
   <span class="t-cyan">purpur</span>    — Purpur (Paper fork, extra features)
+  <span class="t-cyan">folia</span>     — Folia (regionized multithreading, 1.19.4+)
   <span class="t-cyan">forge</span>     — Forge (mods, auto-installs)
   <span class="t-cyan">neoforge</span>  — NeoForge (modern Forge fork)
   <span class="t-cyan">fabric</span>    — Fabric (lightweight mods)
@@ -525,7 +527,7 @@ The `update` command enforces compatibility between server software families to 
 
 | Switch | Allowed | Reason |
 |--------|---------|--------|
-| Paper ↔ Purpur | Yes | Same plugin API (Purpur is a Paper fork) |
+| Paper ↔ Purpur ↔ Folia | Yes | Same plugin API family (Paper forks). Note: most plugins won't work on Folia. |
 | Forge ↔ NeoForge | Yes (with warning) | Similar but diverging mod ecosystems |
 | Paper/Purpur → Forge/Fabric/NeoForge | **No** | Plugins and mods are incompatible |
 | Forge/NeoForge → Fabric | **No** | Completely different mod formats |

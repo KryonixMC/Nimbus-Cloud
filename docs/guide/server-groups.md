@@ -87,7 +87,7 @@ restart_on_crash = true
 max_restarts = 5
 
 [group.jvm]
-args = ["-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled"]
+optimize = true
 ```
 
 ### Via REST API
@@ -123,6 +123,7 @@ Service names are auto-generated. The number is the next available integer for t
 |---|---|
 | `PAPER` | Paper server (most common) |
 | `PURPUR` | Purpur server (Paper fork with extra features) |
+| `FOLIA` | Folia server (Paper fork with regionized multithreading, 1.19.4+) |
 | `VELOCITY` | Velocity proxy |
 | `FORGE` | Forge modded server |
 | `FABRIC` | Fabric modded server |
@@ -172,14 +173,14 @@ max_restarts = 5           # Max consecutive restart attempts before giving up
 `stop_on_empty` is different from `idle_timeout`. `stop_on_empty` triggers immediately when the last player leaves. `idle_timeout` waits for the specified number of seconds after the server becomes empty.
 :::
 
-### JVM arguments
+### JVM & Performance
 
 ```toml
 [group.jvm]
-args = ["-XX:+UseG1GC"]
+optimize = true    # Aikar's flags + config tuning (default)
 ```
 
-Additional JVM arguments passed to the server process. Memory (`-Xmx`/`-Xms`) is set automatically from `resources.memory`.
+When `optimize = true` (default), Nimbus automatically applies Aikar's JVM flags and optimizes server configs for best performance. Set custom `args` to override the JVM flags, or `optimize = false` to disable all auto-optimization. Memory (`-Xmx`/`-Xms`) is set automatically from `resources.memory`.
 
 ### Advanced fields
 

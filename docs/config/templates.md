@@ -86,7 +86,7 @@ Because symlinked directories point to the template, do not modify files inside 
 
 Nimbus automatically patches server configuration files to ensure correct port binding and proxy forwarding. You do not need to manually set ports or forwarding secrets.
 
-### server.properties (Paper/Purpur)
+### server.properties (Paper/Purpur/Folia)
 
 Nimbus sets:
 - `server-port` -- Assigned port from the port allocator
@@ -144,6 +144,7 @@ Nimbus automatically downloads server software when it's not already present in 
 |----------|--------|----------|-----------------|
 | `PAPER` | PaperMC API | `server.jar` | Latest build for the configured version |
 | `PURPUR` | Purpur API | `server.jar` | Latest build for the configured version |
+| `FOLIA` | PaperMC API | `server.jar` | Latest build for the configured version |
 | `VELOCITY` | PaperMC API | `velocity.jar` | Latest build for the configured version |
 | `FORGE` | MinecraftForge Maven | `server.jar` | Installer downloaded and run automatically |
 | `NEOFORGE` | NeoForged Maven | `server.jar` | Installer downloaded and run automatically |
@@ -184,7 +185,7 @@ If a Via plugin JAR already exists in the `plugins/` directory, Nimbus skips the
 
 ## EULA Auto-Acceptance
 
-For Paper and Purpur servers, Nimbus automatically accepts the Minecraft EULA by creating `eula.txt` with `eula=true`. This prevents the server from halting on first launch waiting for manual EULA acceptance.
+For Paper, Purpur, and Folia servers, Nimbus automatically accepts the Minecraft EULA by creating `eula.txt` with `eula=true`. This prevents the server from halting on first launch waiting for manual EULA acceptance.
 
 ---
 
@@ -227,7 +228,7 @@ Global templates let you share plugins and configs across all servers of a given
 
 | Directory | Applied To |
 |-----------|-----------|
-| `templates/global/` | All backend servers (Paper, Purpur, Forge, Fabric, etc.) |
+| `templates/global/` | All backend servers (Paper, Purpur, Folia, Forge, Fabric, etc.) |
 | `templates/global_proxy/` | All proxy servers (Velocity) |
 
 Global overlays are applied **after** the group-specific template, so they overwrite any conflicting files. This is useful for:
