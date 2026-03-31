@@ -1,5 +1,6 @@
 package dev.nimbus.api.routes
 
+import dev.nimbus.NimbusVersion
 import dev.nimbus.api.*
 import dev.nimbus.event.EventBus
 import dev.nimbus.event.NimbusEvent
@@ -29,7 +30,8 @@ fun Route.proxySyncRoutes(proxySyncManager: ProxySyncManager, eventBus: EventBus
                 kickMessage = proxySyncManager.globalKickMessage,
                 whitelist = proxySyncManager.getMaintenanceWhitelist().toList(),
                 groups = maintenanceGroups
-            )
+            ),
+            version = NimbusVersion.version
         ))
     }
 

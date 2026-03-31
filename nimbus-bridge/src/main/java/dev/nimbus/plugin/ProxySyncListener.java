@@ -52,6 +52,9 @@ public class ProxySyncListener {
     private volatile String chatFormat = "{prefix}{player}{suffix} <dark_gray>» <gray>{message}";
     private volatile boolean chatEnabled = true;
 
+    // Nimbus version (from API)
+    private volatile String nimbusVersion = "dev";
+
     // Stress test: fake player samples for server list hover
     private volatile java.util.List<String> stressBotSamples = java.util.Collections.emptyList();
     private volatile int stressSimulatedPlayers = 0;
@@ -333,7 +336,8 @@ public class ProxySyncListener {
     private String replacePlaceholders(String template, Player player, int online, int max) {
         String result = template
                 .replace("{online}", String.valueOf(online))
-                .replace("{max}", String.valueOf(max));
+                .replace("{max}", String.valueOf(max))
+                .replace("{version}", nimbusVersion);
 
         if (player != null) {
             result = result.replace("{player}", player.getUsername());
@@ -515,6 +519,10 @@ public class ProxySyncListener {
         if (chat != null) {
             chatFormat = getJsonString(chat, "format", chatFormat);
             if (chat.has("enabled")) chatEnabled = chat.get("enabled").getAsBoolean();
+        }
+
+        if (json.has("version") && !json.get("version").isJsonNull()) {
+            nimbusVersion = json.get("version").getAsString();
         }
 
         // Load maintenance state from proxy config

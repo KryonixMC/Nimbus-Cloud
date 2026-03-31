@@ -25,9 +25,9 @@ data class MotdTomlSection(
 data class MaintenanceTomlSection(
     val enabled: Boolean = false,
     @SerialName("motd_line1")
-    val motdLine1: String = "  <gradient:#ff6b6b:#ee5a24><bold>MAINTENANCE</bold></gradient>",
+    val motdLine1: String = "<gradient:#ff6b6b:#ee5a24><bold>ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ</bold></gradient>",
     @SerialName("motd_line2")
-    val motdLine2: String = "  <gray>We are currently performing maintenance.</gray>",
+    val motdLine2: String = "<gray>We are currently performing maintenance.</gray>",
     @SerialName("protocol_text")
     val protocolText: String = "Maintenance",
     @SerialName("kick_message")
@@ -78,15 +78,15 @@ data class ProxySyncConfig(
 )
 
 data class TabListConfig(
-    val header: String = "\n<gradient:#58a6ff:#56d4dd><bold>☁ NIMBUS CLOUD</bold></gradient>\n",
-    val footer: String = "\n<gray>Online</gray> <white>»</white> <gradient:#56d4dd:#b392f0>{online}</gradient><dark_gray>/</dark_gray><gray>{max}</gray>\n",
+    val header: String = "\n<gradient:#58a6ff:#56d4dd><bold>ɴɪᴍʙᴜꜱᴄʟᴏᴜᴅ</bold></gradient>\nᴍɪɴᴇᴄʀᴀꜰᴛ ᴄʟᴏᴜᴅ ꜱʏꜱᴛᴇᴍ\n\nv{version}\n",
+    val footer: String = "\n<gray>Online</gray> <white>»</white> <gradient:#56d4dd:#b392f0>{online}</gradient><dark_gray>/</dark_gray><gray>{max}</gray>\n<gray>Server</gray> <white>»</white> <green>{server}\n",
     val playerFormat: String = "{prefix}{player}{suffix}",
     val updateInterval: Int = 5
 )
 
 data class MotdConfig(
-    val line1: String = "  <gradient:#58a6ff:#56d4dd:#b392f0><bold>☁ NIMBUS CLOUD</bold></gradient>",
-    val line2: String = "  <gray>» </gray><gradient:#56d364:#56d4dd>{online} players online</gradient>",
+    val line1: String = "<gradient:#58a6ff:#56d4dd><bold>ɴɪᴍʙᴜꜱᴄʟᴏᴜᴅ</bold></gradient>",
+    val line2: String = "<gray>» </gray><gradient:#56d364:#56d4dd>{online} players online</gradient>",
     val maxPlayers: Int = -1,
     val playerCountOffset: Int = 0
 )
@@ -105,8 +105,8 @@ data class MaintenanceConfig(
 
 data class GlobalMaintenanceConfig(
     val enabled: Boolean = false,
-    val motdLine1: String = "  <gradient:#ff6b6b:#ee5a24><bold>MAINTENANCE</bold></gradient>",
-    val motdLine2: String = "  <gray>We are currently performing maintenance.</gray>",
+    val motdLine1: String = "<gradient:#ff6b6b:#ee5a24><bold>ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ</bold></gradient>",
+    val motdLine2: String = "<gray>We are currently performing maintenance.</gray>",
     val protocolText: String = "Maintenance",
     val kickMessage: String = "<red><bold>Maintenance</bold></red>\n<gray>The server is currently under maintenance.\nPlease try again later.</gray>",
     val whitelist: List<String> = emptyList()

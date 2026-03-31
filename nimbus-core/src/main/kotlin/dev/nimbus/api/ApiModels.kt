@@ -18,7 +18,8 @@ data class ServiceResponse(
     val startedAt: String?,
     val restartCount: Int,
     val uptime: String?,
-    val isStatic: Boolean = false
+    val isStatic: Boolean = false,
+    val bedrockPort: Int? = null
 )
 
 @Serializable
@@ -426,7 +427,8 @@ data class ProxySyncResponse(
     val tablist: TabListResponse,
     val motd: MotdResponse,
     val chat: ChatResponse,
-    val maintenance: ProxyMaintenanceResponse? = null
+    val maintenance: ProxyMaintenanceResponse? = null,
+    val version: String? = null
 )
 
 @Serializable

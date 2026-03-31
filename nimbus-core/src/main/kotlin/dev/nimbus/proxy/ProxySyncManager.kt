@@ -29,10 +29,10 @@ class ProxySyncManager(private val proxyDir: Path) {
     @Volatile var globalMaintenanceEnabled: Boolean = false
         private set
 
-    @Volatile var globalMotdLine1: String = "  <gradient:#ff6b6b:#ee5a24><bold>MAINTENANCE</bold></gradient>"
+    @Volatile var globalMotdLine1: String = "<gradient:#ff6b6b:#ee5a24><bold>ᴍᴀɪɴᴛᴇɴᴀɴᴄᴇ</bold></gradient>"
         private set
 
-    @Volatile var globalMotdLine2: String = "  <gray>We are currently performing maintenance.</gray>"
+    @Volatile var globalMotdLine2: String = "<gray>We are currently performing maintenance.</gray>"
         private set
 
     @Volatile var globalProtocolText: String = "Maintenance"
@@ -270,7 +270,7 @@ class ProxySyncManager(private val proxyDir: Path) {
     private fun buildMotdToml(): String = buildString {
         appendLine("# Nimbus MOTD Configuration")
         appendLine("# Controls the server list MOTD shown in the Minecraft multiplayer screen.")
-        appendLine("# Supports MiniMessage formatting and placeholders: {online}, {max}")
+        appendLine("# Supports MiniMessage formatting and placeholders: {online}, {max}, {version}")
         appendLine()
         appendLine("[motd]")
         appendLine("line1 = ${tomlString(config.motd.line1)}")
@@ -303,7 +303,7 @@ class ProxySyncManager(private val proxyDir: Path) {
         appendLine("# Nimbus Tab List Configuration")
         appendLine("# Controls the tab list header, footer, and player name format.")
         appendLine("# Supports MiniMessage formatting and placeholders:")
-        appendLine("#   {online}, {max}, {player}, {server}, {group}, {prefix}, {suffix}")
+        appendLine("#   {online}, {max}, {player}, {server}, {group}, {prefix}, {suffix}, {version}")
         appendLine()
         appendLine("[tablist]")
         appendLine("header = ${tomlString(config.tabList.header)}")
