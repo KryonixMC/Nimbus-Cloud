@@ -8,7 +8,7 @@ NimbusPerms supports **Spigot 1.8.8** through the **latest Paper/Folia** version
 
 ## Architecture
 
-The plugin entry point is `NimbusPermsPlugin` (`dev.nimbus.perms.NimbusPermsPlugin`), a standard `JavaPlugin` that reads its API connection from JVM system properties (`nimbus.api.url`, `nimbus.api.token`). It requires the [Nimbus SDK](/developer/sdk) and only activates on Nimbus-managed services.
+The plugin entry point is `NimbusPermsPlugin` (`dev.kryonix.nimbus.perms.NimbusPermsPlugin`), a standard `JavaPlugin` that reads its API connection from JVM system properties (`nimbus.api.url`, `nimbus.api.token`). It requires the [Nimbus SDK](/developer/sdk) and only activates on Nimbus-managed services.
 
 On enable, it selects a `PermissionProvider` implementation, then starts the `ChatRenderer` and `NameTagHandler` display components. Player join/quit events are forwarded to all three systems.
 
@@ -25,7 +25,7 @@ NimbusPermsPlugin
 
 ### PermissionProvider interface
 
-All providers implement `dev.nimbus.perms.provider.PermissionProvider`:
+All providers implement `dev.kryonix.nimbus.perms.provider.PermissionProvider`:
 
 ```java
 public interface PermissionProvider {
@@ -93,7 +93,7 @@ Key behaviors:
 
 ## Wildcard permission injection
 
-`PermissibleInjector` (`dev.nimbus.perms.handler.PermissibleInjector`) extends `PermissibleBase` to add wildcard matching that Bukkit does not support natively:
+`PermissibleInjector` (`dev.kryonix.nimbus.perms.handler.PermissibleInjector`) extends `PermissibleBase` to add wildcard matching that Bukkit does not support natively:
 
 - `*` grants all permissions
 - `some.node.*` grants all permissions starting with `some.node.`

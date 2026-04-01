@@ -6,7 +6,7 @@ plugins {
 }
 
 application {
-    mainClass.set("dev.nimbus.agent.AgentKt")
+    mainClass.set("dev.kryonix.nimbus.agent.AgentKt")
 }
 
 dependencies {

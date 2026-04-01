@@ -34,7 +34,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 
 ## Auto-Updates
 
-`UpdateChecker` (`dev/nimbus/update/UpdateChecker.kt`) runs on startup:
+`UpdateChecker` (`dev/kryonix/nimbus/update/UpdateChecker.kt`) runs on startup:
 - Queries `GET /repos/jonax1337/Nimbus/releases/latest` via GitHub API
 - Compares semver (major.minor.patch) against `NimbusVersion.version` from JAR manifest
 - Patch/minor: auto-downloads new JAR, swaps in place, keeps backup (`nimbus-backup.jar`)
@@ -51,7 +51,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 
 ## Modules
 
-- `nimbus-core` — Main application (entry point: `dev.nimbus.NimbusKt`)
+- `nimbus-core` — Main application (entry point: `dev.kryonix.nimbus.NimbusKt`)
 - `nimbus-agent` — Remote agent node for multi-node clusters
 - `nimbus-protocol` — Shared cluster message types
 - `nimbus-bridge` — Velocity plugin: hub commands + cloud bridge (Java, auto-embedded as resource `nimbus-bridge.jar` during build)
@@ -72,7 +72,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 ## Architecture
 
 ```
-nimbus-core/src/main/kotlin/dev/nimbus/
+nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 ├── Nimbus.kt              # Entry point, bootstrap
 ├── api/                   # Ktor REST API + WebSocket (v0.2)
 ├── config/                # TOML config loading (NimbusConfig, GroupConfig)
@@ -129,7 +129,7 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 ## Cross-Version Compatibility
 
 - Plugins (SDK, Perms, Display) support Spigot 1.8.8+ through latest Paper/Folia
-- `dev.nimbus.sdk.compat` package provides cross-version abstractions:
+- `dev.kryonix.nimbus.sdk.compat` package provides cross-version abstractions:
   - `VersionHelper`: runtime detection of Folia, Adventure API, AsyncChatEvent
   - `SchedulerCompat`: Bukkit/Folia scheduler abstraction (delegates to `FoliaScheduler` on Folia)
   - `TextCompat`: Adventure/legacy text abstraction (delegates to `AdventureHelper` on Paper 1.16.5+)

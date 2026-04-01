@@ -252,7 +252,7 @@ Nimbus.reportPlayerCount();
 Type-safe event handling with auto-deserialization:
 
 ```java
-import dev.nimbus.sdk.event.*;
+import dev.kryonix.nimbus.sdk.event.*;
 
 Nimbus.on(ServiceReadyEvent.class, event -> {
     System.out.println(event.getServiceName() + " is ready!");
