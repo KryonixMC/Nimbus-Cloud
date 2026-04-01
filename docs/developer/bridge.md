@@ -52,6 +52,8 @@ All commands require the base permission `nimbus.cloud`. The `/cloud` command is
 |---|---|---|
 | `/cloud players` | `nimbus.cloud.players` | List all online players and their current servers |
 | `/cloud send <player> <service>` | `nimbus.cloud.send` | Transfer a player to another service |
+| `/cloud kick <player> [reason]` | `nimbus.cloud.kick` | Kick a player from the network |
+| `/cloud broadcast [--group <g>] <msg>` | `nimbus.cloud.broadcast` | Broadcast a message to all players or a specific group |
 
 ### Network management
 
@@ -101,22 +103,22 @@ All commands require the base permission `nimbus.cloud`. The `/cloud` command is
 |---|---|---|
 | `/hub` | `/lobby`, `/l` | Send the player to a lobby server |
 
-The hub command finds the first server whose name starts with "Lobby" (case-insensitive) and connects the player. If the player is already on a lobby, they're told they're already there.
+The hub command finds the lobby server with the **fewest players** (least-players load balancing) and connects the player. If the player is already on any lobby, they're told they're already there.
 
 ## Connection handling
 
 The bridge manages player connections automatically:
 
 ### Initial connection
-When a player joins the proxy, they are routed to the first available lobby server. If no lobby is available, the player is disconnected with an error message.
+When a player joins the proxy, they are routed to the lobby with the **fewest players**. If no lobby is available, the player is disconnected with an error message.
 
 ### Kicked from server
 When a player is kicked from a non-lobby server:
-1. The bridge attempts to redirect them to a lobby
+1. The bridge attempts to redirect them to the lobby with the fewest players
 2. If a lobby is available, the player is sent there with a message
 3. If no lobby is available, the player is disconnected
 
-When kicked from a lobby server, the player is disconnected with the kick reason.
+When kicked from a lobby server (e.g. during a restart), the bridge redirects the player to a **different** lobby. If no other lobby is available, the player is disconnected with the kick reason.
 
 ## Permission integration
 

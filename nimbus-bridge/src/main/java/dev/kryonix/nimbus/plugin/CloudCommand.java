@@ -43,6 +43,8 @@ public class CloudCommand implements SimpleCommand {
             Map.entry("exec",        "nimbus.cloud.exec"),
             Map.entry("players",     "nimbus.cloud.players"),
             Map.entry("send",        "nimbus.cloud.send"),
+            Map.entry("kick",        "nimbus.cloud.kick"),
+            Map.entry("broadcast",   "nimbus.cloud.broadcast"),
             Map.entry("groups",      "nimbus.cloud.groups"),
             Map.entry("info",        "nimbus.cloud.info"),
             Map.entry("setstate",    "nimbus.cloud.setstate"),
@@ -55,7 +57,7 @@ public class CloudCommand implements SimpleCommand {
 
     private static final List<String> SUBCOMMANDS = List.of(
             "help", "list", "status", "start", "stop", "restart",
-            "exec", "players", "send", "groups", "info", "setstate", "reload", "perms", "maintenance", "stress", "events"
+            "exec", "players", "send", "kick", "broadcast", "groups", "info", "setstate", "reload", "perms", "maintenance", "stress", "events"
     );
 
     private static final List<String> STRESS_SUBCMDS = List.of("status", "start", "stop", "ramp");
@@ -146,6 +148,8 @@ public class CloudCommand implements SimpleCommand {
             case "exec"    -> handleExec(invocation, args);
             case "players" -> handlePlayers(invocation);
             case "send"    -> handleSend(invocation, args);
+            case "kick"    -> handleKick(invocation, args);
+            case "broadcast" -> handleBroadcast(invocation, args);
             case "groups"  -> handleGroups(invocation);
             case "info"    -> handleInfo(invocation, args);
             case "setstate"-> handleSetState(invocation, args);
@@ -193,6 +197,27 @@ public class CloudCommand implements SimpleCommand {
             return List.of();
         }
 
+        // Broadcast --group tab completion
+        if (sub.equals("broadcast") && invocation.source().hasPermission("nimbus.cloud.broadcast")) {
+            if (args.length == 2) {
+                String partial = args[1].toLowerCase();
+                return Stream.of("--group").filter(s -> s.startsWith(partial)).toList();
+            }
+            return List.of();
+        }
+
+        // Kick: suggest online player names
+        if (sub.equals("kick") && invocation.source().hasPermission("nimbus.cloud.kick")) {
+            if (args.length == 2) {
+                String partial = args[1].toLowerCase();
+                return proxyServer.getAllPlayers().stream()
+                        .map(Player::getUsername)
+                        .filter(name -> name.toLowerCase().startsWith(partial))
+                        .toList();
+            }
+            return List.of();
+        }
+
         // For other subcommands that take service/group names
         return List.of();
     }
@@ -217,6 +242,8 @@ public class CloudCommand implements SimpleCommand {
                 new HelpEntry("/cloud exec <service> <cmd>",  "Execute command on service","nimbus.cloud.exec"),
                 new HelpEntry("/cloud players",               "List online players",       "nimbus.cloud.players"),
                 new HelpEntry("/cloud send <player> <target>","Transfer a player",         "nimbus.cloud.send"),
+                new HelpEntry("/cloud kick <player> [reason]", "Kick player from network",  "nimbus.cloud.kick"),
+                new HelpEntry("/cloud broadcast [--group] <msg>","Broadcast to all players", "nimbus.cloud.broadcast"),
                 new HelpEntry("/cloud setstate <svc> <state>", "Set custom state on service","nimbus.cloud.setstate"),
                 new HelpEntry("/cloud perms",                 "Manage permissions",        "nimbus.cloud.perms"),
                 new HelpEntry("/cloud maintenance",           "Toggle maintenance mode",   "nimbus.cloud.maintenance"),
@@ -461,6 +488,77 @@ public class CloudCommand implements SimpleCommand {
             if (result.isSuccess()) {
                 source.sendMessage(
                         Component.text("Sent " + player + " to " + target, NamedTextColor.GREEN)
+                );
+            } else {
+                source.sendMessage(apiError(result));
+            }
+        });
+    }
+
+    private void handleKick(Invocation invocation, String[] args) {
+        var source = invocation.source();
+        if (args.length < 2) {
+            source.sendMessage(Component.text("Usage: /cloud kick <player> [reason...]", NamedTextColor.RED));
+            return;
+        }
+        String player = args[1];
+        String reason = args.length > 2
+                ? String.join(" ", Arrays.copyOfRange(args, 2, args.length))
+                : "You have been kicked from the network.";
+
+        JsonObject body = new JsonObject();
+        body.addProperty("reason", reason);
+
+        source.sendMessage(Component.text("Kicking " + player + "...", NamedTextColor.GRAY));
+        api.post("/api/players/" + enc(player) + "/kick", body).thenAccept(result -> {
+            if (result.isSuccess()) {
+                source.sendMessage(
+                        Component.text("Kicked ", NamedTextColor.GREEN)
+                                .append(Component.text(player, NamedTextColor.WHITE))
+                                .append(Component.text(" from the network.", NamedTextColor.GREEN))
+                );
+            } else {
+                source.sendMessage(apiError(result));
+            }
+        });
+    }
+
+    private void handleBroadcast(Invocation invocation, String[] args) {
+        var source = invocation.source();
+        if (args.length < 2) {
+            source.sendMessage(Component.text("Usage: /cloud broadcast [--group <group>] <message...>", NamedTextColor.RED));
+            return;
+        }
+
+        String group = null;
+        int messageStart = 1;
+
+        // Parse optional --group flag
+        if (args[1].equalsIgnoreCase("--group") || args[1].equalsIgnoreCase("-g")) {
+            if (args.length < 4) {
+                source.sendMessage(Component.text("Usage: /cloud broadcast --group <group> <message...>", NamedTextColor.RED));
+                return;
+            }
+            group = args[2];
+            messageStart = 3;
+        }
+
+        String message = String.join(" ", Arrays.copyOfRange(args, messageStart, args.length));
+
+        JsonObject body = new JsonObject();
+        body.addProperty("message", message);
+        if (group != null) {
+            body.addProperty("group", group);
+        }
+
+        String scope = group != null ? "group " + group : "network";
+        source.sendMessage(Component.text("Broadcasting to " + scope + "...", NamedTextColor.GRAY));
+        api.post("/api/broadcast", body).thenAccept(result -> {
+            if (result.isSuccess()) {
+                JsonObject json = result.asJson();
+                int services = json.get("services").getAsInt();
+                source.sendMessage(
+                        Component.text("Broadcast sent to " + services + " service(s).", NamedTextColor.GREEN)
                 );
             } else {
                 source.sendMessage(apiError(result));

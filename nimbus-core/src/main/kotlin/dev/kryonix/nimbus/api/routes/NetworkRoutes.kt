@@ -101,4 +101,64 @@ fun Route.networkRoutes(
             call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to send player transfer command"))
         }
     }
+
+    // POST /api/players/{name}/kick — Kick player from the network
+    post("/api/players/{name}/kick") {
+        val playerName = call.parameters["name"]!!
+        val request = call.receive<KickPlayerRequest>()
+
+        val proxyService = registry.getAll().firstOrNull { service ->
+            val group = groupManager.getGroup(service.groupName)
+            group?.config?.group?.software == ServerSoftware.VELOCITY && service.state == ServiceState.READY
+        }
+
+        if (proxyService == null) {
+            return@post call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage(false, "No Velocity proxy available"))
+        }
+
+        // Velocity's /velocity kick command: velocity kick <player> <reason>
+        val success = serviceManager.executeCommand(proxyService.name, "velocity kick $playerName ${request.reason}")
+        if (success) {
+            call.respond(ApiMessage(true, "Player '$playerName' kicked from the network"))
+        } else {
+            call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to execute kick command"))
+        }
+    }
+
+    // POST /api/broadcast — Broadcast a message to all services (or a specific group)
+    post("/api/broadcast") {
+        val request = call.receive<BroadcastRequest>()
+
+        val targetServices = if (request.group != null) {
+            registry.getByGroup(request.group).filter { it.state == ServiceState.READY }
+        } else {
+            registry.getAll().filter { it.state == ServiceState.READY }
+        }
+
+        if (targetServices.isEmpty()) {
+            val scope = request.group?.let { "group '${it}'" } ?: "network"
+            return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "No ready services found in $scope"))
+        }
+
+        var successCount = 0
+        for (service in targetServices) {
+            // Use Minecraft's /say command for backend servers, alertraw for proxies
+            val group = groupManager.getGroup(service.groupName)
+            val command = if (group?.config?.group?.software == ServerSoftware.VELOCITY) {
+                "velocity broadcast ${request.message}"
+            } else {
+                "say ${request.message}"
+            }
+            if (serviceManager.executeCommand(service.name, command)) {
+                successCount++
+            }
+        }
+
+        val scope = request.group?.let { "group '${it}'" } ?: "network"
+        call.respond(BroadcastResponse(
+            success = successCount > 0,
+            message = "Broadcast sent to $successCount/${targetServices.size} services in $scope",
+            services = successCount
+        ))
+    }
 }

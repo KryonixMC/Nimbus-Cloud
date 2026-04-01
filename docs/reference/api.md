@@ -654,6 +654,80 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+### POST /api/players/{name}/kick
+
+Kick a player from the network via the Velocity proxy.
+
+**Request Body:**
+
+```json
+{
+  "reason": "You have been kicked from the network."
+}
+```
+
+The `reason` field is optional and defaults to `"You have been kicked from the network."`.
+
+**Example:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Breaking the rules."}' \
+  http://localhost:8080/api/players/Steve/kick
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Kick command sent |
+| 503 | No Velocity proxy available |
+| 500 | Failed to execute kick command |
+
+---
+
+### POST /api/broadcast
+
+Broadcast a message to all running services, or to a specific group.
+
+**Request Body:**
+
+```json
+{
+  "message": "Server restarting in 5 minutes!",
+  "group": "Lobby"
+}
+```
+
+The `group` field is optional. When omitted, the message is sent to all READY services.
+
+Backend servers receive the message via `/say`, proxy servers via `velocity broadcast`.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Broadcast sent to 4/4 services in network",
+  "services": 4
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Maintenance in 10 minutes!"}' \
+  http://localhost:8080/api/broadcast
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Broadcast sent (check `services` count in response) |
+| 404 | No ready services found in the target scope |
+
+---
+
 ## Permissions
 
 ### GET /api/permissions/groups

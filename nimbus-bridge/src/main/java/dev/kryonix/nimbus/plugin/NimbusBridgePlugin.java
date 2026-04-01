@@ -282,10 +282,21 @@ public class NimbusBridgePlugin {
         }
     }
 
+    /**
+     * Finds the lobby server with the fewest players (least-players load balancing).
+     */
     private static Optional<RegisteredServer> findLobby(ProxyServer server) {
+        return findLobbyExcluding(server, null);
+    }
+
+    /**
+     * Finds the lobby server with the fewest players, optionally excluding a specific server.
+     */
+    private static Optional<RegisteredServer> findLobbyExcluding(ProxyServer server, String excludeServerName) {
         return server.getAllServers().stream()
             .filter(s -> s.getServerInfo().getName().toLowerCase().startsWith("lobby"))
-            .min((a, b) -> a.getServerInfo().getName().compareToIgnoreCase(b.getServerInfo().getName()));
+            .filter(s -> excludeServerName == null || !s.getServerInfo().getName().equalsIgnoreCase(excludeServerName))
+            .min(java.util.Comparator.comparingInt(s -> s.getPlayersConnected().size()));
     }
 
     /**
@@ -365,20 +376,31 @@ public class NimbusBridgePlugin {
             Player player = event.getPlayer();
             String kickedFrom = event.getServer().getServerInfo().getName();
 
-            // If kicked from a non-lobby server, try to send back to lobby
-            if (!kickedFrom.toLowerCase().startsWith("lobby")) {
+            if (kickedFrom.toLowerCase().startsWith("lobby")) {
+                // Kicked from a lobby — try to find a different lobby
+                Optional<RegisteredServer> otherLobby = findLobbyExcluding(server, kickedFrom);
+                if (otherLobby.isPresent()) {
+                    event.setResult(KickedFromServerEvent.RedirectPlayer.create(
+                        otherLobby.get(),
+                        Component.text("Sent to another lobby.", NamedTextColor.YELLOW)
+                    ));
+                    logger.info("Redirected {} to {} after kick from {}", player.getUsername(), otherLobby.get().getServerInfo().getName(), kickedFrom);
+                    return;
+                }
+            } else {
+                // Kicked from a non-lobby server — send back to lobby (least players)
                 Optional<RegisteredServer> lobby = findLobby(server);
                 if (lobby.isPresent()) {
                     event.setResult(KickedFromServerEvent.RedirectPlayer.create(
                         lobby.get(),
                         Component.text("Sent back to lobby.", NamedTextColor.YELLOW)
                     ));
-                    logger.info("Redirected {} to lobby after kick from {}", player.getUsername(), kickedFrom);
+                    logger.info("Redirected {} to {} after kick from {}", player.getUsername(), lobby.get().getServerInfo().getName(), kickedFrom);
                     return;
                 }
             }
 
-            // Kicked from lobby or no lobby available — disconnect with message
+            // No lobby available — disconnect with message
             Component reason = event.getServerKickReason().orElse(
                 Component.text("Connection lost.", NamedTextColor.RED)
             );
@@ -475,18 +497,18 @@ public class NimbusBridgePlugin {
                 return;
             }
 
+            // Already on a lobby?
+            var currentServer = player.getCurrentServer().orElse(null);
+            if (currentServer != null &&
+                currentServer.getServerInfo().getName().toLowerCase().startsWith("lobby")) {
+                player.sendMessage(Component.text("You are already on the lobby.", NamedTextColor.YELLOW));
+                return;
+            }
+
             Optional<RegisteredServer> lobbyServer = findLobby(server);
 
             if (lobbyServer.isEmpty()) {
                 player.sendMessage(Component.text("No lobby server available.", NamedTextColor.RED));
-                return;
-            }
-
-            // Already on a lobby?
-            var currentServer = player.getCurrentServer().orElse(null);
-            if (currentServer != null &&
-                currentServer.getServerInfo().getName().equalsIgnoreCase(lobbyServer.get().getServerInfo().getName())) {
-                player.sendMessage(Component.text("You are already on the lobby.", NamedTextColor.YELLOW));
                 return;
             }
 

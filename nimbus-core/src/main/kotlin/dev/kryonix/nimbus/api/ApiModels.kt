@@ -137,6 +137,24 @@ data class SendPlayerRequest(
     val targetService: String
 )
 
+@Serializable
+data class KickPlayerRequest(
+    val reason: String = "You have been kicked from the network."
+)
+
+@Serializable
+data class BroadcastRequest(
+    val message: String,
+    val group: String? = null
+)
+
+@Serializable
+data class BroadcastResponse(
+    val success: Boolean,
+    val message: String,
+    val services: Int
+)
+
 // ── System DTOs ─────────────────────────────────────────────────────
 
 @Serializable
