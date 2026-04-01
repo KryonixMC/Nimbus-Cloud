@@ -5,6 +5,7 @@ description: Permissions bridge for Nimbus cloud networks — builtin or LuckPer
 author: Kryonix
 depend:
   - NimbusSDK
+folia-supported: true
 softdepend:
   - LuckPerms
   - ProtocolLib

@@ -3,6 +3,7 @@ version: '${version}'
 main: dev.kryonix.nimbus.display.NimbusDisplayPlugin
 description: Server selector signs and NPCs for Nimbus cloud networks
 author: Kryonix
+folia-supported: true
 depend: [NimbusSDK]
 softdepend: [ProtocolLib, FancyNpcs]
 

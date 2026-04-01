@@ -4,5 +4,6 @@ main: dev.kryonix.nimbus.sdk.NimbusSdkPlugin
 description: Nimbus Cloud SDK — provides API client for Nimbus-managed servers
 author: Kryonix
 load: STARTUP
+folia-supported: true
 softdepend:
   - ProtocolLib
