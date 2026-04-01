@@ -1,6 +1,6 @@
 name: NimbusPerms
 version: '${version}'
-main: dev.nimbus.perms.NimbusPermsPlugin
+main: dev.kryonix.nimbus.perms.NimbusPermsPlugin
 description: Permissions bridge for Nimbus cloud networks — builtin or LuckPerms provider
 author: Nimbus
 depend:

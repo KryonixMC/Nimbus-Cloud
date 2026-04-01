@@ -6,9 +6,9 @@ The `nimbus-protocol` module defines the shared message types exchanged between 
 
 All cluster communication uses JSON-serialized messages with a `type` discriminator field. The protocol is defined in a single file:
 
-- `dev.nimbus.protocol.ClusterMessage` -- Sealed class containing all message types
-- `dev.nimbus.protocol.ServiceHeartbeat` -- Data class for per-service status in heartbeats
-- `dev.nimbus.protocol.clusterJson` -- Pre-configured `kotlinx.serialization.json.Json` instance
+- `dev.kryonix.nimbus.protocol.ClusterMessage` -- Sealed class containing all message types
+- `dev.kryonix.nimbus.protocol.ServiceHeartbeat` -- Data class for per-service status in heartbeats
+- `dev.kryonix.nimbus.protocol.clusterJson` -- Pre-configured `kotlinx.serialization.json.Json` instance
 
 ```kotlin
 val clusterJson = Json {
@@ -61,7 +61,7 @@ Included in `HeartbeatResponse.services` -- per-service status with `serviceName
 
 ## ServiceHandle interface
 
-The `ServiceHandle` interface (`dev.nimbus.service.ServiceHandle` in `nimbus-core`) abstracts over local and remote processes with methods for `stdoutLines`, `isAlive()`, `pid()`, `sendCommand()`, `waitForReady()`, `stopGracefully()`, `awaitExit()`, and `destroy()`. For remote services, the controller translates these calls into `ClusterMessage` instances sent over the WebSocket.
+The `ServiceHandle` interface (`dev.kryonix.nimbus.service.ServiceHandle` in `nimbus-core`) abstracts over local and remote processes with methods for `stdoutLines`, `isAlive()`, `pid()`, `sendCommand()`, `waitForReady()`, `stopGracefully()`, `awaitExit()`, and `destroy()`. For remote services, the controller translates these calls into `ClusterMessage` instances sent over the WebSocket.
 
 ## Message flow examples
 

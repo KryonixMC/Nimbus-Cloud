@@ -4,7 +4,7 @@ plugins {
 }
 
 allprojects {
-    group = "dev.nimbus"
+    group = "dev.kryonix.nimbus"
     version = findProperty("nimbusVersion") as String? ?: "0.0.0"
 
     repositories {

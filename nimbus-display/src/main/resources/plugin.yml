@@ -1,6 +1,6 @@
 name: NimbusDisplay
 version: '${version}'
-main: dev.nimbus.display.NimbusDisplayPlugin
+main: dev.kryonix.nimbus.display.NimbusDisplayPlugin
 description: Server selector signs and NPCs for Nimbus cloud networks
 author: Nimbus
 depend: [NimbusSDK]
