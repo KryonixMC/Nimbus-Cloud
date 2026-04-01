@@ -8,6 +8,7 @@ import net.luckperms.api.event.EventSubscription;
 import net.luckperms.api.event.user.UserDataRecalculateEvent;
 import net.luckperms.api.event.group.GroupDataRecalculateEvent;
 import net.luckperms.api.model.user.User;
+import dev.nimbus.sdk.compat.SchedulerCompat;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -71,7 +72,7 @@ public class LuckPermsProvider implements PermissionProvider {
     @Override
     public void onJoin(Player player) {
         // Load display data from LuckPerms and sync to Nimbus API
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        SchedulerCompat.runTaskAsync(plugin, () -> {
             User user = luckPerms.getUserManager().getUser(player.getUniqueId());
             if (user == null) return;
 
@@ -158,7 +159,7 @@ public class LuckPermsProvider implements PermissionProvider {
 
     private void onGroupDataRecalculate(GroupDataRecalculateEvent event) {
         // When a group changes, refresh all online players
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshAll);
+        SchedulerCompat.runTaskAsync(plugin, this::refreshAll);
     }
 
     // ── Nimbus API Sync ─────────────────────────────────────
@@ -187,5 +188,11 @@ public class LuckPermsProvider implements PermissionProvider {
         }
     }
 
-    private record DisplayInfo(String prefix, String suffix, String group, int priority) {}
+    private static final class DisplayInfo {
+        final String prefix, suffix, group;
+        final int priority;
+        DisplayInfo(String prefix, String suffix, String group, int priority) {
+            this.prefix = prefix; this.suffix = suffix; this.group = group; this.priority = priority;
+        }
+    }
 }

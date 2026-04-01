@@ -4,9 +4,8 @@ import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusDisplay;
 import dev.nimbus.sdk.NimbusGroup;
 import dev.nimbus.sdk.NimbusService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.Bukkit;
+import dev.nimbus.sdk.compat.SchedulerCompat;
+import dev.nimbus.sdk.compat.TextCompat;
 import org.bukkit.Location;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -15,8 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 public class NpcManager {
-
-    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
 
     private final JavaPlugin plugin;
     private final NpcConfig config;
@@ -45,7 +42,7 @@ public class NpcManager {
 
         // All NPCs go through FancyNpcs — delay spawn to let FancyNpcs fully initialize
         plugin.getLogger().fine("Scheduling " + npcs.size() + " NPC(s) for delayed spawn...");
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        SchedulerCompat.runTaskLater(plugin, () -> {
             for (NimbusNpc npc : npcs.values()) {
                 try {
                     renderer.spawn(npc);
@@ -67,7 +64,6 @@ public class NpcManager {
         for (NimbusNpc npc : config.loadNpcs()) {
             npcs.put(npc.id(), npc);
         }
-        // On reload, FancyNpcs is already initialized — spawn immediately
         for (NimbusNpc npc : npcs.values()) {
             try { renderer.spawn(npc); } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to spawn NPC '" + npc.id() + "'", e);
@@ -123,7 +119,8 @@ public class NpcManager {
 
         String state = display != null ? display.resolveState(rawState) : rawState;
 
-        Component[] lines = new Component[templates.size()];
+        // Render hologram lines as legacy color-coded strings
+        String[] lines = new String[templates.size()];
         for (int i = 0; i < templates.size(); i++) {
             lines[i] = render(templates.get(i), target, players, maxPlayers, servers, state);
         }
@@ -131,17 +128,16 @@ public class NpcManager {
         renderer.updateHolograms(npc, lines);
     }
 
-    private Component render(String template, String name, int players, int maxPlayers,
-                              int servers, String state) {
-        if (template == null) return Component.empty();
-        String text = template
+    private String render(String template, String name, int players, int maxPlayers,
+                           int servers, String state) {
+        if (template == null) return "";
+        return template
                 .replace("{name}", name)
                 .replace("{target}", name)
                 .replace("{players}", String.valueOf(players))
                 .replace("{max_players}", String.valueOf(maxPlayers))
                 .replace("{servers}", String.valueOf(servers))
                 .replace("{state}", state);
-        return LEGACY.deserialize(text);
     }
 
     // ── Accessors ─────────────────────────────────────────────────────
@@ -186,15 +182,12 @@ public class NpcManager {
         NimbusNpc old = npcs.get(id);
         if (old == null) return;
 
-        // Despawn old
         try { renderer.despawn(old); } catch (Exception ignored) {}
 
-        // Store and persist
         npcs.put(id, updated);
         config.removeNpc(id);
         config.addNpc(updated);
 
-        // Respawn with new settings
         try { renderer.spawn(updated); } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to respawn NPC '" + id + "'", e);
         }

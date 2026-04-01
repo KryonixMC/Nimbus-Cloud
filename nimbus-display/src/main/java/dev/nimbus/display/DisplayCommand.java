@@ -3,9 +3,7 @@ package dev.nimbus.display;
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusService;
 import dev.nimbus.sdk.RoutingStrategy;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
+import dev.nimbus.sdk.compat.TextCompat;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
@@ -71,33 +69,33 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
 
     private void handleSignSet(Player player, String[] args) {
         if (!perm(player, "nimbus.display.sign")) return;
-        if (args.length < 1) { player.sendMessage(err("Usage: /ndisplay sign set <target> [strategy]")); return; }
+        if (args.length < 1) { msg(player, "&cUsage: /ndisplay sign set <target> [strategy]"); return; }
 
         Block block = player.getTargetBlockExact(5);
-        if (block == null || !(block.getState() instanceof Sign)) { player.sendMessage(err("Look at a sign first!")); return; }
+        if (block == null || !(block.getState() instanceof Sign)) { msg(player, "&cLook at a sign first!"); return; }
 
         String target = args[0];
         boolean isService = !Nimbus.cache().getGroupNames().contains(target);
-        if (isService && Nimbus.cache().get(target) == null) { player.sendMessage(err("Unknown group or service: " + target)); return; }
+        if (isService && Nimbus.cache().get(target) == null) { msg(player, "&cUnknown group or service: " + target); return; }
 
         String groupName = isService ? target.replaceAll("-\\d+$", "") : target;
-        if (!signManager.hasDisplay(groupName)) { player.sendMessage(err("No display config for " + groupName)); return; }
+        if (!signManager.hasDisplay(groupName)) { msg(player, "&cNo display config for " + groupName); return; }
 
         RoutingStrategy strategy = !isService && args.length >= 2 ? parseStrategy(args[1]) : RoutingStrategy.LEAST_PLAYERS;
         var loc = block.getLocation();
         String id = target.toLowerCase() + "-" + loc.getBlockX() + "-" + loc.getBlockY() + "-" + loc.getBlockZ();
         signManager.addSign(new NimbusSign(id, loc, target, isService, strategy));
-        player.sendMessage(ok("Sign set for ").append(white(target)));
+        msg(player, "&aSign set for &f" + target);
     }
 
     private void handleSignRemove(Player player) {
         if (!perm(player, "nimbus.display.sign")) return;
         Block block = player.getTargetBlockExact(5);
-        if (block == null || !(block.getState() instanceof Sign)) { player.sendMessage(err("Look at a sign first!")); return; }
+        if (block == null || !(block.getState() instanceof Sign)) { msg(player, "&cLook at a sign first!"); return; }
         NimbusSign nSign = signManager.getSign(block.getLocation());
-        if (nSign == null) { player.sendMessage(err("Not a Nimbus sign.")); return; }
+        if (nSign == null) { msg(player, "&cNot a Nimbus sign."); return; }
         signManager.removeSign(block.getLocation());
-        player.sendMessage(Component.text("Sign removed: ", NamedTextColor.YELLOW).append(white(nSign.target())));
+        msg(player, "&eSign removed: &f" + nSign.target());
     }
 
     // ── NPC ───────────────────────────────────────────────────────────
@@ -115,14 +113,14 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
 
     private void handleNpcSet(Player player, String[] args) {
         if (!perm(player, "nimbus.display.npc")) return;
-        if (args.length < 1) { player.sendMessage(err("Usage: /ndisplay npc set <target> [strategy] [type] [skin]")); return; }
+        if (args.length < 1) { msg(player, "&cUsage: /ndisplay npc set <target> [strategy] [type] [skin]"); return; }
 
         String target = args[0];
         boolean isService = !Nimbus.cache().getGroupNames().contains(target);
-        if (isService && Nimbus.cache().get(target) == null) { player.sendMessage(err("Unknown: " + target)); return; }
+        if (isService && Nimbus.cache().get(target) == null) { msg(player, "&cUnknown: " + target); return; }
 
         String groupName = isService ? target.replaceAll("-\\d+$", "") : target;
-        if (!npcManager.hasDisplay(groupName)) { player.sendMessage(err("No display config for " + groupName)); return; }
+        if (!npcManager.hasDisplay(groupName)) { msg(player, "&cNo display config for " + groupName); return; }
 
         RoutingStrategy strategy = !isService && args.length >= 2 ? parseStrategy(args[1]) : RoutingStrategy.LEAST_PLAYERS;
 
@@ -135,7 +133,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                 skin = args.length >= 4 ? args[3] : null;
             } else {
                 try { entityType = EntityType.valueOf(typeArg); } catch (IllegalArgumentException e) {
-                    player.sendMessage(err("Unknown entity type: " + args[2])); return;
+                    msg(player, "&cUnknown entity type: " + args[2]); return;
                 }
             }
         }
@@ -149,15 +147,15 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
 
         String typeLabel = entityType == EntityType.PLAYER
                 ? "player" + (skin != null ? ", skin: " + skin : "") : entityType.name().toLowerCase();
-        player.sendMessage(ok("NPC set for ").append(white(target)).append(gray(" (" + typeLabel + ")")));
+        msg(player, "&aNPC set for &f" + target + " &7(" + typeLabel + ")");
     }
 
     private void handleNpcRemove(Player player) {
         if (!perm(player, "nimbus.display.npc")) return;
         NimbusNpc npc = npcManager.getNearestNpc(player.getLocation(), 5.0);
-        if (npc == null) { player.sendMessage(err("No NPC within 5 blocks.")); return; }
+        if (npc == null) { msg(player, "&cNo NPC within 5 blocks."); return; }
         npcManager.removeNpc(npc.id());
-        player.sendMessage(Component.text("NPC removed: ", NamedTextColor.YELLOW).append(white(npc.target())));
+        msg(player, "&eNPC removed: &f" + npc.target());
     }
 
     // ── NPC Edit (live update + save) ─────────────────────────────────
@@ -167,7 +165,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
         if (args.length < 2) { sendEditHelp(player); return; }
 
         NimbusNpc npc = npcManager.getNearestNpc(player.getLocation(), 5.0);
-        if (npc == null) { player.sendMessage(err("No NPC within 5 blocks.")); return; }
+        if (npc == null) { msg(player, "&cNo NPC within 5 blocks."); return; }
 
         String prop = args[0].toLowerCase();
         String value = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
@@ -176,7 +174,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
             case "type" -> {
                 EntityType type;
                 try { type = EntityType.valueOf(value.toUpperCase()); } catch (IllegalArgumentException e) {
-                    player.sendMessage(err("Unknown entity type: " + value)); yield null;
+                    msg(player, "&cUnknown entity type: " + value); yield null;
                 }
                 yield new NimbusNpc(npc.id(), npc.location(), npc.target(), npc.serviceTarget(),
                         npc.strategy(), type, npc.skin(), npc.lookAtPlayer(),
@@ -206,7 +204,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                 NpcAction action; String actionValue = null;
                 String[] parts = value.split(" ", 2);
                 try { action = NpcAction.valueOf(parts[0].toUpperCase()); } catch (IllegalArgumentException e) {
-                    player.sendMessage(err("Unknown action: " + parts[0])); yield null;
+                    msg(player, "&cUnknown action: " + parts[0]); yield null;
                 }
                 if (parts.length > 1) actionValue = parts[1];
                 yield new NimbusNpc(npc.id(), npc.location(), npc.target(), npc.serviceTarget(),
@@ -218,7 +216,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                 NpcAction action; String actionValue = null;
                 String[] parts = value.split(" ", 2);
                 try { action = NpcAction.valueOf(parts[0].toUpperCase()); } catch (IllegalArgumentException e) {
-                    player.sendMessage(err("Unknown action: " + parts[0])); yield null;
+                    msg(player, "&cUnknown action: " + parts[0]); yield null;
                 }
                 if (parts.length > 1) actionValue = parts[1];
                 yield new NimbusNpc(npc.id(), npc.location(), npc.target(), npc.serviceTarget(),
@@ -231,7 +229,6 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                 if (value.equalsIgnoreCase("clear")) {
                     lines = List.of();
                 } else {
-                    // Split on | for multiple lines: "Line 1|Line 2|Line 3"
                     lines = List.of(value.split("\\|"));
                 }
                 yield new NimbusNpc(npc.id(), npc.location(), npc.target(), npc.serviceTarget(),
@@ -240,7 +237,6 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                         lines, npc.floatingItem(), npc.equipment(), npc.burning(), npc.pose());
             }
             case "floating_item", "floatingitem" -> {
-                // "false"/"off"/"none" = disable, "true" = display config material, "MATERIAL" = override
                 String fi = value.equalsIgnoreCase("false") || value.equalsIgnoreCase("off")
                         || value.equalsIgnoreCase("none") ? null : value;
                 yield new NimbusNpc(npc.id(), npc.location(), npc.target(), npc.serviceTarget(),
@@ -249,7 +245,6 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                         npc.hologramLines(), fi, npc.equipment(), npc.burning(), npc.pose());
             }
             case "mainhand", "offhand", "head", "helmet", "chest", "chestplate", "legs", "leggings", "feet", "boots" -> {
-                // Equipment slot edit: /ndisplay npc edit mainhand DIAMOND_SWORD
                 String slot = switch (prop) {
                     case "helmet" -> "head";
                     case "chestplate" -> "chest";
@@ -279,19 +274,18 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
                     npc.hologramLines(), npc.floatingItem(), npc.equipment(), npc.burning(),
                     value.equalsIgnoreCase("none") || value.equalsIgnoreCase("standing") ? null : value.toLowerCase());
             case "pos", "position", "location" -> {
-                // Move NPC to player's current position
                 yield new NimbusNpc(npc.id(), player.getLocation(), npc.target(), npc.serviceTarget(),
                         npc.strategy(), npc.entityType(), npc.skin(), npc.lookAtPlayer(),
                         npc.leftClick(), npc.rightClick(), npc.leftClickValue(), npc.rightClickValue(),
                         npc.hologramLines(), npc.floatingItem(), npc.equipment(), npc.burning(), npc.pose());
             }
-            default -> { player.sendMessage(err("Unknown property: " + prop)); sendEditHelp(player); yield null; }
+            default -> { msg(player, "&cUnknown property: " + prop); sendEditHelp(player); yield null; }
         };
 
         if (updated == null) return;
 
         npcManager.updateNpc(npc.id(), updated);
-        player.sendMessage(ok("NPC updated: ").append(gray(prop)).append(white(" → " + value)));
+        msg(player, "&aNPC updated: &7" + prop + " &f→ " + value);
     }
 
     // ── NPC Info ──────────────────────────────────────────────────────
@@ -299,32 +293,32 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
     private void handleNpcInfo(Player player) {
         if (!perm(player, "nimbus.display.npc")) return;
         NimbusNpc npc = npcManager.getNearestNpc(player.getLocation(), 5.0);
-        if (npc == null) { player.sendMessage(err("No NPC within 5 blocks.")); return; }
+        if (npc == null) { msg(player, "&cNo NPC within 5 blocks."); return; }
 
-        player.sendMessage(Component.text("NPC: ", NamedTextColor.AQUA).append(white(npc.id())));
-        player.sendMessage(gray("  target: ").append(white(npc.target())));
-        player.sendMessage(gray("  type: ").append(white(npc.entityType().name().toLowerCase())));
-        if (npc.skin() != null) player.sendMessage(gray("  skin: ").append(white(npc.skin())));
-        player.sendMessage(gray("  strategy: ").append(white(npc.strategy().name().toLowerCase())));
-        player.sendMessage(gray("  lookat: ").append(white(String.valueOf(npc.lookAtPlayer()))));
-        player.sendMessage(gray("  left_click: ").append(white(npc.leftClick().name()
-                + (npc.leftClickValue() != null ? " " + npc.leftClickValue() : ""))));
-        player.sendMessage(gray("  right_click: ").append(white(npc.rightClick().name()
-                + (npc.rightClickValue() != null ? " " + npc.rightClickValue() : ""))));
+        msg(player, "&bNPC: &f" + npc.id());
+        msg(player, "&7  target: &f" + npc.target());
+        msg(player, "&7  type: &f" + npc.entityType().name().toLowerCase());
+        if (npc.skin() != null) msg(player, "&7  skin: &f" + npc.skin());
+        msg(player, "&7  strategy: &f" + npc.strategy().name().toLowerCase());
+        msg(player, "&7  lookat: &f" + npc.lookAtPlayer());
+        msg(player, "&7  left_click: &f" + npc.leftClick().name()
+                + (npc.leftClickValue() != null ? " " + npc.leftClickValue() : ""));
+        msg(player, "&7  right_click: &f" + npc.rightClick().name()
+                + (npc.rightClickValue() != null ? " " + npc.rightClickValue() : ""));
         if (npc.hologramLines() != null && !npc.hologramLines().isEmpty())
-            player.sendMessage(gray("  hologram: ").append(white(String.join(" | ", npc.hologramLines()))));
-        player.sendMessage(gray("  floating_item: ").append(white(npc.floatingItem() != null ? npc.floatingItem() : "off")));
+            msg(player, "&7  hologram: &f" + String.join(" | ", npc.hologramLines()));
+        msg(player, "&7  floating_item: &f" + (npc.floatingItem() != null ? npc.floatingItem() : "off"));
         if (npc.equipment() != null && !npc.equipment().isEmpty()) {
             for (var entry : npc.equipment().entrySet()) {
-                player.sendMessage(gray("  " + entry.getKey() + ": ").append(white(entry.getValue())));
+                msg(player, "&7  " + entry.getKey() + ": &f" + entry.getValue());
             }
         }
-        player.sendMessage(gray("  burning: ").append(white(String.valueOf(npc.burning()))));
+        msg(player, "&7  burning: &f" + npc.burning());
         if (npc.pose() != null)
-            player.sendMessage(gray("  pose: ").append(white(npc.pose())));
+            msg(player, "&7  pose: &f" + npc.pose());
         var loc = npc.location();
-        player.sendMessage(gray("  location: ").append(white(
-                String.format("%.1f %.1f %.1f (%.0f/%.0f)", loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch()))));
+        msg(player, "&7  location: &f" + String.format("%.1f %.1f %.1f (%.0f/%.0f)",
+                loc.getX(), loc.getY(), loc.getZ(), loc.getYaw(), loc.getPitch()));
     }
 
     // ── List / Reload ─────────────────────────────────────────────────
@@ -334,69 +328,69 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
         var signs = signManager.getSigns();
         var npcs = npcManager.getNpcs();
 
-        player.sendMessage(Component.text("Nimbus Display (" + signs.size() + " signs, " + npcs.size() + " NPCs)", NamedTextColor.AQUA));
+        msg(player, "&bNimbus Display (" + signs.size() + " signs, " + npcs.size() + " NPCs)");
 
         for (NimbusSign sign : signs) {
             var loc = sign.location();
-            player.sendMessage(gray("  [S] " + sign.id() + " → ").append(Component.text(sign.target(), NamedTextColor.GREEN))
-                    .append(gray(" @ " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ())));
+            msg(player, "&7  [S] " + sign.id() + " → &a" + sign.target()
+                    + "&7 @ " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ());
         }
         for (NimbusNpc npc : npcs) {
-            player.sendMessage(gray("  [N] " + npc.id() + " → ").append(Component.text(npc.target(), NamedTextColor.GREEN))
-                    .append(gray(" [" + npc.entityType().name().toLowerCase() + "] L:" + npc.leftClick() + " R:" + npc.rightClick())));
+            msg(player, "&7  [N] " + npc.id() + " → &a" + npc.target()
+                    + "&7 [" + npc.entityType().name().toLowerCase() + "] L:" + npc.leftClick() + " R:" + npc.rightClick());
         }
-        if (signs.isEmpty() && npcs.isEmpty()) player.sendMessage(gray("  No signs or NPCs configured."));
+        if (signs.isEmpty() && npcs.isEmpty()) msg(player, "&7  No signs or NPCs configured.");
     }
 
     private void handleReload(Player player) {
         if (!perm(player, "nimbus.display.reload")) return;
         signManager.reload();
         npcManager.reload();
-        player.sendMessage(ok("Reloaded " + signManager.getSignCount() + " sign(s), " + npcManager.getNpcCount() + " NPC(s)."));
+        msg(player, "&aReloaded " + signManager.getSignCount() + " sign(s), " + npcManager.getNpcCount() + " NPC(s).");
     }
 
     // ── Help ──────────────────────────────────────────────────────────
 
     private void sendHelp(Player p) {
-        p.sendMessage(Component.text("Nimbus Display", NamedTextColor.AQUA, TextDecoration.BOLD));
-        p.sendMessage(white("  /ndisplay sign set <target> [strategy]").append(gray(" — set sign")));
-        p.sendMessage(white("  /ndisplay sign remove").append(gray(" — remove sign")));
-        p.sendMessage(white("  /ndisplay npc set <target> [strategy] [type] [skin]").append(gray(" — spawn NPC")));
-        p.sendMessage(white("  /ndisplay npc remove").append(gray(" — remove nearest NPC")));
-        p.sendMessage(white("  /ndisplay npc edit <property> <value>").append(gray(" — live edit NPC")));
-        p.sendMessage(white("  /ndisplay npc info").append(gray(" — show NPC properties")));
-        p.sendMessage(white("  /ndisplay list").append(gray(" — list all")));
-        p.sendMessage(white("  /ndisplay reload").append(gray(" — reload config")));
+        msg(p, "&b&lNimbus Display");
+        msg(p, "&f  /ndisplay sign set <target> [strategy]&7 — set sign");
+        msg(p, "&f  /ndisplay sign remove&7 — remove sign");
+        msg(p, "&f  /ndisplay npc set <target> [strategy] [type] [skin]&7 — spawn NPC");
+        msg(p, "&f  /ndisplay npc remove&7 — remove nearest NPC");
+        msg(p, "&f  /ndisplay npc edit <property> <value>&7 — live edit NPC");
+        msg(p, "&f  /ndisplay npc info&7 — show NPC properties");
+        msg(p, "&f  /ndisplay list&7 — list all");
+        msg(p, "&f  /ndisplay reload&7 — reload config");
     }
 
     private void sendSignHelp(Player p) {
-        p.sendMessage(white("  /ndisplay sign set <target> [strategy]"));
-        p.sendMessage(white("  /ndisplay sign remove"));
+        msg(p, "&f  /ndisplay sign set <target> [strategy]");
+        msg(p, "&f  /ndisplay sign remove");
     }
 
     private void sendNpcHelp(Player p) {
-        p.sendMessage(Component.text("NPC Commands:", NamedTextColor.AQUA));
-        p.sendMessage(white("  /ndisplay npc set <target> [strategy] [type] [skin]"));
-        p.sendMessage(white("  /ndisplay npc remove"));
-        p.sendMessage(white("  /ndisplay npc edit <property> <value>"));
-        p.sendMessage(white("  /ndisplay npc info"));
+        msg(p, "&bNPC Commands:");
+        msg(p, "&f  /ndisplay npc set <target> [strategy] [type] [skin]");
+        msg(p, "&f  /ndisplay npc remove");
+        msg(p, "&f  /ndisplay npc edit <property> <value>");
+        msg(p, "&f  /ndisplay npc info");
     }
 
     private void sendEditHelp(Player p) {
-        p.sendMessage(Component.text("Editable properties:", NamedTextColor.AQUA));
-        p.sendMessage(gray("  type ").append(white("<PLAYER|VILLAGER|ZOMBIE|...>")));
-        p.sendMessage(gray("  skin ").append(white("<player_name>")));
-        p.sendMessage(gray("  target ").append(white("<group|service>")));
-        p.sendMessage(gray("  strategy ").append(white("<least|fill|random>")));
-        p.sendMessage(gray("  lookat ").append(white("<true|false>")));
-        p.sendMessage(gray("  left_click ").append(white("<CONNECT|COMMAND|INVENTORY|NONE> [value]")));
-        p.sendMessage(gray("  right_click ").append(white("<CONNECT|COMMAND|INVENTORY|NONE> [value]")));
-        p.sendMessage(gray("  hologram ").append(white("<Line1|Line2|Line3> or 'clear'")));
-        p.sendMessage(gray("  floating_item ").append(white("<true|MATERIAL|off> (true=from display config)")));
-        p.sendMessage(gray("  mainhand/offhand/head/chest/legs/feet ").append(white("<MATERIAL|none>")));
-        p.sendMessage(gray("  burning ").append(white("<true|false>")));
-        p.sendMessage(gray("  pose ").append(white("<crouching|sleeping|swimming|spin_attack|none>")));
-        p.sendMessage(gray("  position ").append(white("here")));
+        msg(p, "&bEditable properties:");
+        msg(p, "&7  type &f<PLAYER|VILLAGER|ZOMBIE|...>");
+        msg(p, "&7  skin &f<player_name>");
+        msg(p, "&7  target &f<group|service>");
+        msg(p, "&7  strategy &f<least|fill|random>");
+        msg(p, "&7  lookat &f<true|false>");
+        msg(p, "&7  left_click &f<CONNECT|COMMAND|INVENTORY|NONE> [value]");
+        msg(p, "&7  right_click &f<CONNECT|COMMAND|INVENTORY|NONE> [value]");
+        msg(p, "&7  hologram &f<Line1|Line2|Line3> or 'clear'");
+        msg(p, "&7  floating_item &f<true|MATERIAL|off> (true=from display config)");
+        msg(p, "&7  mainhand/offhand/head/chest/legs/feet &f<MATERIAL|none>");
+        msg(p, "&7  burning &f<true|false>");
+        msg(p, "&7  pose &f<crouching|sleeping|swimming|spin_attack|none>");
+        msg(p, "&7  position &fhere");
     }
 
     // ── Tab Complete ──────────────────────────────────────────────────
@@ -411,28 +405,23 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
             default -> List.of();
         };
 
-        // sign/npc set <target>
         if (args.length == 3 && args[1].equalsIgnoreCase("set")) {
             List<String> s = new ArrayList<>(Nimbus.cache().getGroupNames());
             try { for (NimbusService sv : Nimbus.services()) s.add(sv.getName()); } catch (Exception ignored) {}
             return filter(s, args[2]);
         }
 
-        // set <target> [strategy]
         if (args.length == 4 && args[1].equalsIgnoreCase("set")) {
             if (Nimbus.cache().getGroupNames().contains(args[2]))
                 return filter(List.of("least", "fill", "random"), args[3]);
         }
 
-        // npc set <target> <strategy> [type]
         if (args.length == 5 && args[0].equalsIgnoreCase("npc") && args[1].equalsIgnoreCase("set"))
             return filter(List.of("PLAYER", "VILLAGER", "ZOMBIE", "SKELETON", "ARMOR_STAND", "PILLAGER", "IRON_GOLEM", "ALLAY"), args[4]);
 
-        // npc edit <property>
         if (args.length == 3 && args[0].equalsIgnoreCase("npc") && args[1].equalsIgnoreCase("edit"))
             return filter(List.of("type", "skin", "target", "strategy", "lookat", "left_click", "right_click", "hologram", "floating_item", "mainhand", "offhand", "head", "chest", "legs", "feet", "burning", "pose", "position"), args[2]);
 
-        // npc edit type <value>
         if (args.length == 4 && args[0].equalsIgnoreCase("npc") && args[1].equalsIgnoreCase("edit")) {
             return switch (args[2].toLowerCase()) {
                 case "type" -> filter(List.of("PLAYER", "VILLAGER", "ZOMBIE", "SKELETON", "ARMOR_STAND", "PILLAGER", "IRON_GOLEM"), args[3]);
@@ -455,6 +444,10 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
 
     // ── Utilities ─────────────────────────────────────────────────────
 
+    private static void msg(Player player, String legacyText) {
+        TextCompat.sendMessage(player, legacyText);
+    }
+
     private static RoutingStrategy parseStrategy(String s) {
         return switch (s.toLowerCase()) {
             case "fill", "fill_first" -> RoutingStrategy.FILL_FIRST;
@@ -474,12 +467,7 @@ public class DisplayCommand implements CommandExecutor, TabCompleter {
 
     private static boolean perm(Player p, String permission) {
         if (p.hasPermission(permission)) return true;
-        p.sendMessage(err("No permission."));
+        msg(p, "&cNo permission.");
         return false;
     }
-
-    private static Component ok(String msg) { return Component.text(msg, NamedTextColor.GREEN); }
-    private static Component err(String msg) { return Component.text(msg, NamedTextColor.RED); }
-    private static Component white(String msg) { return Component.text(msg, NamedTextColor.WHITE); }
-    private static Component gray(String msg) { return Component.text(msg, NamedTextColor.GRAY); }
 }

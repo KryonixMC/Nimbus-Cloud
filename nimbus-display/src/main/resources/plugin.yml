@@ -1,7 +1,6 @@
 name: NimbusDisplay
 version: '${version}'
 main: dev.nimbus.display.NimbusDisplayPlugin
-api-version: '1.20'
 description: Server selector signs and NPCs for Nimbus cloud networks
 author: Nimbus
 depend: [NimbusSDK]

@@ -11,6 +11,8 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import dev.nimbus.sdk.compat.SchedulerCompat;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -30,7 +32,16 @@ public class StressBotManager {
     private int botIdCounter = 0;
     private int entityIdCounter = 50000;
 
-    private record BotInfo(UUID uuid, int entityId, WrappedGameProfile profile, double x, double y, double z) {}
+    private static final class BotInfo {
+        final UUID uuid;
+        final int entityId;
+        final WrappedGameProfile profile;
+        final double x, y, z;
+        BotInfo(UUID uuid, int entityId, WrappedGameProfile profile, double x, double y, double z) {
+            this.uuid = uuid; this.entityId = entityId; this.profile = profile;
+            this.x = x; this.y = y; this.z = z;
+        }
+    }
 
     public StressBotManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -49,7 +60,7 @@ public class StressBotManager {
 
             if (targetGroup != null && !targetGroup.equals(myGroup)) {
                 if (!activeBots.isEmpty()) {
-                    Bukkit.getScheduler().runTask(plugin, this::removeAllBots);
+                    SchedulerCompat.runTask(plugin, this::removeAllBots);
                 }
                 return;
             }
@@ -76,7 +87,7 @@ public class StressBotManager {
             if (totalSimulated == 0) botsForMe = 0;
 
             final int target = botsForMe;
-            Bukkit.getScheduler().runTask(plugin, () -> adjustBots(target));
+            SchedulerCompat.runTask(plugin, () -> adjustBots(target));
         });
 
         logger.info("[StressBot] Manager started — listening for stress test events");
@@ -224,7 +235,7 @@ public class StressBotManager {
     public void onPlayerJoin(Player player) {
         if (activeBots.isEmpty() || !protocolLibAvailable) return;
 
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        SchedulerCompat.runForEntityLater(plugin, player, () -> {
             for (BotInfo bot : activeBots.values()) {
                 sendBotSpawnPackets(player, bot);
             }
@@ -232,11 +243,8 @@ public class StressBotManager {
     }
 
     public void shutdown() {
-        if (Bukkit.isPrimaryThread()) {
-            removeAllBots();
-        } else {
-            Bukkit.getScheduler().runTask(plugin, this::removeAllBots);
-        }
+        // On Folia there's no single "primary thread" — always schedule via compat
+        SchedulerCompat.runTask(plugin, this::removeAllBots);
     }
 
     private void removeAllBots() {

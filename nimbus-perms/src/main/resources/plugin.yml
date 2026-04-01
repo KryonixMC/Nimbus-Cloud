@@ -1,7 +1,6 @@
 name: NimbusPerms
 version: '${version}'
 main: dev.nimbus.perms.NimbusPermsPlugin
-api-version: '1.20'
 description: Permissions bridge for Nimbus cloud networks — builtin or LuckPerms provider
 author: Nimbus
 depend:

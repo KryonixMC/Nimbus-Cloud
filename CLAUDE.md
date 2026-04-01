@@ -55,9 +55,9 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 - `nimbus-agent` — Remote agent node for multi-node clusters
 - `nimbus-protocol` — Shared cluster message types
 - `nimbus-bridge` — Velocity plugin: hub commands + cloud bridge (Java, auto-embedded as resource `nimbus-bridge.jar` during build)
-- `nimbus-sdk` — Paper server SDK (auto-deployed to backend servers)
-- `nimbus-perms` — Paper permissions plugin: builtin or LuckPerms provider (auto-deployed, configurable)
-- `nimbus-display` — Paper display plugin: server selector signs + NPCs via FancyNpcs (player skins, entity types, equipment, holograms, floating items, server inventory, look-at, poses)
+- `nimbus-sdk` — Server SDK (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed to backend servers)
+- `nimbus-perms` — Permissions plugin: builtin or LuckPerms provider (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed, configurable)
+- `nimbus-display` — Display plugin: server selector signs + NPCs via FancyNpcs (Spigot 1.8.8+ signs, Paper 1.20+ NPCs, Folia compatible)
 
 ## Tech Stack
 
@@ -115,7 +115,7 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 - EULA auto-accepted for Paper/Purpur/Pufferfish/Folia templates
 - Pufferfish support: downloads from Jenkins CI (`ci.pufferfish.host`), treated as Paper-based (plugins, Via, performance optimizer)
 - Cardboard (BETA): optional Bukkit/Paper plugin support for Fabric servers, auto-downloads with iCommon dependency from Modrinth
-- Folia: SDK + NimbusPerms + ProtocolLib auto-excluded (incompatible with regionized threading)
+- Folia: ProtocolLib auto-excluded (incompatible with regionized threading); SDK + NimbusPerms are Folia-compatible via SchedulerCompat
 - Performance optimizer: Aikar's JVM flags + Paper/Purpur/Pufferfish/Folia config tuning (optimize=true default)
 - Process ready detection: watches stdout for "Done" pattern (120s timeout, 180s for modded)
 - Graceful shutdown order: game servers → lobbies → proxies
@@ -125,6 +125,19 @@ nimbus-core/src/main/kotlin/dev/nimbus/
 - Bedrock support: Geyser + Floodgate auto-downloaded from GeyserMC API, key.pem centrally managed
 - Permission system: groups, inheritance, tracks, meta, weight, audit log, debug — central DB on controller
 - LuckPerms support: optional provider in NimbusPerms, syncs display data to controller for proxy features
+
+## Cross-Version Compatibility
+
+- Plugins (SDK, Perms, Display) support Spigot 1.8.8+ through latest Paper/Folia
+- `dev.nimbus.sdk.compat` package provides cross-version abstractions:
+  - `VersionHelper`: runtime detection of Folia, Adventure API, AsyncChatEvent
+  - `SchedulerCompat`: Bukkit/Folia scheduler abstraction (delegates to `FoliaScheduler` on Folia)
+  - `TextCompat`: Adventure/legacy text abstraction (delegates to `AdventureHelper` on Paper 1.16.5+)
+- `api-version` removed from plugin.yml for universal loading
+- Chat rendering: `ModernChatHandler` (Paper AsyncChatEvent) vs `LegacyChatHandler` (Bukkit AsyncPlayerChatEvent)
+- Sign rendering: `TextCompat.setSignLine()` uses `sign.line(Component)` or `sign.setLine(String)` based on server
+- Hologram text: `TextCompat.setCustomName()` for cross-version ArmorStand naming
+- FancyNpcs features only available on Paper 1.20+ (soft dependency, graceful degradation)
 
 ## Code Style
 

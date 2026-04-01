@@ -230,7 +230,7 @@ public class NimbusEventStream implements AutoCloseable {
     private volatile int reconnectAttempts = 0;
 
     private void scheduleReconnect() {
-        Thread.ofVirtual().start(() -> {
+        Thread t = new Thread(() -> {
             try {
                 // Exponential backoff: 3s, 6s, 12s, 24s, capped at 30s
                 long delayMs = Math.min(3000L * (1L << Math.min(reconnectAttempts, 4)), 30_000L);
@@ -242,7 +242,9 @@ public class NimbusEventStream implements AutoCloseable {
                 }
             } catch (InterruptedException ignored) {
             }
-        });
+        }, "nimbus-reconnect");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void dispatch(String message) {

@@ -3,6 +3,7 @@ package dev.nimbus.display;
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusDisplay;
 import dev.nimbus.sdk.NimbusGroup;
+import dev.nimbus.sdk.compat.SchedulerCompat;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,14 +53,14 @@ public class NimbusDisplayPlugin extends JavaPlugin {
 
         // Sign + hologram text update (every 2 seconds by default)
         int interval = signConfig.getUpdateInterval();
-        getServer().getScheduler().runTaskTimer(this, () -> {
+        SchedulerCompat.runTaskTimer(this, () -> {
             signManager.updateAll();
             npcManager.updateAll();
         }, interval, interval);
 
         // Periodic display + group cache refresh (every 5 minutes)
         long refreshInterval = 20L * 60 * 5;
-        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+        SchedulerCompat.runTaskTimerAsync(this, () -> {
             signManager.refreshDisplays();
             signManager.refreshGroups();
         }, refreshInterval, refreshInterval);

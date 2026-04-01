@@ -1,5 +1,6 @@
 package dev.nimbus.sdk;
 
+import dev.nimbus.sdk.compat.SchedulerCompat;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -51,7 +52,7 @@ public class NimbusSdkPlugin extends JavaPlugin implements Listener {
                     getServer().getPluginManager().registerEvents(this, this);
 
                     // Report player count every 10 seconds to keep controller's data fresh
-                    getServer().getScheduler().runTaskTimerAsynchronously(this, this::reportPlayerCount, 200L, 200L);
+                    SchedulerCompat.runTaskTimerAsync(this, this::reportPlayerCount, 200L, 200L);
                 }
             } catch (Exception e) {
                 getLogger().warning("Failed to initialize Nimbus SDK: " + e.getMessage());
@@ -81,7 +82,7 @@ public class NimbusSdkPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         // Schedule with 1 tick delay — the quitting player is still in getOnlinePlayers() during the event
-        getServer().getScheduler().runTaskLaterAsynchronously(this, this::reportPlayerCount, 1L);
+        SchedulerCompat.runTaskLaterAsync(this, this::reportPlayerCount, 1L);
     }
 
     private void reportPlayerCount() {

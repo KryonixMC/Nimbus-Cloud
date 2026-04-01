@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import dev.nimbus.perms.NimbusPermsPlugin;
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusEventStream;
+import dev.nimbus.sdk.compat.SchedulerCompat;
 import org.bukkit.entity.Player;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionAttachment;
@@ -79,7 +80,7 @@ public class BuiltinProvider implements PermissionProvider {
 
     @Override
     public void refresh(UUID uuid) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        SchedulerCompat.runTask(plugin, () -> {
             Player player = plugin.getServer().getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 loadAndApply(player);
@@ -89,7 +90,7 @@ public class BuiltinProvider implements PermissionProvider {
 
     @Override
     public void refreshAll() {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        SchedulerCompat.runTask(plugin, () -> {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
                 loadAndApply(player);
             }
@@ -159,7 +160,7 @@ public class BuiltinProvider implements PermissionProvider {
                         // Priority is not in the standard response but we extract from display group
                         displayCache.put(uuid, new DisplayInfo(prefix, suffix, displayGroup, priority));
 
-                        plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        SchedulerCompat.runForEntity(plugin, player, () -> {
                             if (!player.isOnline()) return;
                             applyPermissions(player, granted, negated);
                         });
@@ -219,7 +220,8 @@ public class BuiltinProvider implements PermissionProvider {
 
         attachments.put(uuid, attachment);
         player.recalculatePermissions();
-        player.updateCommands();
+        // updateCommands() is only available on Paper 1.13+ — use safely
+        try { player.updateCommands(); } catch (NoSuchMethodError ignored) {}
 
         int registered = plugin.getServer().getPluginManager().getPermissions().size();
         plugin.getLogger().info("[Perms] " + player.getName() + ": " + count + " granted (of " + registered + " registered), " + negated.size() + " negated, wildcard=" + hasWildcard);
@@ -255,5 +257,11 @@ public class BuiltinProvider implements PermissionProvider {
         }
     }
 
-    private record DisplayInfo(String prefix, String suffix, String group, int priority) {}
+    private static final class DisplayInfo {
+        final String prefix, suffix, group;
+        final int priority;
+        DisplayInfo(String prefix, String suffix, String group, int priority) {
+            this.prefix = prefix; this.suffix = suffix; this.group = group; this.priority = priority;
+        }
+    }
 }

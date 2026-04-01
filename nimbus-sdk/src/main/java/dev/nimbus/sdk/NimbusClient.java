@@ -391,6 +391,11 @@ public class NimbusClient implements AutoCloseable {
 
     @Override
     public void close() {
-        httpClient.close();
+        // HttpClient.close() was added in Java 21 — use reflection for backwards compatibility
+        try {
+            httpClient.getClass().getMethod("close").invoke(httpClient);
+        } catch (Exception ignored) {
+            // Pre-Java 21: HttpClient has no close() — GC will handle cleanup
+        }
     }
 }

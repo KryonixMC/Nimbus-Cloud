@@ -104,7 +104,7 @@ class CreateGroupCommand(
             if (software == ServerSoftware.FOLIA) {
                 w.println()
                 w.println("${YELLOW}Note: Folia uses regionized multithreading. Most Bukkit/Paper plugins")
-                w.println("will NOT work. Nimbus SDK and ProtocolLib are automatically excluded.$RESET")
+                w.println("will NOT work. Nimbus SDK + Perms are Folia-compatible, ProtocolLib is excluded.$RESET")
                 w.println()
             }
 

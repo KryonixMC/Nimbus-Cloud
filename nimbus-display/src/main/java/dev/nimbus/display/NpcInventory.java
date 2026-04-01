@@ -4,10 +4,7 @@ import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusDisplay;
 import dev.nimbus.sdk.NimbusGroup;
 import dev.nimbus.sdk.NimbusService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.Bukkit;
+import dev.nimbus.sdk.compat.TextCompat;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -29,11 +26,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * Server selector GUI — opens a chest inventory showing all servers in a group.
  * Uses {@link InventoryHolder} for reliable click detection.
  * <p>
+ * Uses {@link TextCompat} for cross-version inventory/item rendering.
  * Register {@link NpcInventory.ClickListener} once in the plugin to handle all inventory clicks.
  */
 public class NpcInventory implements InventoryHolder {
-
-    private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
 
     private final NimbusNpc npc;
     private final ConcurrentHashMap<String, NimbusDisplay> displayCache;
@@ -61,7 +57,7 @@ public class NpcInventory implements InventoryHolder {
 
         NimbusDisplay display = displayCache.get(groupName);
         if (display == null) {
-            player.sendMessage(Component.text("No display config for " + groupName + ".", NamedTextColor.RED));
+            TextCompat.sendRich(player, "No display config for " + groupName + ".", "red");
             return;
         }
 
@@ -82,8 +78,7 @@ public class NpcInventory implements InventoryHolder {
                 .replace("{max_players}", String.valueOf(maxPlayers))
                 .replace("{servers}", String.valueOf(services.size()));
 
-        // Create inventory with this as holder for reliable click detection
-        inventory = Bukkit.createInventory(this, size, LEGACY.deserialize(renderedTitle));
+        inventory = TextCompat.createInventory(this, size, renderedTitle);
 
         // Sort: READY first, then by name
         services.sort((a, b) -> {
@@ -104,16 +99,16 @@ public class NpcInventory implements InventoryHolder {
             ItemStack item = new ItemStack(material);
             ItemMeta meta = item.getItemMeta();
 
-            meta.displayName(renderItem(display.getInventoryItemName(), service.getName(),
-                    service.getPlayerCount(), maxPlayers, 1, state));
+            TextCompat.setItemDisplayName(meta, renderText(display.getInventoryItemName(),
+                    service.getName(), service.getPlayerCount(), maxPlayers, 1, state));
 
             List<String> loreTemplates = display.getInventoryItemLore();
             if (loreTemplates != null) {
-                List<Component> lore = new ArrayList<>();
+                List<String> loreLines = new ArrayList<>();
                 for (String template : loreTemplates) {
-                    lore.add(renderItem(template, service.getName(), service.getPlayerCount(), maxPlayers, 1, state));
+                    loreLines.add(renderText(template, service.getName(), service.getPlayerCount(), maxPlayers, 1, state));
                 }
-                meta.lore(lore);
+                TextCompat.setItemLore(meta, loreLines);
             }
 
             item.setItemMeta(meta);
@@ -132,32 +127,31 @@ public class NpcInventory implements InventoryHolder {
 
         NimbusService service = Nimbus.cache().get(serviceName);
         if (service == null || !service.isReady()) {
-            player.sendMessage(Component.text(serviceName + " is not available.", NamedTextColor.RED));
+            TextCompat.sendRich(player, serviceName + " is not available.", "red");
             return;
         }
 
         player.closeInventory();
-        player.sendMessage(Component.text("Connecting to ", NamedTextColor.GREEN)
-                .append(Component.text(serviceName, NamedTextColor.WHITE))
-                .append(Component.text("...", NamedTextColor.GREEN)));
+        TextCompat.sendComposite(player, new String[][]{
+                {"Connecting to ", "green"}, {serviceName, "white"}, {"...", "green"}
+        });
         Nimbus.client().sendPlayer(player.getName(), serviceName)
                 .exceptionally(e -> {
-                    player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
+                    TextCompat.sendRich(player, "Failed to connect.", "red");
                     return null;
                 });
     }
 
-    private Component renderItem(String template, String name, int players, int maxPlayers,
-                                  int servers, String state) {
-        if (template == null) return Component.empty();
-        String text = template
+    private String renderText(String template, String name, int players, int maxPlayers,
+                               int servers, String state) {
+        if (template == null) return "";
+        return template
                 .replace("{name}", name)
                 .replace("{target}", name)
                 .replace("{players}", String.valueOf(players))
                 .replace("{max_players}", String.valueOf(maxPlayers))
                 .replace("{servers}", String.valueOf(servers))
                 .replace("{state}", state);
-        return LEGACY.deserialize(text);
     }
 
     // ── Static Listener (register once) ───────────────────────────────

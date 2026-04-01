@@ -2,13 +2,13 @@ package dev.nimbus.display;
 
 import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import dev.nimbus.sdk.compat.TextCompat;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 
@@ -34,7 +34,8 @@ public class SignListener implements Listener {
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (!event.getAction().isRightClick()) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_BLOCK && action != Action.RIGHT_CLICK_AIR) return;
 
         Block block = event.getClickedBlock();
         if (block == null || !(block.getState() instanceof Sign)) return;
@@ -56,35 +57,31 @@ public class SignListener implements Listener {
             NimbusService service = Nimbus.cache().get(nSign.target());
 
             if (service == null || !service.isReady()) {
-                player.sendMessage(Component.text(nSign.target() + " is not available.", NamedTextColor.RED));
+                TextCompat.sendRich(player, nSign.target() + " is not available.", "red");
                 return;
             }
 
-            player.sendMessage(
-                    Component.text("Connecting to ", NamedTextColor.GREEN)
-                            .append(Component.text(nSign.target(), NamedTextColor.WHITE))
-                            .append(Component.text("...", NamedTextColor.GREEN))
-            );
+            TextCompat.sendComposite(player, new String[][]{
+                    {"Connecting to ", "green"}, {nSign.target(), "white"}, {"...", "green"}
+            });
             Nimbus.client().sendPlayer(player.getName(), nSign.target())
                     .exceptionally(e -> {
-                        player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
+                        TextCompat.sendRich(player, "Failed to connect.", "red");
                         return null;
                     });
         } else {
             NimbusService best = Nimbus.bestServer(nSign.target(), nSign.strategy());
             if (best == null) {
-                player.sendMessage(Component.text("No " + nSign.target() + " server available.", NamedTextColor.RED));
+                TextCompat.sendRich(player, "No " + nSign.target() + " server available.", "red");
                 return;
             }
 
-            player.sendMessage(
-                    Component.text("Connecting to ", NamedTextColor.GREEN)
-                            .append(Component.text(best.getName(), NamedTextColor.WHITE))
-                            .append(Component.text("...", NamedTextColor.GREEN))
-            );
+            TextCompat.sendComposite(player, new String[][]{
+                    {"Connecting to ", "green"}, {best.getName(), "white"}, {"...", "green"}
+            });
             Nimbus.route(player.getName(), nSign.target(), nSign.strategy())
                     .exceptionally(e -> {
-                        player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
+                        TextCompat.sendRich(player, "Failed to connect.", "red");
                         return null;
                     });
         }
@@ -99,14 +96,13 @@ public class SignListener implements Listener {
 
         if (!event.getPlayer().hasPermission("nimbus.display.sign")) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(Component.text("No permission.", NamedTextColor.RED));
+            TextCompat.sendRich(event.getPlayer(), "No permission.", "red");
             return;
         }
 
         signManager.removeSign(event.getBlock().getLocation());
-        event.getPlayer().sendMessage(
-                Component.text("Sign removed: ", NamedTextColor.YELLOW)
-                        .append(Component.text(nSign.target(), NamedTextColor.WHITE))
-        );
+        TextCompat.sendComposite(event.getPlayer(), new String[][]{
+                {"Sign removed: ", "yellow"}, {nSign.target(), "white"}
+        });
     }
 }

@@ -1,10 +1,11 @@
 package dev.nimbus.display;
 
-import net.kyori.adventure.text.Component;
+import dev.nimbus.sdk.compat.SchedulerCompat;
+import dev.nimbus.sdk.compat.TextCompat;
+import dev.nimbus.sdk.compat.VersionHelper;
 import org.bukkit.*;
 import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -18,6 +19,9 @@ import java.util.logging.Level;
  *   <li>Holograms: real invisible ArmorStands</li>
  *   <li>Floating items: real dropped Item entities (natural client-side bobbing + spin)</li>
  * </ul>
+ * <p>
+ * Cross-version compatible: uses {@link TextCompat} for hologram text,
+ * handles PersistentDataContainer availability (1.14+), and supports Folia scheduling.
  */
 public class NpcRenderer {
 
@@ -25,8 +29,8 @@ public class NpcRenderer {
     private static final double HOLOGRAM_BASE_OFFSET = 0.15;
 
     private final JavaPlugin plugin;
-    private final NamespacedKey hologramKey;
     private final boolean fancyNpcsAvailable;
+    private final boolean hasPersistentData;
     private final ConcurrentHashMap<String, dev.nimbus.sdk.NimbusDisplay> displayCache;
 
     private final ConcurrentHashMap<String, NpcState> states = new ConcurrentHashMap<>();
@@ -40,8 +44,8 @@ public class NpcRenderer {
     public NpcRenderer(JavaPlugin plugin, ConcurrentHashMap<String, dev.nimbus.sdk.NimbusDisplay> displayCache) {
         this.plugin = plugin;
         this.displayCache = displayCache;
-        this.hologramKey = new NamespacedKey(plugin, "nimbus-hologram");
         this.fancyNpcsAvailable = Bukkit.getPluginManager().getPlugin("FancyNpcs") != null;
+        this.hasPersistentData = classExists("org.bukkit.persistence.PersistentDataContainer");
 
         if (fancyNpcsAvailable) {
             plugin.getLogger().info("FancyNpcs detected — all NPC types enabled");
@@ -61,8 +65,7 @@ public class NpcRenderer {
         String npcId = npc.id();
         for (Entity nearby : world.getNearbyEntities(npc.location(), 10, 15, 10)) {
             if (nearby instanceof Player) continue;
-            String tag = nearby.getPersistentDataContainer().get(hologramKey, PersistentDataType.STRING);
-            if (tag != null && tag.startsWith(npcId)) nearby.remove();
+            if (isNimbusHologram(nearby, npcId)) nearby.remove();
         }
     }
 
@@ -113,31 +116,19 @@ public class NpcRenderer {
                     npc.location()
             );
 
-            // Entity type (PLAYER, VILLAGER, ZOMBIE, SKELETON, etc.)
             npcData.setType(npc.entityType());
 
-            // Skin (only relevant for PLAYER type, but safe to set for all)
             if (npc.isFakePlayer() && npc.skin() != null) {
                 npcData.setSkin(npc.skin());
             }
 
-            // Hide nametag (space = invisible but not null, avoids NPE in FancyNpcs)
             npcData.setDisplayName(" ");
-
-            // Look at player
             npcData.setTurnToPlayer(npc.lookAtPlayer());
             npcData.setTurnToPlayerDistance(15);
-
-            // Don't show in tab
             npcData.setShowInTab(false);
-
-            // Not collidable
             npcData.setCollidable(false);
-
-            // Large visibility range (default is ~30, we want NPCs visible from far away)
             npcData.setVisibilityDistance(200);
 
-            // Equipment (all slots)
             if (npc.equipment() != null && !npc.equipment().isEmpty()) {
                 var eq = new java.util.HashMap<de.oliver.fancynpcs.api.utils.NpcEquipmentSlot, ItemStack>();
                 for (var entry : npc.equipment().entrySet()) {
@@ -148,9 +139,6 @@ public class NpcRenderer {
                 if (!eq.isEmpty()) npcData.setEquipment(eq);
             }
 
-            // Note: burning is applied after spawn via on_fire attribute
-
-            // Create and register
             var fancyNpc = fancyPlugin.getNpcAdapter().apply(npcData);
             fancyNpc.setSaveToFile(false);
             fancyNpc.create();
@@ -159,9 +147,8 @@ public class NpcRenderer {
             fancyNpc.spawnForAll();
 
             // After spawn: apply equipment + burning + force update
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            SchedulerCompat.runTaskLater(plugin, () -> {
                 try {
-                    // Equipment: re-apply all slots on live data
                     if (npc.equipment() != null && !npc.equipment().isEmpty()) {
                         var eq = new java.util.HashMap<>(fancyNpc.getData().getEquipment());
                         for (var entry : npc.equipment().entrySet()) {
@@ -172,7 +159,6 @@ public class NpcRenderer {
                         fancyNpc.getData().setEquipment(eq);
                     }
 
-                    // Attributes: burning + pose
                     var attrManager = fancyPlugin.getAttributeManager();
                     if (npc.burning()) {
                         var onFire = attrManager.getAttributeByName(npc.entityType(), "on_fire");
@@ -189,8 +175,7 @@ public class NpcRenderer {
                 }
             }, 10L);
 
-            // Second update after skin has had time to resolve from Mojang
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            SchedulerCompat.runTaskLater(plugin, () -> {
                 try {
                     fancyNpc.updateForAll();
                 } catch (Exception ignored) {}
@@ -225,18 +210,18 @@ public class NpcRenderer {
                 as.setMarker(true);
                 as.setGravity(false);
                 as.setCustomNameVisible(true);
-                as.customName(Component.text("..."));
-                as.setPersistent(true);
+                TextCompat.setCustomName(as, "...");
                 as.setSilent(true);
                 as.setInvulnerable(true);
                 as.setCollidable(false);
-                as.getPersistentDataContainer().set(hologramKey, PersistentDataType.STRING, npc.id());
+                // Tag hologram for cleanup — use PersistentDataContainer on 1.14+, metadata fallback on 1.8
+                tagHologram(as, npc.id());
             });
             state.hologramEntities.add(stand.getUniqueId());
         }
     }
 
-    public void updateHolograms(NimbusNpc npc, Component[] lines) {
+    public void updateHolograms(NimbusNpc npc, String[] lines) {
         NpcState state = states.get(npc.id());
         if (state == null) return;
         World world = npc.location().getWorld();
@@ -244,8 +229,8 @@ public class NpcRenderer {
 
         for (int i = 0; i < state.hologramEntities.size() && i < lines.length; i++) {
             Entity entity = world.getEntity(state.hologramEntities.get(i));
-            if (entity instanceof ArmorStand stand) {
-                stand.customName(lines[i]);
+            if (entity instanceof ArmorStand) {
+                TextCompat.setCustomName(entity, lines[i]);
             }
         }
     }
@@ -262,7 +247,6 @@ public class NpcRenderer {
         double y = loc.getY() + entityHeight + HOLOGRAM_BASE_OFFSET
                 + hologramCount * HOLOGRAM_LINE_HEIGHT + 0.3;
 
-        // Resolve material: "true" = from display config, otherwise use as material name
         String floatingVal = npc.floatingItem();
         Material mat;
         if ("true".equalsIgnoreCase(floatingVal)) {
@@ -279,16 +263,56 @@ public class NpcRenderer {
         Item item = world.dropItem(itemLoc, new ItemStack(mat), dropped -> {
             dropped.setGravity(false);
             dropped.setPickupDelay(Integer.MAX_VALUE);
-            dropped.setUnlimitedLifetime(true);
-            dropped.setCanMobPickup(false);
-            dropped.setCanPlayerPickup(false);
+            // setUnlimitedLifetime/setCanMobPickup are Paper 1.19+ — use safely
+            try { dropped.setUnlimitedLifetime(true); } catch (NoSuchMethodError ignored) {}
+            try { dropped.setCanMobPickup(false); } catch (NoSuchMethodError ignored) {}
+            try { dropped.setCanPlayerPickup(false); } catch (NoSuchMethodError ignored) {}
             dropped.setInvulnerable(true);
-            dropped.setPersistent(true);
             dropped.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
-            dropped.getPersistentDataContainer().set(hologramKey, PersistentDataType.STRING, npc.id() + "-item");
+            tagHologram(dropped, npc.id() + "-item");
         });
         item.setVelocity(new org.bukkit.util.Vector(0, 0, 0));
         state.floatingItemEntity = item.getUniqueId();
+    }
+
+    // ── Persistent tagging (cross-version) ───────────────────────────
+
+    private void tagHologram(Entity entity, String tag) {
+        if (hasPersistentData) {
+            try {
+                var key = new NamespacedKey(plugin, "nimbus-hologram");
+                entity.getPersistentDataContainer().set(key,
+                        org.bukkit.persistence.PersistentDataType.STRING, tag);
+            } catch (Exception e) {
+                // Fallback: use scoreboard tags
+                entity.addScoreboardTag("nimbus-holo-" + tag);
+            }
+        } else {
+            // 1.8–1.13: use scoreboard tags (available since 1.9) or custom name
+            try {
+                entity.addScoreboardTag("nimbus-holo-" + tag);
+            } catch (NoSuchMethodError ignored) {
+                // 1.8.x: no scoreboard tags — rely on proximity cleanup
+            }
+        }
+    }
+
+    private boolean isNimbusHologram(Entity entity, String npcId) {
+        if (hasPersistentData) {
+            try {
+                var key = new NamespacedKey(plugin, "nimbus-hologram");
+                String tag = entity.getPersistentDataContainer().get(key,
+                        org.bukkit.persistence.PersistentDataType.STRING);
+                return tag != null && tag.startsWith(npcId);
+            } catch (Exception ignored) {}
+        }
+        // Fallback: check scoreboard tags
+        try {
+            for (String tag : entity.getScoreboardTags()) {
+                if (tag.startsWith("nimbus-holo-" + npcId)) return true;
+            }
+        } catch (NoSuchMethodError ignored) {}
+        return false;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
@@ -315,5 +339,9 @@ public class NpcRenderer {
             case ENDERMAN -> 2.9;
             default -> 1.8;
         };
+    }
+
+    private static boolean classExists(String name) {
+        try { Class.forName(name); return true; } catch (ClassNotFoundException e) { return false; }
     }
 }

@@ -4,8 +4,7 @@ import dev.nimbus.sdk.Nimbus;
 import dev.nimbus.sdk.NimbusDisplay;
 import dev.nimbus.sdk.NimbusGroup;
 import dev.nimbus.sdk.NimbusService;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import dev.nimbus.sdk.compat.TextCompat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -62,29 +61,29 @@ public class NpcListener implements Listener {
                 if (npc.serviceTarget()) {
                     NimbusService service = Nimbus.cache().get(npc.target());
                     if (service == null || !service.isReady()) {
-                        player.sendMessage(Component.text(npc.target() + " is not available.", NamedTextColor.RED));
+                        TextCompat.sendRich(player, npc.target() + " is not available.", "red");
                         return;
                     }
-                    player.sendMessage(Component.text("Connecting to ", NamedTextColor.GREEN)
-                            .append(Component.text(npc.target(), NamedTextColor.WHITE))
-                            .append(Component.text("...", NamedTextColor.GREEN)));
+                    TextCompat.sendComposite(player, new String[][]{
+                            {"Connecting to ", "green"}, {npc.target(), "white"}, {"...", "green"}
+                    });
                     Nimbus.client().sendPlayer(player.getName(), npc.target())
                             .exceptionally(e -> {
-                                player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
+                                TextCompat.sendRich(player, "Failed to connect.", "red");
                                 return null;
                             });
                 } else {
                     NimbusService best = Nimbus.bestServer(npc.target(), npc.strategy());
                     if (best == null) {
-                        player.sendMessage(Component.text("No " + npc.target() + " server available.", NamedTextColor.RED));
+                        TextCompat.sendRich(player, "No " + npc.target() + " server available.", "red");
                         return;
                     }
-                    player.sendMessage(Component.text("Connecting to ", NamedTextColor.GREEN)
-                            .append(Component.text(best.getName(), NamedTextColor.WHITE))
-                            .append(Component.text("...", NamedTextColor.GREEN)));
+                    TextCompat.sendComposite(player, new String[][]{
+                            {"Connecting to ", "green"}, {best.getName(), "white"}, {"...", "green"}
+                    });
                     Nimbus.route(player.getName(), npc.target(), npc.strategy())
                             .exceptionally(e -> {
-                                player.sendMessage(Component.text("Failed to connect.", NamedTextColor.RED));
+                                TextCompat.sendRich(player, "Failed to connect.", "red");
                                 return null;
                             });
                 }
