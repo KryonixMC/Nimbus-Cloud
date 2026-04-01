@@ -27,7 +27,7 @@ import java.util.Optional;
     name = "Nimbus Bridge",
     version = "0.2.0",
     description = "Hub commands & Cloud Bridge for Nimbus networks",
-    authors = {"Nimbus"}
+    authors = {"Kryonix"}
 )
 public class NimbusBridgePlugin {
 

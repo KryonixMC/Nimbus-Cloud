@@ -205,6 +205,10 @@ fun nimbusMain() = runBlocking {
     val proxySyncManager = dev.kryonix.nimbus.proxy.ProxySyncManager(proxyDir)
     proxySyncManager.init()
 
+    // Refinery performance engine integration
+    val refineryIntegration = dev.kryonix.nimbus.refinery.RefineryIntegration(eventBus, registry, groupManager, scope, templatesDir)
+    refineryIntegration.init()
+
     // Load group configs
     val groupConfigs = ConfigLoader.loadGroupConfigs(groupsDir)
     if (groupConfigs.isEmpty()) {
@@ -313,6 +317,7 @@ fun nimbusMain() = runBlocking {
             }
             metricsJobs.forEach { it.cancel() }
             scalingJob.cancel()
+            refineryIntegration.shutdown()
             api.stop()
             try {
                 serviceManager.stopAll()
@@ -340,7 +345,8 @@ fun nimbusMain() = runBlocking {
         nodeManager = nodeManager,
         loadBalancer = loadBalancer,
         configPath = configPath,
-        stressTestManager = stressTestManager
+        stressTestManager = stressTestManager,
+        refineryIntegration = refineryIntegration
     )
     console.init()
 

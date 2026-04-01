@@ -114,7 +114,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/jonax1337/Nimbus' },
+      { icon: 'github', link: 'https://github.com/kryonixmc/Nimbus' },
     ],
 
     footer: {

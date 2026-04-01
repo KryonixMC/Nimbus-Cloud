@@ -1,10 +1,10 @@
 # ── Nimbus Cloud Installer (Windows) ────────────────────────────
-# Usage: irm https://raw.githubusercontent.com/jonax1337/Nimbus/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
 # ────────────────────────────────────────────────────────────────
 
 $ErrorActionPreference = "Stop"
 
-$RepoOwner = "jonax1337"
+$RepoOwner = "kryonixmc"
 $RepoName = "Nimbus"
 $InstallDir = "C:\Nimbus"
 $JavaVersion = 21

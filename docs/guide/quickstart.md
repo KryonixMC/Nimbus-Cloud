@@ -13,7 +13,7 @@ Install Nimbus with a single command — it handles Java, downloads, and start s
     <span class="terminal-title">terminal</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/jonax1337/Nimbus/main/install.sh | bash
+<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
 </pre>
 </div>
 
@@ -24,7 +24,7 @@ Install Nimbus with a single command — it handles Java, downloads, and start s
     <span class="terminal-title">powershell</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/jonax1337/Nimbus/main/install.ps1 | iex
+<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
 </pre>
 </div>
 

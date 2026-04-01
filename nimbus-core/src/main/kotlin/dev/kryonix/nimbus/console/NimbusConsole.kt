@@ -43,7 +43,8 @@ class NimbusConsole(
     private val nodeManager: NodeManager? = null,
     private val loadBalancer: TcpLoadBalancer? = null,
     private val configPath: Path? = null,
-    private val stressTestManager: StressTestManager? = null
+    private val stressTestManager: StressTestManager? = null,
+    private val refineryIntegration: dev.kryonix.nimbus.refinery.RefineryIntegration? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(NimbusConsole::class.java)
@@ -128,6 +129,9 @@ class NimbusConsole(
         }
         if (stressTestManager != null) {
             dispatcher.register(StressCommand(stressTestManager, registry, groupManager))
+        }
+        if (refineryIntegration != null) {
+            dispatcher.register(dev.kryonix.nimbus.refinery.RefineryCommand(refineryIntegration, registry))
         }
         dispatcher.register(ClearCommand(terminal))
         dispatcher.register(ShutdownCommand(serviceManager, registry))

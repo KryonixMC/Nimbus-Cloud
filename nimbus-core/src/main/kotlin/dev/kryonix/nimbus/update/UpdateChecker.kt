@@ -32,7 +32,7 @@ import java.nio.file.StandardCopyOption
  */
 class UpdateChecker(
     private val baseDir: Path,
-    private val repoOwner: String = "jonax1337",
+    private val repoOwner: String = "kryonixmc",
     private val repoName: String = "Nimbus"
 ) {
     private val logger = LoggerFactory.getLogger(UpdateChecker::class.java)

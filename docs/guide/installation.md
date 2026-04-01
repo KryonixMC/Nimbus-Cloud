@@ -11,7 +11,7 @@ The fastest way to get Nimbus running. The installer handles everything — Java
     <span class="terminal-title">terminal</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/jonax1337/Nimbus/main/install.sh | bash
+<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
 </pre>
 </div>
 
@@ -22,7 +22,7 @@ The fastest way to get Nimbus running. The installer handles everything — Java
     <span class="terminal-title">powershell</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/jonax1337/Nimbus/main/install.ps1 | iex
+<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
 </pre>
 </div>
 
@@ -101,7 +101,7 @@ Clone the repository and build the fat JAR:
     <span class="terminal-title">terminal</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">$</span> git clone https://github.com/jonax1337/Nimbus.git
+<span class="t-dim">$</span> git clone https://github.com/kryonixmc/Nimbus.git
 <span class="t-dim">$</span> cd Nimbus
 <span class="t-dim">$</span> ./gradlew shadowJar
 <span class="t-dim">&gt; Task :nimbus-bridge:shadowJar</span>

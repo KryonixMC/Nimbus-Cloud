@@ -90,7 +90,7 @@ Install the agent on each worker machine with a single command:
     <span class="terminal-title">terminal — worker node</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/jonax1337/Nimbus/main/install-agent.sh | bash
+<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
 </pre>
 </div>
 
@@ -101,7 +101,7 @@ Install the agent on each worker machine with a single command:
     <span class="terminal-title">powershell — worker node</span>
   </div>
   <pre class="terminal-body">
-<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/jonax1337/Nimbus/main/install-agent.ps1 | iex
+<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
 </pre>
 </div>
 

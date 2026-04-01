@@ -2,7 +2,7 @@ name: NimbusSDK
 version: '${version}'
 main: dev.kryonix.nimbus.sdk.NimbusSdkPlugin
 description: Nimbus Cloud SDK — provides API client for Nimbus-managed servers
-author: Nimbus
+author: Kryonix
 load: STARTUP
 softdepend:
   - ProtocolLib
