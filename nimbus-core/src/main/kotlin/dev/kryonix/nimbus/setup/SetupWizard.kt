@@ -6,6 +6,7 @@ import dev.kryonix.nimbus.console.ConsoleFormatter.CYAN
 import dev.kryonix.nimbus.console.ConsoleFormatter.GREEN
 import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
 import dev.kryonix.nimbus.console.ConsoleFormatter.YELLOW
+import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.module.ModuleManager
 import dev.kryonix.nimbus.module.ModuleInfo
 import dev.kryonix.nimbus.template.SoftwareResolver
@@ -37,6 +38,7 @@ class SetupWizard(
     private var paperVersions: SoftwareResolver.VersionList? = null
     private var pufferfishVersions: SoftwareResolver.VersionList? = null
     private var purpurVersions: SoftwareResolver.VersionList? = null
+    private var foliaVersions: SoftwareResolver.VersionList? = null
     private var velocityVersions: SoftwareResolver.VersionList? = null
 
     // Operating system detection
@@ -62,6 +64,16 @@ class SetupWizard(
         if (!groupsDir.exists() || !groupsDir.isDirectory()) return true
         return groupsDir.listDirectoryEntries("*.toml").isEmpty()
     }
+
+    data class GroupEntry(
+        val name: String,
+        val software: ServerSoftware,
+        val version: String,
+        val minInstances: Int,
+        val maxInstances: Int,
+        val memory: String,
+        val viaPlugins: List<ViaPlugin>
+    )
 
     suspend fun run(): Boolean {
         var terminal: Terminal? = null
@@ -90,253 +102,314 @@ class SetupWizard(
             paperVersions = softwareResolver.fetchPaperVersions()
             pufferfishVersions = softwareResolver.fetchPufferfishVersions()
             purpurVersions = softwareResolver.fetchPurpurVersions()
+            foliaVersions = softwareResolver.fetchFoliaVersions()
             velocityVersions = softwareResolver.fetchVelocityVersions()
             w.println(" ${ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN)}")
             w.println()
 
-            // --- Step 1: Network ---
-            stepHeader(w, 1, "Network")
-            val networkName = prompt(terminal, "  Network name", "MyNetwork")
-            w.println()
-
-            // --- Step 2: Proxy ---
-            stepHeader(w, 2, "Proxy")
-            val velocityVersion = velocityVersions?.latest ?: "3.4.0-SNAPSHOT"
-            done(w, "Velocity $velocityVersion ${ConsoleFormatter.hint("(always latest — backwards compatible)")}")
-            w.println()
-
-            // --- Step 2.5: Bedrock Support ---
-            val bedrockEnabled = promptYesNo(terminal, "  Enable Bedrock Edition? (Geyser + Floodgate)", false)
-            if (bedrockEnabled) {
-                done(w, "Bedrock support enabled ${ConsoleFormatter.hint("(Geyser + Floodgate will be auto-installed)")}")
-            }
-            w.println()
-
-            // --- Step 2.5b: Modules ---
-            val availableModules = discoverEmbeddedModules()
+            // Mutable state for step-based navigation
+            var networkName = "MyNetwork"
+            var bedrockEnabled = false
             val selectedModules = mutableSetOf<String>()
-
-            if (availableModules.isNotEmpty()) {
-                stepHeader(w, 3, "Modules")
-                w.println()
-
-                // Pre-select defaults
-                availableModules.filter { it.defaultEnabled }.forEach { selectedModules.add(it.id) }
-
-                // Interactive picker
-                val moduleOptions = availableModules.map { PickerOption(it.id, it.name, it.description) }
-                pickMany(terminal, moduleOptions, selectedModules)
-
-                val moduleCount = selectedModules.size
-                if (moduleCount > 0) {
-                    done(w, "$moduleCount module(s) selected")
-                } else {
-                    w.println("  ${ConsoleFormatter.hint("No modules selected — you can add them later with: modules install")}")
-                }
-                w.println()
-            }
-
-            // Derive permsEnabled from module selection (controls deploy_plugin in nimbus.toml)
-            val permsEnabled = "perms" in selectedModules
-
-            // --- Step 4: Server Groups ---
-            stepHeader(w, 4, "Server Groups")
-            w.println()
-
-            val templateOptions = listOf(
-                PickerOption("1", "Standard Lobby", "Proxy + Lobby"),
-                PickerOption("2", "Lobby + Games", "Proxy + Lobby + Minigame server"),
-                PickerOption("3", "Custom", "configure everything yourself")
-            )
-            val templateIndex = pickOne(terminal, templateOptions)
-            val templateChoice = templateOptions[templateIndex].id
-            done(w, templateOptions[templateIndex].label)
-
-            data class GroupEntry(
-                val name: String,
-                val software: ServerSoftware,
-                val version: String,
-                val minInstances: Int,
-                val maxInstances: Int,
-                val memory: String,
-                val viaPlugins: List<ViaPlugin>
-            )
-
+            var templateChoice = "1"
             val groups = mutableListOf<GroupEntry>()
 
-            when (templateChoice) {
-                "1" -> {
-                    w.println()
-                    w.println("  ${ConsoleFormatter.hint("Setting up: Proxy + Lobby")}")
-                    w.println()
-                    val sw = promptSoftware(terminal)
-                    val ver = promptVersion(terminal, w, sw)
-                    val mem = prompt(terminal, "  Lobby memory", "1G")
-                    val vias = promptViaPlugins(terminal, w, ver)
-                    groups.add(GroupEntry("Lobby", sw, ver, 1, 4, mem, vias))
-                    done(w, "Lobby ${ConsoleFormatter.hint("($sw $ver, $mem)")}")
-                }
-                "2" -> {
-                    w.println()
-                    w.println("  ${ConsoleFormatter.hint("Setting up: Proxy + Lobby + Game server")}")
-                    w.println()
+            val availableModules = discoverEmbeddedModules()
+            val velocityVersion = velocityVersions?.latest ?: "3.4.0-SNAPSHOT"
+            val lastStep = 6
 
-                    w.println("  ${ConsoleFormatter.colorize("Lobby:", ConsoleFormatter.BOLD)}")
-                    val lobbySw = promptSoftware(terminal)
-                    val lobbyVer = promptVersion(terminal, w, lobbySw)
-                    val lobbyMem = prompt(terminal, "  Lobby memory", "1G")
-                    val lobbyVias = promptViaPlugins(terminal, w, lobbyVer)
-                    groups.add(GroupEntry("Lobby", lobbySw, lobbyVer, 1, 4, lobbyMem, lobbyVias))
-                    done(w, "Lobby ${ConsoleFormatter.hint("($lobbySw $lobbyVer, $lobbyMem)")}")
-                    w.println()
-
-                    w.println("  ${ConsoleFormatter.colorize("Game server:", ConsoleFormatter.BOLD)}")
-                    val gameName = prompt(terminal, "  Group name", "BedWars")
-                    val gameSw = promptSoftware(terminal)
-                    val gameVer = promptVersion(terminal, w, gameSw)
-                    val gameMem = prompt(terminal, "  Memory per instance", "2G")
-                    val gameMax = promptInt(terminal, "  Max instances", 10)
-                    val gameVias = promptViaPlugins(terminal, w, gameVer)
-                    groups.add(GroupEntry(gameName, gameSw, gameVer, 1, gameMax, gameMem, gameVias))
-                    done(w, "$gameName ${ConsoleFormatter.hint("($gameSw $gameVer, $gameMem, max $gameMax)")}")
+            var step = 0
+            while (step <= lastStep) {
+                if (step < 0) {
+                    // Back from first step = cancel wizard
+                    w.println("\n  ${ConsoleFormatter.hint("Setup cancelled.")}")
+                    return false
                 }
-                else -> {
-                    w.println()
-                    var addMore = true
-                    while (addMore) {
-                        val name = prompt(terminal, "  Group name", "")
-                        if (name.isBlank()) {
-                            w.println("  ${ConsoleFormatter.error("Name cannot be empty.")}")
+                when (step) {
+                    // --- Step 0: Network ---
+                    0 -> {
+                        stepHeader(w, 1, "Network")
+                        networkName = prompt(terminal, "  Network name", networkName)
+                        w.println()
+                        step++
+                    }
+
+                    // --- Step 1: Proxy + Bedrock ---
+                    1 -> {
+                        stepHeader(w, 2, "Proxy")
+                        done(w, "Velocity $velocityVersion ${ConsoleFormatter.hint("(always latest — backwards compatible)")}")
+                        w.println()
+
+                        val bedrockOptions = listOf(
+                            InteractivePicker.Option("no", "No", "standard Java Edition only"),
+                            InteractivePicker.Option("yes", "Yes", "Geyser + Floodgate will be auto-installed")
+                        )
+                        w.println("  ${ConsoleFormatter.colorize("Enable Bedrock Edition?", ConsoleFormatter.BOLD)}")
+                        val bedrockIndex = InteractivePicker.pickOne(terminal, bedrockOptions, if (bedrockEnabled) 1 else 0)
+                        if (bedrockIndex == InteractivePicker.BACK) {
+                            step--
                             continue
                         }
-                        val sw = promptSoftware(terminal)
-                        val ver = promptVersion(terminal, w, sw)
-                        val min = promptInt(terminal, "  Min instances", 1)
-                        val max = promptInt(terminal, "  Max instances", 4)
-                        val mem = prompt(terminal, "  Memory per instance", "1G")
-                        val vias = promptViaPlugins(terminal, w, ver)
-                        groups.add(GroupEntry(name, sw, ver, min, max, mem, vias))
-                        done(w, "$name ${ConsoleFormatter.hint("($sw $ver, $mem, $min-$max instances)")}")
+                        bedrockEnabled = bedrockIndex == 1
+                        if (bedrockEnabled) {
+                            done(w, "Bedrock support enabled ${ConsoleFormatter.hint("(Geyser + Floodgate will be auto-installed)")}")
+                        }
                         w.println()
-                        addMore = promptYesNo(terminal, "  Add another group?", false)
+                        step++
+                    }
+
+                    // --- Step 2: Modules ---
+                    2 -> {
+                        if (availableModules.isNotEmpty()) {
+                            stepHeader(w, 3, "Modules")
+                            w.println()
+
+                            // Pre-select defaults if starting fresh
+                            if (selectedModules.isEmpty()) {
+                                availableModules.filter { it.defaultEnabled }.forEach { selectedModules.add(it.id) }
+                            }
+
+                            val moduleOptions = availableModules.map { InteractivePicker.Option(it.id, it.name, it.description) }
+                            val confirmed = InteractivePicker.pickMany(terminal, moduleOptions, selectedModules)
+                            if (!confirmed) {
+                                step--
+                                continue
+                            }
+
+                            val moduleCount = selectedModules.size
+                            if (moduleCount > 0) {
+                                done(w, "$moduleCount module(s) selected")
+                            } else {
+                                w.println("  ${ConsoleFormatter.hint("No modules selected — you can add them later with: modules install")}")
+                            }
+                            w.println()
+                        }
+                        step++
+                    }
+
+                    // --- Step 3: Server Groups (template + config) ---
+                    3 -> {
+                        stepHeader(w, 4, "Server Groups")
+                        w.println()
+
+                        val templateOptions = listOf(
+                            InteractivePicker.Option("1", "Standard Lobby", "Proxy + Lobby"),
+                            InteractivePicker.Option("2", "Lobby + Games", "Proxy + Lobby + Minigame server"),
+                            InteractivePicker.Option("3", "Custom", "configure everything yourself")
+                        )
+                        val defaultTemplate = templateOptions.indexOfFirst { it.id == templateChoice }.coerceAtLeast(0)
+                        val templateIndex = InteractivePicker.pickOne(terminal, templateOptions, defaultTemplate)
+                        if (templateIndex == InteractivePicker.BACK) {
+                            step--
+                            continue
+                        }
+                        templateChoice = templateOptions[templateIndex].id
+                        done(w, templateOptions[templateIndex].label)
+
+                        groups.clear()
+                        var goBack = false
+
+                        when (templateChoice) {
+                            "1" -> {
+                                w.println()
+                                w.println("  ${ConsoleFormatter.hint("Setting up: Proxy + Lobby")}")
+                                w.println()
+                                val sw = promptSoftware(terminal)
+                                if (sw == null) { goBack = true } else {
+                                    val ver = promptVersion(terminal, w, sw)
+                                    val mem = prompt(terminal, "  Lobby memory", "1G")
+                                    val vias = promptViaPlugins(terminal, w, ver)
+                                    groups.add(GroupEntry("Lobby", sw, ver, 1, 4, mem, vias))
+                                    done(w, "Lobby ${ConsoleFormatter.hint("($sw $ver, $mem)")}")
+                                }
+                            }
+                            "2" -> {
+                                w.println()
+                                w.println("  ${ConsoleFormatter.hint("Setting up: Proxy + Lobby + Game server")}")
+                                w.println()
+
+                                w.println("  ${ConsoleFormatter.colorize("Lobby:", ConsoleFormatter.BOLD)}")
+                                val lobbySw = promptSoftware(terminal)
+                                if (lobbySw == null) { goBack = true } else {
+                                    val lobbyVer = promptVersion(terminal, w, lobbySw)
+                                    val lobbyMem = prompt(terminal, "  Lobby memory", "1G")
+                                    val lobbyVias = promptViaPlugins(terminal, w, lobbyVer)
+                                    groups.add(GroupEntry("Lobby", lobbySw, lobbyVer, 1, 4, lobbyMem, lobbyVias))
+                                    done(w, "Lobby ${ConsoleFormatter.hint("($lobbySw $lobbyVer, $lobbyMem)")}")
+                                    w.println()
+
+                                    w.println("  ${ConsoleFormatter.colorize("Game server:", ConsoleFormatter.BOLD)}")
+                                    val gameName = prompt(terminal, "  Group name", "BedWars")
+                                    val gameSw = promptSoftware(terminal)
+                                    if (gameSw == null) { goBack = true } else {
+                                        val gameVer = promptVersion(terminal, w, gameSw)
+                                        val gameMem = prompt(terminal, "  Memory per instance", "2G")
+                                        val gameMax = promptInt(terminal, "  Max instances", 10)
+                                        val gameVias = promptViaPlugins(terminal, w, gameVer)
+                                        groups.add(GroupEntry(gameName, gameSw, gameVer, 1, gameMax, gameMem, gameVias))
+                                        done(w, "$gameName ${ConsoleFormatter.hint("($gameSw $gameVer, $gameMem, max $gameMax)")}")
+                                    }
+                                }
+                            }
+                            else -> {
+                                w.println()
+                                var addMore = true
+                                while (addMore && !goBack) {
+                                    val name = prompt(terminal, "  Group name", "")
+                                    if (name.isBlank()) {
+                                        w.println("  ${ConsoleFormatter.error("Name cannot be empty.")}")
+                                        continue
+                                    }
+                                    val sw = promptSoftware(terminal)
+                                    if (sw == null) { goBack = true; break }
+                                    val ver = promptVersion(terminal, w, sw)
+                                    val min = promptInt(terminal, "  Min instances", 1)
+                                    val max = promptInt(terminal, "  Max instances", 4)
+                                    val mem = prompt(terminal, "  Memory per instance", "1G")
+                                    val vias = promptViaPlugins(terminal, w, ver)
+                                    groups.add(GroupEntry(name, sw, ver, min, max, mem, vias))
+                                    done(w, "$name ${ConsoleFormatter.hint("($sw $ver, $mem, $min-$max instances)")}")
+                                    w.println()
+                                    addMore = promptYesNo(terminal, "  Add another group?", false)
+                                }
+                            }
+                        }
+
+                        if (goBack) {
+                            groups.clear()
+                            step--
+                            continue
+                        }
+                        w.println()
+                        step++
+                    }
+
+                    // --- Step 4: Download ---
+                    4 -> {
+                        stepHeader(w, 5, "Downloading")
+                        w.println()
+
+                        // Proxy
+                        download(w, "Velocity $velocityVersion") {
+                            val dir = baseDir.resolve("templates/proxy")
+                            softwareResolver.ensureJarAvailable(ServerSoftware.VELOCITY, velocityVersion, dir)
+                        }
+
+                        // Game servers (Via plugins go on backend servers only, NOT on the proxy)
+                        val downloaded = mutableSetOf<Pair<ServerSoftware, String>>()
+                        for (group in groups) {
+                            val key = group.software to group.version
+                            val templateDir = baseDir.resolve("templates/${group.name.lowercase()}")
+
+                            if (key in downloaded) {
+                                val sourceGroup = groups.first { (it.software to it.version) == key && it.name != group.name }
+                                val sourceJar = baseDir.resolve("templates/${sourceGroup.name.lowercase()}/${softwareResolver.jarFileName(group.software)}")
+                                if (sourceJar.exists()) {
+                                    Files.createDirectories(templateDir)
+                                    Files.copy(sourceJar, templateDir.resolve(softwareResolver.jarFileName(group.software)))
+                                    w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} ${group.name} ${ConsoleFormatter.hint("(copied from ${sourceGroup.name})")}")
+                                }
+                            } else {
+                                val label = "${group.software.name.lowercase().replaceFirstChar { it.uppercase() }} ${group.version}"
+                                download(w, "$label ${ConsoleFormatter.hint("(${group.name})")}") {
+                                    softwareResolver.ensureJarAvailable(group.software, group.version, templateDir)
+                                }
+                                downloaded.add(key)
+                            }
+
+                            // Via plugins for backend servers
+                            for (plugin in group.viaPlugins) {
+                                download(w, "${plugin.slug} ${ConsoleFormatter.hint("(${group.name})")}") {
+                                    softwareResolver.downloadViaPlugin(plugin, templateDir, "PAPER")
+                                }
+                            }
+                        }
+
+                        // Bedrock plugins (Geyser + Floodgate)
+                        if (bedrockEnabled) {
+                            w.println()
+                            w.println("  ${ConsoleFormatter.colorize("Bedrock:", ConsoleFormatter.BOLD)}")
+                            val proxyTemplate = baseDir.resolve("templates/proxy")
+                            val globalTemplate = baseDir.resolve("templates/global")
+                            download(w, "Geyser ${ConsoleFormatter.hint("(Velocity plugin)")}") {
+                                softwareResolver.ensureGeyserPlugin(proxyTemplate)
+                            }
+                            download(w, "Floodgate ${ConsoleFormatter.hint("(Velocity plugin)")}") {
+                                softwareResolver.ensureFloodgatePlugin(proxyTemplate, "velocity")
+                            }
+                            download(w, "Floodgate ${ConsoleFormatter.hint("(backend plugin)")}") {
+                                softwareResolver.ensureFloodgatePlugin(globalTemplate, "spigot")
+                            }
+                        }
+                        w.println()
+                        step++
+                    }
+
+                    // --- Step 5: Save config ---
+                    5 -> {
+                        val permsEnabled = "perms" in selectedModules
+
+                        stepHeader(w, 6, "Saving configuration")
+                        w.println()
+
+                        writeNimbusToml(networkName, permsEnabled, bedrockEnabled)
+                        w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/nimbus.toml")
+
+                        writeProxyToml(velocityVersion)
+                        w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/groups/proxy.toml")
+
+                        for (group in groups) {
+                            writeGroupToml(group.name, group.software, group.version, group.minInstances, group.maxInstances, group.memory)
+                            w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/groups/${group.name.lowercase()}.toml")
+                        }
+
+                        // Extract selected module JARs to modules/
+                        if (selectedModules.isNotEmpty()) {
+                            val modulesOutputDir = baseDir.resolve("modules")
+                            Files.createDirectories(modulesOutputDir)
+                            for (mod in availableModules) {
+                                if (mod.id in selectedModules) {
+                                    extractEmbeddedModule(mod.fileName, modulesOutputDir)
+                                    w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} modules/${mod.fileName}")
+                                }
+                            }
+                        }
+
+                        w.println()
+                        w.println(ConsoleFormatter.separator(40))
+                        w.println("  ${ConsoleFormatter.successLine("Setup complete!")} ${ConsoleFormatter.hint("${groups.size + 1} group(s) configured.")}")
+                        w.println(ConsoleFormatter.separator(40))
+                        w.println()
+                        step++
+                    }
+
+                    // --- Step 6: Start script ---
+                    6 -> {
+                        val startScriptName = if (detectedOs == OperatingSystem.WINDOWS) "start.bat" else "start.sh"
+                        val startScriptExists = baseDir.resolve(startScriptName).exists()
+
+                        if (detectedOs != OperatingSystem.UNKNOWN && !startScriptExists) {
+                            stepHeader(w, 7, "Start Script")
+                            w.println()
+
+                            if (detectedOs == OperatingSystem.WINDOWS) {
+                                w.println("  ${ConsoleFormatter.hint("Create a start.bat to launch Nimbus easily.")}")
+                            } else {
+                                w.println("  ${ConsoleFormatter.hint("Create a start.sh that runs Nimbus in a screen session.")}")
+                                w.println("  ${ConsoleFormatter.hint("Detach with Ctrl+A,D — reattach with: screen -r nimbus")}")
+                            }
+                            w.println()
+
+                            if (promptYesNo(terminal, "  Create start script?", true)) {
+                                writeStartScript(detectedOs)
+                                w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} $startScriptName")
+                                w.println()
+                            }
+                            w.println()
+                        }
+                        step++
                     }
                 }
-            }
-            w.println()
-
-            // --- Step 5: Download ---
-            stepHeader(w, 5, "Downloading")
-            w.println()
-
-            // Proxy
-            download(w, "Velocity $velocityVersion") {
-                val dir = baseDir.resolve("templates/proxy")
-                softwareResolver.ensureJarAvailable(ServerSoftware.VELOCITY, velocityVersion, dir)
-            }
-
-            // Game servers (Via plugins go on backend servers only, NOT on the proxy)
-            val downloaded = mutableSetOf<Pair<ServerSoftware, String>>()
-            for (group in groups) {
-                val key = group.software to group.version
-                val templateDir = baseDir.resolve("templates/${group.name.lowercase()}")
-
-                if (key in downloaded) {
-                    val sourceGroup = groups.first { (it.software to it.version) == key && it.name != group.name }
-                    val sourceJar = baseDir.resolve("templates/${sourceGroup.name.lowercase()}/${softwareResolver.jarFileName(group.software)}")
-                    if (sourceJar.exists()) {
-                        Files.createDirectories(templateDir)
-                        Files.copy(sourceJar, templateDir.resolve(softwareResolver.jarFileName(group.software)))
-                        w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} ${group.name} ${ConsoleFormatter.hint("(copied from ${sourceGroup.name})")}")
-                    }
-                } else {
-                    val label = "${group.software.name.lowercase().replaceFirstChar { it.uppercase() }} ${group.version}"
-                    download(w, "$label ${ConsoleFormatter.hint("(${group.name})")}") {
-                        softwareResolver.ensureJarAvailable(group.software, group.version, templateDir)
-                    }
-                    downloaded.add(key)
-                }
-
-                // Via plugins for backend servers
-                for (plugin in group.viaPlugins) {
-                    download(w, "${plugin.slug} ${ConsoleFormatter.hint("(${group.name})")}") {
-                        softwareResolver.downloadViaPlugin(plugin, templateDir, "PAPER")
-                    }
-                }
-            }
-
-            // Bedrock plugins (Geyser + Floodgate)
-            if (bedrockEnabled) {
-                w.println()
-                w.println("  ${ConsoleFormatter.colorize("Bedrock:", ConsoleFormatter.BOLD)}")
-                val proxyTemplate = baseDir.resolve("templates/proxy")
-                val globalTemplate = baseDir.resolve("templates/global")
-                download(w, "Geyser ${ConsoleFormatter.hint("(Velocity plugin)")}") {
-                    softwareResolver.ensureGeyserPlugin(proxyTemplate)
-                }
-                download(w, "Floodgate ${ConsoleFormatter.hint("(Velocity plugin)")}") {
-                    softwareResolver.ensureFloodgatePlugin(proxyTemplate, "velocity")
-                }
-                download(w, "Floodgate ${ConsoleFormatter.hint("(backend plugin)")}") {
-                    softwareResolver.ensureFloodgatePlugin(globalTemplate, "spigot")
-                }
-            }
-            w.println()
-
-            // --- Step 6: Write configs ---
-            stepHeader(w, 6, "Saving configuration")
-            w.println()
-
-            writeNimbusToml(networkName, permsEnabled, bedrockEnabled)
-            w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/nimbus.toml")
-
-            writeProxyToml(velocityVersion)
-            w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/groups/proxy.toml")
-
-            for (group in groups) {
-                writeGroupToml(group.name, group.software, group.version, group.minInstances, group.maxInstances, group.memory)
-                w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/groups/${group.name.lowercase()}.toml")
-            }
-
-            // Extract selected module JARs to modules/
-            if (selectedModules.isNotEmpty()) {
-                val modulesOutputDir = baseDir.resolve("modules")
-                Files.createDirectories(modulesOutputDir)
-                for (mod in availableModules) {
-                    if (mod.id in selectedModules) {
-                        extractEmbeddedModule(mod.fileName, modulesOutputDir)
-                        w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} modules/${mod.fileName}")
-                    }
-                }
-            }
-
-            w.println()
-            w.println(ConsoleFormatter.separator(40))
-            w.println("  ${ConsoleFormatter.successLine("Setup complete!")} ${ConsoleFormatter.hint("${groups.size + 1} group(s) configured.")}")
-            w.println(ConsoleFormatter.separator(40))
-            w.println()
-
-            // --- Step 7: Start script (skip if already exists, e.g. from installer) ---
-            val startScriptName = if (detectedOs == OperatingSystem.WINDOWS) "start.bat" else "start.sh"
-            val startScriptExists = baseDir.resolve(startScriptName).exists()
-
-            if (detectedOs != OperatingSystem.UNKNOWN && !startScriptExists) {
-                stepHeader(w, 7, "Start Script")
-                w.println()
-
-                if (detectedOs == OperatingSystem.WINDOWS) {
-                    w.println("  ${ConsoleFormatter.hint("Create a start.bat to launch Nimbus easily.")}")
-                } else {
-                    w.println("  ${ConsoleFormatter.hint("Create a start.sh that runs Nimbus in a screen session.")}")
-                    w.println("  ${ConsoleFormatter.hint("Detach with Ctrl+A,D — reattach with: screen -r nimbus")}")
-                }
-                w.println()
-
-                if (promptYesNo(terminal, "  Create start script?", true)) {
-                    writeStartScript(detectedOs)
-                    w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} $startScriptName")
-                    w.println()
-                }
-                w.println()
             }
 
             return true
@@ -351,156 +424,7 @@ class SetupWizard(
         }
     }
 
-    // ── Interactive pickers ───────────────────────────────────
-
-    private data class PickerOption(val id: String, val label: String, val hint: String = "")
-
-    private enum class PickerKey { UP, DOWN, SPACE, ENTER, OTHER }
-
-    private fun readPickerKey(reader: org.jline.utils.NonBlockingReader): PickerKey {
-        val c = reader.read()
-        return when (c) {
-            13, 10 -> PickerKey.ENTER
-            32 -> PickerKey.SPACE
-            27 -> {
-                val next = reader.peek(50)
-                if (next == -2 || next == -1) return PickerKey.OTHER
-                reader.read() // consume '['
-                when (reader.read()) {
-                    65 -> PickerKey.UP    // ESC[A
-                    66 -> PickerKey.DOWN  // ESC[B
-                    else -> PickerKey.OTHER
-                }
-            }
-            else -> PickerKey.OTHER
-        }
-    }
-
-    private fun clearLines(w: java.io.Writer, count: Int) {
-        for (i in 0 until count) w.write("\u001B[A")
-        for (i in 0 until count) {
-            w.write("\u001B[2K")
-            if (i < count - 1) w.write("\u001B[B")
-        }
-        for (i in 0 until count - 1) w.write("\u001B[A")
-        w.write("\r")
-        w.flush()
-    }
-
-    /**
-     * Single-select picker: ↑↓ navigate, enter to confirm.
-     * Returns the selected option index.
-     */
-    private fun pickOne(terminal: Terminal, options: List<PickerOption>, default: Int = 0): Int {
-        var cursor = default
-        val w = terminal.writer()
-        val originalAttrs = terminal.enterRawMode()
-        val reader = terminal.reader()
-
-        try {
-            w.print("\u001B[?25l")
-            w.flush()
-
-            val lines = options.size + 1
-            drawSinglePicker(w, options, cursor)
-
-            while (true) {
-                val key = readPickerKey(reader)
-                when (key) {
-                    PickerKey.UP -> cursor = (cursor - 1 + options.size) % options.size
-                    PickerKey.DOWN -> cursor = (cursor + 1) % options.size
-                    PickerKey.ENTER, PickerKey.SPACE -> break
-                    else -> {}
-                }
-                clearLines(w, lines)
-                drawSinglePicker(w, options, cursor)
-            }
-
-            clearLines(w, lines)
-            w.print("\u001B[?25h")
-            w.flush()
-        } finally {
-            terminal.setAttributes(originalAttrs)
-            w.print("\u001B[?25h")
-            w.flush()
-        }
-
-        return cursor
-    }
-
-    private fun drawSinglePicker(w: java.io.Writer, options: List<PickerOption>, cursor: Int) {
-        w.write("  ${ConsoleFormatter.hint("↑↓ navigate  ·  enter select")}\n")
-        for ((i, opt) in options.withIndex()) {
-            val isCursor = i == cursor
-            val radio = if (isCursor) "${CYAN}●$RESET" else "${ConsoleFormatter.DIM}○$RESET"
-            val pointer = if (isCursor) "${CYAN}›$RESET " else "  "
-            val nameColor = if (isCursor) CYAN else ""
-            val nameReset = if (isCursor) RESET else ""
-            val hint = if (opt.hint.isNotEmpty()) "  ${ConsoleFormatter.DIM}${opt.hint}$RESET" else ""
-            w.write("    $pointer$radio  $nameColor${opt.label}$nameReset$hint\n")
-        }
-        w.flush()
-    }
-
-    /**
-     * Multi-select picker: ↑↓ navigate, space toggle, enter confirm.
-     * Modifies [selected] in place and returns it.
-     */
-    private fun pickMany(terminal: Terminal, options: List<PickerOption>, selected: MutableSet<String>): Set<String> {
-        var cursor = 0
-        val w = terminal.writer()
-        val originalAttrs = terminal.enterRawMode()
-        val reader = terminal.reader()
-
-        try {
-            w.print("\u001B[?25l")
-            w.flush()
-
-            val lines = options.size + 1
-            drawMultiPicker(w, options, selected, cursor)
-
-            while (true) {
-                val key = readPickerKey(reader)
-                when (key) {
-                    PickerKey.UP -> cursor = (cursor - 1 + options.size) % options.size
-                    PickerKey.DOWN -> cursor = (cursor + 1) % options.size
-                    PickerKey.SPACE -> {
-                        val id = options[cursor].id
-                        if (id in selected) selected.remove(id) else selected.add(id)
-                    }
-                    PickerKey.ENTER -> break
-                    else -> {}
-                }
-                clearLines(w, lines)
-                drawMultiPicker(w, options, selected, cursor)
-            }
-
-            clearLines(w, lines)
-            w.print("\u001B[?25h")
-            w.flush()
-        } finally {
-            terminal.setAttributes(originalAttrs)
-            w.print("\u001B[?25h")
-            w.flush()
-        }
-
-        return selected
-    }
-
-    private fun drawMultiPicker(w: java.io.Writer, options: List<PickerOption>, selected: Set<String>, cursor: Int) {
-        w.write("  ${ConsoleFormatter.hint("↑↓ navigate  ·  space toggle  ·  enter confirm")}\n")
-        for ((i, opt) in options.withIndex()) {
-            val isSelected = opt.id in selected
-            val isCursor = i == cursor
-            val checkbox = if (isSelected) "${GREEN}✓$RESET" else "${ConsoleFormatter.DIM}○$RESET"
-            val pointer = if (isCursor) "${CYAN}›$RESET " else "  "
-            val nameColor = if (isCursor) CYAN else ""
-            val nameReset = if (isCursor) RESET else ""
-            val hint = if (opt.hint.isNotEmpty()) "  ${ConsoleFormatter.DIM}${opt.hint}$RESET" else ""
-            w.write("    $pointer$checkbox  $nameColor${opt.label}$nameReset$hint\n")
-        }
-        w.flush()
-    }
+    // (Picker methods removed — now uses shared InteractivePicker)
 
     // ── Module helpers ────────────────────────────────────────
 
@@ -576,20 +500,27 @@ class SetupWizard(
         return answer.toIntOrNull() ?: default
     }
 
-    private fun promptSoftware(terminal: Terminal): ServerSoftware {
+    /**
+     * Prompts for server software using InteractivePicker.
+     * Returns null if the user pressed ESC (back).
+     */
+    private fun promptSoftware(terminal: Terminal): ServerSoftware? {
         val w = terminal.writer()
         w.println("  ${ConsoleFormatter.colorize("Server software:", ConsoleFormatter.BOLD)}")
         val options = listOf(
-            PickerOption("paper", "Paper", "recommended, best plugin support"),
-            PickerOption("purpur", "Purpur", "Paper fork with extra gameplay config"),
-            PickerOption("pufferfish", "Pufferfish", "Paper fork optimized for large servers")
+            InteractivePicker.Option("paper", "Paper", "recommended, best plugin support"),
+            InteractivePicker.Option("purpur", "Purpur", "Paper fork with extra gameplay config"),
+            InteractivePicker.Option("pufferfish", "Pufferfish", "Paper fork optimized for large servers"),
+            InteractivePicker.Option("folia", "Folia", "Paper fork with regionized multithreading")
         )
-        val index = pickOne(terminal, options)
+        val index = InteractivePicker.pickOne(terminal, options)
+        if (index == InteractivePicker.BACK) return null
         val chosen = options[index]
         done(w, chosen.label)
         return when (chosen.id) {
             "purpur" -> ServerSoftware.PURPUR
             "pufferfish" -> ServerSoftware.PUFFERFISH
+            "folia" -> ServerSoftware.FOLIA
             else -> ServerSoftware.PAPER
         }
     }
@@ -599,6 +530,7 @@ class SetupWizard(
             ServerSoftware.PAPER -> paperVersions
             ServerSoftware.PUFFERFISH -> pufferfishVersions
             ServerSoftware.PURPUR -> purpurVersions
+            ServerSoftware.FOLIA -> foliaVersions
             ServerSoftware.VELOCITY -> velocityVersions
             else -> paperVersions // Modded servers use their own version prompts in CreateGroupCommand
         }
@@ -634,11 +566,11 @@ class SetupWizard(
         val isLatest = (paperVersions?.latest ?: "1.21.4") == version
 
         val options = mutableListOf(
-            PickerOption("viaversion", "ViaVersion", "newer clients can join older servers"),
-            PickerOption("viabackwards", "ViaBackwards", "older clients can join newer servers")
+            InteractivePicker.Option("viaversion", "ViaVersion", "newer clients can join older servers"),
+            InteractivePicker.Option("viabackwards", "ViaBackwards", "older clients can join newer servers")
         )
         if (minor >= 9) {
-            options.add(PickerOption("viarewind", "ViaRewind", "extends backwards support to 1.7/1.8"))
+            options.add(InteractivePicker.Option("viarewind", "ViaRewind", "extends backwards support to 1.7/1.8"))
         }
 
         // Pre-select based on version
@@ -646,7 +578,7 @@ class SetupWizard(
         if (!isLatest) preSelected.add("viaversion")
         if (minor >= 17) preSelected.add("viabackwards")
 
-        pickMany(terminal, options, preSelected)
+        InteractivePicker.pickMany(terminal, options, preSelected)
 
         val plugins = mutableListOf<ViaPlugin>()
 

@@ -7,6 +7,7 @@ import dev.kryonix.nimbus.console.ConsoleFormatter
 import dev.kryonix.nimbus.console.ConsoleFormatter.CYAN
 import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
 import dev.kryonix.nimbus.console.ConsoleFormatter.YELLOW
+import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.console.NimbusConsole
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.service.ServiceManager
@@ -142,9 +143,14 @@ class CreateGroupCommand(
 
             // Step 4: Static or dynamic
             w.println()
-            w.println(ConsoleFormatter.hint("Static services keep their data (world, configs) across restarts."))
-            w.println(ConsoleFormatter.hint("Dynamic services start fresh from the template every time."))
-            val isStatic = promptYesNo("Static service", false)
+            w.println(ConsoleFormatter.hint("Static services keep their data. Dynamic services start fresh from template."))
+            val staticOptions = listOf(
+                InteractivePicker.Option("dynamic", "Dynamic", "start fresh from template every time"),
+                InteractivePicker.Option("static", "Static", "keep world, configs across restarts")
+            )
+            val staticIndex = InteractivePicker.pickOne(terminal, staticOptions, 0)
+            val isStatic = if (staticIndex == InteractivePicker.BACK) false else staticOptions[staticIndex].id == "static"
+            w.println(ConsoleFormatter.successLine(if (isStatic) "Static" else "Dynamic"))
 
             // Step 5-7: Instances & memory
             val minInstances = promptInt("Min instances", 1)
@@ -303,21 +309,26 @@ class CreateGroupCommand(
     }
 
     private fun promptSoftware(w: java.io.PrintWriter): ServerSoftware? {
-        w.println(ConsoleFormatter.hint("Available server software:"))
-        w.println("  ${CYAN}paper$RESET      — Paper (optimized vanilla, plugins)")
-        w.println("  ${CYAN}pufferfish$RESET — Pufferfish (Paper fork, high-performance)")
-        w.println("  ${CYAN}purpur$RESET     — Purpur (Paper fork, extra features)")
-        w.println("  ${CYAN}folia$RESET      — Folia (regionized multithreading, 1.19.4+)")
-        w.println("  ${CYAN}forge$RESET      — Forge (mods, auto-installs)")
-        w.println("  ${CYAN}neoforge$RESET   — NeoForge (modern Forge fork)")
-        w.println("  ${CYAN}fabric$RESET     — Fabric (lightweight mods)")
-        w.println("  ${CYAN}modpack$RESET    — Import a Modrinth modpack")
-        w.println("  ${CYAN}custom$RESET     — Custom JAR (bring your own)")
-        w.flush()
-
-        val answer = prompt("Server software", "paper",
-            candidates = listOf("paper", "pufferfish", "purpur", "folia", "forge", "neoforge", "fabric", "modpack", "custom"))
-        return when (answer.lowercase()) {
+        w.println(ConsoleFormatter.hint("Select server software:"))
+        val options = listOf(
+            InteractivePicker.Option("paper", "Paper", "optimized vanilla, plugins"),
+            InteractivePicker.Option("purpur", "Purpur", "Paper fork, extra features"),
+            InteractivePicker.Option("pufferfish", "Pufferfish", "Paper fork, high-performance"),
+            InteractivePicker.Option("folia", "Folia", "regionized multithreading, 1.19.4+"),
+            InteractivePicker.Option("forge", "Forge", "mods, auto-installs"),
+            InteractivePicker.Option("neoforge", "NeoForge", "modern Forge fork"),
+            InteractivePicker.Option("fabric", "Fabric", "lightweight mods"),
+            InteractivePicker.Option("modpack", "Import Modpack", "Modrinth modpack"),
+            InteractivePicker.Option("custom", "Custom JAR", "bring your own")
+        )
+        val index = InteractivePicker.pickOne(terminal, options)
+        if (index == InteractivePicker.BACK) {
+            w.println(ConsoleFormatter.hint("Cancelled."))
+            return ServerSoftware.PAPER // fallback, won't reach here in normal flow
+        }
+        val chosen = options[index]
+        w.println(ConsoleFormatter.successLine(chosen.label))
+        return when (chosen.id) {
             "pufferfish" -> ServerSoftware.PUFFERFISH
             "purpur" -> ServerSoftware.PURPUR
             "folia" -> ServerSoftware.FOLIA

@@ -7,6 +7,7 @@ import dev.kryonix.nimbus.console.ConsoleFormatter
 import dev.kryonix.nimbus.console.ConsoleFormatter.CYAN
 import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
 import dev.kryonix.nimbus.console.ConsoleFormatter.YELLOW
+import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.console.NimbusConsole
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.service.ServiceRegistry
@@ -328,10 +329,18 @@ class UpdateCommand(
                 (if (def.modloaderVersion.isNotEmpty()) " (loader ${def.modloaderVersion})" else "")))
             w.println()
 
-            val action = prompt("What to update?", "version",
-                candidates = listOf("version", "software"))
+            val actionOptions = listOf(
+                InteractivePicker.Option("version", "Update Version", "change Minecraft version"),
+                InteractivePicker.Option("software", "Switch Software", "change server software")
+            )
+            val actionIndex = InteractivePicker.pickOne(terminal, actionOptions)
+            if (actionIndex == InteractivePicker.BACK) {
+                w.println(ConsoleFormatter.hint("Cancelled."))
+                return
+            }
+            val action = actionOptions[actionIndex].id
 
-            when (action.lowercase()) {
+            when (action) {
                 "version" -> {
                     w.print("${ConsoleFormatter.hint("Fetching available versions...")} ")
                     w.flush()
@@ -353,30 +362,31 @@ class UpdateCommand(
                     updateVersion(groupName, def.software, def.version, targetVersion, def.modloaderVersion)
                 }
                 "software" -> {
-                    // Show compatible options
-                    w.println(ConsoleFormatter.hint("Compatible software for ${def.software.name}:"))
-
-                    val options = mutableListOf<String>()
+                    // Build compatible options dynamically
+                    val compatOptions = mutableListOf<InteractivePicker.Option>()
+                    val compatSoftware = mutableListOf<ServerSoftware>()
                     for (sw in ServerSoftware.entries) {
                         if (sw == def.software || sw == ServerSoftware.CUSTOM || sw == ServerSoftware.VELOCITY) continue
                         val compat = checkCompatibility(def.software, sw)
                         if (compat.allowed) {
-                            val warning = if (compat.warning != null) " ${YELLOW}(with caveats)$RESET" else ""
-                            w.println("  ${CYAN}${sw.name.lowercase()}$RESET$warning")
-                            options.add(sw.name.lowercase())
+                            val hint = if (compat.warning != null) "with caveats" else ""
+                            compatOptions.add(InteractivePicker.Option(sw.name.lowercase(), sw.name.lowercase().replaceFirstChar { it.uppercase() }, hint))
+                            compatSoftware.add(sw)
                         }
                     }
 
-                    if (options.isEmpty()) {
+                    if (compatOptions.isEmpty()) {
                         w.println(ConsoleFormatter.warn("No compatible software switches available for ${def.software.name}."))
                         return
                     }
 
-                    val targetStr = prompt("New software", options.first(), candidates = options)
-                    val targetSoftware = parseSoftware(targetStr) ?: run {
-                        w.println(ConsoleFormatter.error("Unknown software: $targetStr"))
+                    w.println(ConsoleFormatter.hint("Compatible software for ${def.software.name}:"))
+                    val swIndex = InteractivePicker.pickOne(terminal, compatOptions)
+                    if (swIndex == InteractivePicker.BACK) {
+                        w.println(ConsoleFormatter.hint("Cancelled."))
                         return
                     }
+                    val targetSoftware = compatSoftware[swIndex]
 
                     // Optionally pick a new version
                     w.print("${ConsoleFormatter.hint("Fetching available versions...")} ")
