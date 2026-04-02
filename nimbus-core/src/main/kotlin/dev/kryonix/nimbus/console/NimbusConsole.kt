@@ -12,6 +12,7 @@ import dev.kryonix.nimbus.service.CompatibilityChecker
 import dev.kryonix.nimbus.service.ServiceManager
 import dev.kryonix.nimbus.service.ServiceRegistry
 import dev.kryonix.nimbus.module.ModuleManager
+import dev.kryonix.nimbus.scaling.ScalingEngine
 import dev.kryonix.nimbus.stress.StressTestManager
 import dev.kryonix.nimbus.template.SoftwareResolver
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,7 @@ class NimbusConsole(
     private val configPath: Path? = null,
     private val stressTestManager: StressTestManager? = null,
     private val moduleManager: ModuleManager? = null,
+    private val scalingEngine: ScalingEngine? = null,
     private val sharedDispatcher: CommandDispatcher? = null
 ) {
 
@@ -133,7 +135,7 @@ class NimbusConsole(
             dispatcher.register(ModulesCommand(moduleManager, terminal, groupManager, templatesPath))
         }
         dispatcher.register(ClearCommand(terminal))
-        dispatcher.register(ShutdownCommand(serviceManager, registry))
+        dispatcher.register(ShutdownCommand(serviceManager, registry, scalingEngine))
 
         logger.info("Registered {} commands", dispatcher.getCommands().size)
     }

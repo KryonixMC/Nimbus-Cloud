@@ -369,6 +369,7 @@ fun nimbusMain() = runBlocking {
         configPath = configPath,
         stressTestManager = stressTestManager,
         moduleManager = moduleManager,
+        scalingEngine = scalingEngine,
         sharedDispatcher = dispatcher
     )
     console.init()

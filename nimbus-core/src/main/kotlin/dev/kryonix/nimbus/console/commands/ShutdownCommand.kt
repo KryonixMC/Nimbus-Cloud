@@ -2,12 +2,14 @@ package dev.kryonix.nimbus.console.commands
 
 import dev.kryonix.nimbus.console.Command
 import dev.kryonix.nimbus.console.ConsoleFormatter
+import dev.kryonix.nimbus.scaling.ScalingEngine
 import dev.kryonix.nimbus.service.ServiceManager
 import dev.kryonix.nimbus.service.ServiceRegistry
 
 class ShutdownCommand(
     private val serviceManager: ServiceManager,
-    private val registry: ServiceRegistry
+    private val registry: ServiceRegistry,
+    private val scalingEngine: ScalingEngine? = null
 ) : Command {
 
     override val name = "shutdown"
@@ -59,6 +61,7 @@ class ShutdownCommand(
         }
 
         println(ConsoleFormatter.warn("Initiating graceful shutdown..."))
+        scalingEngine?.shutdown()
         println(ConsoleFormatter.hint("Stopping ${services.size} service(s)..."))
 
         try {
