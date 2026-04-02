@@ -4,7 +4,7 @@ This page covers Nimbus's internal architecture for developers who want to under
 
 ## Module structure
 
-Nimbus is organized into seven modules:
+Nimbus is organized into eleven modules:
 
 ```
 nimbus-core (Controller)
@@ -19,10 +19,15 @@ nimbus-core (Controller)
 ├── service/       → Service lifecycle, process management
 ├── template/      → Template copying, software download
 ├── setup/         → First-run wizard
-├── permissions/   → Permission system (groups, players, wildcards)
-├── display/       → Sign/NPC display configs
+├── module/        → ModuleManager, ModuleContextImpl (dynamic module loading)
 ├── proxy/         → Proxy sync (tab list, MOTD, chat format, maintenance)
 └── velocity/      → Velocity config generation
+
+nimbus-module-api (Module API)
+├── NimbusModule          → Module interface
+├── ModuleContext          → Service access for modules
+├── ModuleCommand          → Console command interface
+└── AuthLevel              → Route auth levels
 
 nimbus-protocol (Shared Protocol)
 ├── ClusterMessage        → Sealed class for all controller ↔ agent messages
@@ -72,6 +77,19 @@ nimbus-display (Paper Plugin)
 ├── SignManager            → Sign lifecycle + rendering
 ├── SignConfig             → YAML persistence
 └── SignListener           → Click-to-join handling
+
+nimbus-module-perms (Permissions Module)
+├── PermissionManager, PermissionGroup, PermissionTrack
+├── PermissionRoutes, PermsCommand
+└── PermissionTables (Exposed DB tables)
+
+nimbus-module-display (Display Module)
+├── DisplayManager, DisplayConfig
+└── DisplayRoutes
+
+nimbus-module-refinery (Refinery Module)
+├── RefineryIntegration, RefineryTelemetryStore
+└── RefineryCommand
 ```
 
 ## Bootstrap flow
@@ -86,24 +104,27 @@ When Nimbus starts (`Nimbus.kt` → `nimbusMain()`), components are initialized 
 5. Directory creation     → Ensure templates/, services/, logs/, etc. exist
 6. Plugin deployment      → Extract nimbus-bridge.jar, nimbus-sdk.jar
 7. Component init         → EventBus, ServiceRegistry, PortAllocator,
-                            TemplateManager, GroupManager, PermissionManager,
-                            DisplayManager, ProxySyncManager
+                            TemplateManager, GroupManager, ProxySyncManager
 8. Group loading          → Parse group configs into GroupManager
-9. ServiceManager         → Wire up all dependencies
-10. ScalingEngine         → Start periodic scaling loop
-11. NimbusApi             → Create (but don't start) Ktor server
-12. NodeManager           → If cluster.enabled: init cluster coordination
-13. ClusterServer         → If cluster.enabled: separate Ktor server on agent_port for agent WebSocket connections
-14. TcpLoadBalancer       → If loadbalancer.enabled: init Layer-4 TCP proxy
+9. Module loading         → ModuleManager scans modules/, loads JARs via
+                            ServiceLoader, calls init() then enable().
+                            Modules register their own commands and API routes
+                            during init.
+10. ServiceManager        → Wire up all dependencies
+11. ScalingEngine         → Start periodic scaling loop
+12. NimbusApi             → Create (but don't start) Ktor server
+13. NodeManager           → If cluster.enabled: init cluster coordination
+14. ClusterServer         → If cluster.enabled: separate Ktor server on agent_port for agent WebSocket connections
+15. TcpLoadBalancer       → If loadbalancer.enabled: init Layer-4 TCP proxy
                             with BackendHealthManager (health checks, circuit breaker,
                             connection draining, idle timeout, connection limit)
-14. Shutdown hook         → Register SIGTERM/SIGINT handler
-15. NimbusConsole.init()  → Banner, event listener
-16. Api.start()           → Start Ktor HTTP server (+ /cluster WS if cluster enabled)
-17. LoadBalancer.start()  → If enabled: start TCP listener on LB port + health check loop
-18. VelocityUpdater       → Start periodic update check (first check after 60s)
-19. startMinimumInstances → Start min_instances for all groups
-20. Console.start()       → JLine3 REPL (blocks until shutdown)
+16. Shutdown hook         → Register SIGTERM/SIGINT handler
+17. NimbusConsole.init()  → Banner, event listener
+18. Api.start()           → Start Ktor HTTP server (+ /cluster WS if cluster enabled)
+19. LoadBalancer.start()  → If enabled: start TCP listener on LB port + health check loop
+20. VelocityUpdater       → Start periodic update check (first check after 60s)
+21. startMinimumInstances → Start min_instances for all groups
+22. Console.start()       → JLine3 REPL (blocks until shutdown)
 ```
 
 ::: info
@@ -263,11 +284,13 @@ This order ensures players are moved to lobbies before lobbies shut down, and pr
 | SDK client | Java HttpClient | Zero dependencies for Paper/Velocity plugins |
 | Cluster protocol | kotlinx-serialization JSON | Typed messages between controller and agents |
 | Load balancer | Java NIO (ServerSocketChannel) | Non-blocking TCP proxy with zero dependencies |
+| Module system | ServiceLoader + URLClassLoader | Dynamic module loading without framework overhead |
 
 The core design principle is **no frameworks** -- no Spring, no dependency injection containers. Components are wired directly in `Nimbus.kt`, making the startup path explicit and debuggable.
 
 ## Next steps
 
+- [Module Development](/developer/modules) -- Building custom modules
 - [SDK](/developer/sdk) -- Backend server plugin API
 - [Bridge Plugin](/developer/bridge) -- Velocity proxy plugin
 - [Display Plugin](/developer/display) -- Signs + NPC management
