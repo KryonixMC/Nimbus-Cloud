@@ -66,6 +66,10 @@ class ModuleContextImpl(
         dispatcher.unregister(name)
     }
 
+    override fun registerCompleter(commandName: String, completer: (args: List<String>, prefix: String) -> List<String>) {
+        dispatcher.registerCompleter(commandName, completer)
+    }
+
     override fun registerRoutes(block: Route.() -> Unit, auth: AuthLevel) {
         when (auth) {
             AuthLevel.NONE -> _publicRoutes.add(block)

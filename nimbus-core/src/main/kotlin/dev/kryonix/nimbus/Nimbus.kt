@@ -238,7 +238,7 @@ fun nimbusMain() = runBlocking {
         dispatcher = dispatcher,
         modulesConfigDir = modulesDir
     )
-    val moduleManager = ModuleManager(controllerModulesDir, moduleContext)
+    val moduleManager = ModuleManager(controllerModulesDir, moduleContext, eventBus)
     moduleManager.loadAll()
     moduleManager.enableAll()
 
@@ -316,7 +316,8 @@ fun nimbusMain() = runBlocking {
         loadBalancer = loadBalancer,
         templatesDir = templatesDir,
         stressTestManager = stressTestManager,
-        moduleContext = moduleContext
+        moduleContext = moduleContext,
+        moduleManager = moduleManager
     )
 
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)

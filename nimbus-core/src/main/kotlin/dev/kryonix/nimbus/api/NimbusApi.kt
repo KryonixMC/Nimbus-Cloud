@@ -53,7 +53,8 @@ class NimbusApi(
     private val loadBalancer: TcpLoadBalancer? = null,
     private val templatesDir: Path = baseDir.resolve("templates"),
     private val stressTestManager: dev.kryonix.nimbus.stress.StressTestManager? = null,
-    private val moduleContext: ModuleContextImpl? = null
+    private val moduleContext: ModuleContextImpl? = null,
+    private val moduleManager: dev.kryonix.nimbus.module.ModuleManager? = null
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -255,6 +256,9 @@ class NimbusApi(
                 configRoutes(config, configPath)
                 if (nodeManager != null || loadBalancer != null) {
                     clusterRoutes(nodeManager, loadBalancer, registry)
+                }
+                if (moduleManager != null) {
+                    moduleRoutes(moduleManager)
                 }
                 // Module admin-level routes
                 moduleContext?.adminRoutes?.forEach { block -> block() }

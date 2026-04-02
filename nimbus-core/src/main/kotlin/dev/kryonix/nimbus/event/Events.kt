@@ -88,6 +88,11 @@ sealed class NimbusEvent {
     // Config
     data class ConfigReloaded(val groupsLoaded: Int) : NimbusEvent()
 
+    // Module lifecycle
+    data class ModuleLoaded(val moduleId: String, val moduleName: String, val moduleVersion: String) : NimbusEvent()
+    data class ModuleEnabled(val moduleId: String, val moduleName: String) : NimbusEvent()
+    data class ModuleDisabled(val moduleId: String, val moduleName: String) : NimbusEvent()
+
     // API lifecycle
     data class ApiStarted(val bind: String, val port: Int) : NimbusEvent()
     data class ApiStopped(val reason: String = "shutdown") : NimbusEvent()

@@ -35,6 +35,31 @@ class PermsModule : NimbusModule {
 
         context.registerCommand(PermsCommand(permissionManager, eventBus))
         context.registerRoutes({ permissionRoutes(permissionManager, eventBus) })
+
+        // Tab completion for perms command
+        context.registerCompleter("perms") { args, prefix ->
+            when (args.size) {
+                1 -> listOf("group", "user", "track", "audit", "reload").filter { it.startsWith(prefix, ignoreCase = true) }
+                2 -> when (args[0].lowercase()) {
+                    "group" -> listOf("list", "info", "create", "delete", "addperm", "removeperm", "setdefault", "addparent", "removeparent", "display", "weight", "meta")
+                        .filter { it.startsWith(prefix, ignoreCase = true) }
+                    "user" -> listOf("list", "info", "check", "addgroup", "removegroup", "promote", "demote", "meta")
+                        .filter { it.startsWith(prefix, ignoreCase = true) }
+                    "track" -> listOf("list", "info", "create", "delete")
+                        .filter { it.startsWith(prefix, ignoreCase = true) }
+                    else -> emptyList()
+                }
+                3 -> when (args[0].lowercase()) {
+                    "group" -> when (args[1].lowercase()) {
+                        "info", "delete", "addperm", "removeperm", "setdefault", "addparent", "removeparent", "display", "weight", "meta" ->
+                            permissionManager.getAllGroups().map { it.name }.filter { it.startsWith(prefix, ignoreCase = true) }
+                        else -> emptyList()
+                    }
+                    else -> emptyList()
+                }
+                else -> emptyList()
+            }
+        }
     }
 
     override suspend fun enable() {}

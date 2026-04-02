@@ -61,6 +61,15 @@ jobs:
           AGENT_JAR=$(find nimbus-agent/build/libs -name "*-all.jar" | head -1)
           cp "$AGENT_JAR" "nimbus-agent-${VERSION}.jar"
 
+          # Module JARs (standalone, for manual install)
+          for mod in perms display refinery; do
+            MOD_JAR=$(find "nimbus-module-${mod}/build/libs" -name "*.jar" ! -name "*-sources*" | head -1)
+            if [ -n "$MOD_JAR" ]; then
+              cp "$MOD_JAR" "nimbus-module-${mod}-${VERSION}.jar"
+              echo "Module: nimbus-module-${mod}-${VERSION}.jar ($(du -h "nimbus-module-${mod}-${VERSION}.jar" | cut -f1))"
+            fi
+          done
+
           echo "Controller: nimbus-controller-${VERSION}.jar ($(du -h "nimbus-controller-${VERSION}.jar" | cut -f1))"
           echo "Agent: nimbus-agent-${VERSION}.jar ($(du -h "nimbus-agent-${VERSION}.jar" | cut -f1))"
 
@@ -75,6 +84,9 @@ jobs:
           files: |
             nimbus-controller-${{ steps.version.outputs.version }}.jar
             nimbus-agent-${{ steps.version.outputs.version }}.jar
+            nimbus-module-perms-${{ steps.version.outputs.version }}.jar
+            nimbus-module-display-${{ steps.version.outputs.version }}.jar
+            nimbus-module-refinery-${{ steps.version.outputs.version }}.jar
           body: |
             ## Nimbus ${{ steps.version.outputs.tag }}
 

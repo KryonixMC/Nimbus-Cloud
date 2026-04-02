@@ -16,6 +16,7 @@ class CommandDispatcher {
 
     private val logger = LoggerFactory.getLogger(CommandDispatcher::class.java)
     private val commands = linkedMapOf<String, ModuleCommand>()
+    private val completers = mutableMapOf<String, (List<String>, String) -> List<String>>()
 
     // Set externally for contextual tab completion
     var registry: ServiceRegistry? = null
@@ -34,8 +35,13 @@ class CommandDispatcher {
     fun unregister(name: String) {
         val removed = commands.remove(name.lowercase())
         if (removed != null) {
+            completers.remove(name.lowercase())
             logger.debug("Unregistered command: {}", name)
         }
+    }
+
+    fun registerCompleter(commandName: String, completer: (List<String>, String) -> List<String>) {
+        completers[commandName.lowercase()] = completer
     }
 
     /**
@@ -91,6 +97,12 @@ class CommandDispatcher {
             // Complete arguments based on command
             val commandName = parts[0].lowercase()
             val argPrefix = parts.last()
+
+            // Check module-registered completers first
+            val moduleCompleter = completers[commandName]
+            if (moduleCompleter != null) {
+                return moduleCompleter(parts.drop(1), argPrefix)
+            }
 
             when (commandName) {
                 in serviceArgCommands -> {
@@ -212,19 +224,6 @@ class CommandDispatcher {
                             } else {
                                 emptyList()
                             }
-                        }
-                        else -> emptyList()
-                    }
-                }
-                "perms" -> {
-                    when (parts.size) {
-                        2 -> listOf("group", "user", "reload").filter { it.startsWith(argPrefix, ignoreCase = true) }
-                        3 -> when (parts[1].lowercase()) {
-                            "group" -> listOf("list", "info", "create", "delete", "addperm", "removeperm", "setdefault", "addparent", "removeparent")
-                                .filter { it.startsWith(argPrefix, ignoreCase = true) }
-                            "user" -> listOf("list", "info", "addgroup", "removegroup")
-                                .filter { it.startsWith(argPrefix, ignoreCase = true) }
-                            else -> emptyList()
                         }
                         else -> emptyList()
                     }

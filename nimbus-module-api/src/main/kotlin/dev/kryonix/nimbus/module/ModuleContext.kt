@@ -41,6 +41,13 @@ interface ModuleContext {
     fun unregisterCommand(name: String)
 
     /**
+     * Register a tab completer for a command.
+     * The completer receives the argument parts (after the command name) and the prefix being typed.
+     * It should return matching candidates.
+     */
+    fun registerCompleter(commandName: String, completer: (args: List<String>, prefix: String) -> List<String>)
+
+    /**
      * Register API routes for this module.
      * Routes are mounted when the API server starts.
      *

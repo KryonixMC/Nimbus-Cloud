@@ -360,5 +360,20 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("scope" to scope)
         )
+        is NimbusEvent.ModuleLoaded -> EventMessage(
+            type = "MODULE_LOADED",
+            timestamp = timestamp.toString(),
+            data = mapOf("moduleId" to moduleId, "moduleName" to moduleName, "moduleVersion" to moduleVersion)
+        )
+        is NimbusEvent.ModuleEnabled -> EventMessage(
+            type = "MODULE_ENABLED",
+            timestamp = timestamp.toString(),
+            data = mapOf("moduleId" to moduleId, "moduleName" to moduleName)
+        )
+        is NimbusEvent.ModuleDisabled -> EventMessage(
+            type = "MODULE_DISABLED",
+            timestamp = timestamp.toString(),
+            data = mapOf("moduleId" to moduleId, "moduleName" to moduleName)
+        )
     }
 }

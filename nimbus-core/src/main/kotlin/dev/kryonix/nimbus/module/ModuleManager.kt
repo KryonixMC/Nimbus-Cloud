@@ -1,5 +1,9 @@
 package dev.kryonix.nimbus.module
 
+import dev.kryonix.nimbus.NimbusVersion
+import dev.kryonix.nimbus.event.EventBus
+import dev.kryonix.nimbus.event.NimbusEvent
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.net.URLClassLoader
 import java.nio.file.Files
@@ -22,7 +26,8 @@ import kotlin.io.path.listDirectoryEntries
  */
 class ModuleManager(
     private val modulesDir: Path,
-    private val context: ModuleContext
+    private val context: ModuleContext,
+    private val eventBus: EventBus
 ) {
 
     private val logger = LoggerFactory.getLogger(ModuleManager::class.java)
@@ -44,7 +49,30 @@ class ModuleManager(
 
         logger.info("Found {} module JAR(s) in {}", jars.size, modulesDir)
 
+        // Pre-read all module metadata for dependency resolution
+        val metadataByJar = mutableMapOf<Path, ModuleInfo>()
         for (jar in jars) {
+            val info = readModuleProperties(jar)
+            if (info != null) metadataByJar[jar] = info
+        }
+
+        // Check version compatibility before loading
+        val nimbusVersion = parseVersion(NimbusVersion.version)
+        for ((jar, info) in metadataByJar) {
+            if (info.minNimbusVersion != null && nimbusVersion != null) {
+                val minVersion = parseVersion(info.minNimbusVersion)
+                if (minVersion != null && compareVersions(nimbusVersion, minVersion) < 0) {
+                    logger.warn("Module '{}' requires Nimbus {} but running {} — skipping",
+                        info.name, info.minNimbusVersion, NimbusVersion.version)
+                    continue
+                }
+            }
+        }
+
+        // Sort by dependencies (modules with no deps first)
+        val loadOrder = resolveDependencyOrder(metadataByJar)
+
+        for (jar in loadOrder) {
             try {
                 val classLoader = URLClassLoader(
                     arrayOf(jar.toUri().toURL()),
@@ -60,9 +88,19 @@ class ModuleManager(
                     }
                     modules[module.id] = module
                     logger.info("Loaded module: {} v{} ({})", module.name, module.version, module.id)
+                    runBlocking { eventBus.emit(NimbusEvent.ModuleLoaded(module.id, module.name, module.version)) }
                 }
             } catch (e: Exception) {
                 logger.error("Failed to load module from {}: {}", jar.fileName, e.message, e)
+            }
+        }
+
+        // Warn about missing dependencies
+        for ((_, info) in metadataByJar) {
+            for (dep in info.dependencies) {
+                if (!modules.containsKey(dep)) {
+                    logger.warn("Module '{}' depends on '{}' which is not installed", info.id, dep)
+                }
             }
         }
     }
@@ -80,6 +118,7 @@ class ModuleManager(
         for ((id, module) in modules) {
             try {
                 module.enable()
+                eventBus.emit(NimbusEvent.ModuleEnabled(module.id, module.name))
             } catch (e: Exception) {
                 logger.error("Failed to enable module '{}': {}", id, e.message, e)
             }
@@ -91,15 +130,14 @@ class ModuleManager(
         for ((id, module) in modules.entries.reversed()) {
             try {
                 module.disable()
+                runBlocking { eventBus.emit(NimbusEvent.ModuleDisabled(module.id, module.name)) }
                 logger.info("Disabled module: {}", module.name)
             } catch (e: Exception) {
                 logger.error("Failed to disable module '{}': {}", id, e.message, e)
             }
         }
         for (cl in classLoaders) {
-            try {
-                cl.close()
-            } catch (_: Exception) {}
+            try { cl.close() } catch (_: Exception) {}
         }
         classLoaders.clear()
     }
@@ -112,7 +150,6 @@ class ModuleManager(
 
     /**
      * Discovers available module JARs embedded in the application resources.
-     * Returns metadata for all available modules (installed or not).
      */
     fun discoverAvailable(): List<ModuleInfo> {
         val result = mutableListOf<ModuleInfo>()
@@ -129,48 +166,29 @@ class ModuleManager(
         return result
     }
 
-    /**
-     * Installs an embedded module by extracting its JAR to the modules directory.
-     * Returns true if installed successfully, false if not found or already installed.
-     */
     fun install(moduleId: String): InstallResult {
         val available = discoverAvailable()
-        val info = available.find { it.id == moduleId }
-            ?: return InstallResult.NOT_FOUND
-
+        val info = available.find { it.id == moduleId } ?: return InstallResult.NOT_FOUND
         val target = modulesDir.resolve(info.fileName)
         if (target.exists()) return InstallResult.ALREADY_INSTALLED
-
         val resource = javaClass.classLoader.getResourceAsStream("controller-modules/${info.fileName}")
             ?: return InstallResult.NOT_FOUND
-
         if (!modulesDir.exists()) Files.createDirectories(modulesDir)
         resource.use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
         logger.info("Installed module '{}' to {}", info.name, target)
         return InstallResult.INSTALLED
     }
 
-    /**
-     * Uninstalls a module by deleting its JAR from the modules directory.
-     * The module remains loaded until restart.
-     */
     fun uninstall(moduleId: String): Boolean {
-        // Find the JAR file for this module
         val available = discoverAvailable()
         val info = available.find { it.id == moduleId }
         val fileName = info?.fileName
-
-        // Also check installed JARs directly
         val installedJars = if (modulesDir.exists()) modulesDir.listDirectoryEntries("*.jar") else emptyList()
         val jarToDelete = if (fileName != null) {
             modulesDir.resolve(fileName)
         } else {
-            // Try to find by reading module.properties from installed JARs
-            installedJars.find { jar ->
-                readModuleProperties(jar)?.id == moduleId
-            }
+            installedJars.find { jar -> readModuleProperties(jar)?.id == moduleId }
         }
-
         if (jarToDelete == null || !jarToDelete.exists()) return false
         jarToDelete.deleteIfExists()
         logger.info("Uninstalled module '{}' — restart required", moduleId)
@@ -179,17 +197,55 @@ class ModuleManager(
 
     enum class InstallResult { INSTALLED, ALREADY_INSTALLED, NOT_FOUND }
 
+    // ── Dependency resolution ──────────────────────────────
+
+    private fun resolveDependencyOrder(metadataByJar: Map<Path, ModuleInfo>): List<Path> {
+        val idToJar = metadataByJar.entries.associate { it.value.id to it.key }
+        val visited = mutableSetOf<String>()
+        val ordered = mutableListOf<Path>()
+
+        fun visit(id: String) {
+            if (id in visited) return
+            visited.add(id)
+            val info = metadataByJar.values.find { it.id == id }
+            if (info != null) {
+                for (dep in info.dependencies) visit(dep)
+            }
+            val jar = idToJar[id]
+            if (jar != null) ordered.add(jar)
+        }
+
+        for (info in metadataByJar.values) visit(info.id)
+        // Add any JARs without metadata
+        for (jar in metadataByJar.keys) {
+            if (jar !in ordered) ordered.add(jar)
+        }
+        return ordered
+    }
+
+    // ── Version comparison ─────────────────────────────────
+
+    private fun parseVersion(version: String): List<Int>? {
+        if (version == "dev") return null
+        return version.split(".").mapNotNull { it.toIntOrNull() }
+    }
+
+    private fun compareVersions(a: List<Int>, b: List<Int>): Int {
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val av = a.getOrElse(i) { 0 }
+            val bv = b.getOrElse(i) { 0 }
+            if (av != bv) return av.compareTo(bv)
+        }
+        return 0
+    }
+
     companion object {
-        /** Known embedded module JAR filenames. */
         private val EMBEDDED_MODULES = listOf(
             "nimbus-module-perms.jar",
             "nimbus-module-display.jar",
             "nimbus-module-refinery.jar"
         )
-        /**
-         * Reads module metadata from a JAR's `module.properties` resource
-         * without loading the module class. Used by the SetupWizard.
-         */
+
         fun readModuleProperties(jarPath: Path): ModuleInfo? {
             return try {
                 JarFile(jarPath.toFile()).use { jar ->
@@ -201,7 +257,9 @@ class ModuleManager(
                         name = props.getProperty("name") ?: return null,
                         description = props.getProperty("description") ?: "",
                         defaultEnabled = props.getProperty("default")?.toBoolean() ?: false,
-                        fileName = jarPath.fileName.toString()
+                        fileName = jarPath.fileName.toString(),
+                        dependencies = props.getProperty("dependencies")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
+                        minNimbusVersion = props.getProperty("min_nimbus_version")
                     )
                 }
             } catch (_: Exception) {
@@ -211,11 +269,13 @@ class ModuleManager(
     }
 }
 
-/** Lightweight module descriptor read from `module.properties` (no class loading required). */
+/** Lightweight module descriptor read from `module.properties`. */
 data class ModuleInfo(
     val id: String,
     val name: String,
     val description: String,
     val defaultEnabled: Boolean,
-    val fileName: String
+    val fileName: String,
+    val dependencies: List<String> = emptyList(),
+    val minNimbusVersion: String? = null
 )
