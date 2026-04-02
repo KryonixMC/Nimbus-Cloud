@@ -60,6 +60,10 @@ Nimbus checks for updates automatically on every startup by querying GitHub Rele
 </pre>
 </div>
 
+::: info Integrity verification
+Downloaded JARs are verified against the expected file size from the GitHub API. The SHA-256 hash is computed and logged for manual verification. If the file size does not match, the update is rejected.
+:::
+
 ::: info Dev builds
 When running from source (version = `dev`), the auto-updater is skipped.
 :::

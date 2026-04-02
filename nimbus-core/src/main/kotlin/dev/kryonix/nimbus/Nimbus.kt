@@ -18,6 +18,8 @@ import dev.kryonix.nimbus.scaling.ScalingEngine
 import dev.kryonix.nimbus.scaling.VelocityUpdater
 import dev.kryonix.nimbus.stress.StressTestManager
 import dev.kryonix.nimbus.update.UpdateChecker
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import dev.kryonix.nimbus.service.PortAllocator
@@ -125,6 +127,12 @@ fun nimbusMain() = runBlocking {
             configPath.toFile().writeText(updated)
         } else {
             configPath.toFile().appendText("\n[api]\nenabled = true\nbind = \"127.0.0.1\"\nport = 8080\ntoken = \"$token\"\n")
+        }
+        // Restrict permissions: nimbus.toml contains API token & database credentials
+        try {
+            Files.setPosixFilePermissions(configPath, PosixFilePermissions.fromString("rw-------"))
+        } catch (_: UnsupportedOperationException) {
+            // Windows doesn't support POSIX permissions
         }
         logger.info("Generated API token (saved to nimbus.toml)")
         config = ConfigLoader.loadNimbusConfig(configPath)
@@ -258,7 +266,8 @@ fun nimbusMain() = runBlocking {
         groupManager = groupManager,
         eventBus = eventBus,
         scope = scope,
-        checkIntervalMs = config.controller.heartbeatInterval
+        checkIntervalMs = config.controller.heartbeatInterval,
+        globalMaxServices = config.controller.maxServices
     )
     val stressTestManager = StressTestManager(registry, groupManager, eventBus, proxySyncManager, scope)
     scalingEngine.stressTestManager = stressTestManager

@@ -41,6 +41,10 @@ Only one instance is started per evaluation cycle. After a scale-up, the engine 
 During an active stress test, the scaling engine is **completely paused** to avoid reacting to simulated player counts. Scaling resumes automatically when the stress test ends.
 :::
 
+::: info Global service limit
+The scaling engine respects the `controller.max_services` setting (default: 20) as a **global hard cap** across all groups. Even if a group's `max_instances` allows more, the engine will not start new instances once the total service count reaches this limit. This prevents resource exhaustion from misconfigured scaling rules.
+:::
+
 ## Scale-down
 
 The engine scales down when a service has been **empty for longer than the idle timeout**:

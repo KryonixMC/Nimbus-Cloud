@@ -29,7 +29,8 @@ class ScalingEngine(
     private val groupManager: GroupManager,
     private val eventBus: EventBus,
     private val scope: CoroutineScope,
-    private val checkIntervalMs: Long = 5000
+    private val checkIntervalMs: Long = 5000,
+    private val globalMaxServices: Int = 0
 ) {
     private val logger = LoggerFactory.getLogger(ScalingEngine::class.java)
 
@@ -111,6 +112,12 @@ class ScalingEngine(
             // --- Scale Up ---
             // Don't scale up if we already have services starting
             if (pendingCount > 0) continue
+
+            // Global hard cap: never exceed controller.max_services across all groups
+            if (globalMaxServices > 0 && registry.getAll().size >= globalMaxServices) {
+                logger.warn("Global service limit reached ({}) — skipping scale-up for group '{}'", globalMaxServices, group.name)
+                continue
+            }
 
             // Cooldown: skip if we recently scaled up this group
             val lastUp = lastScaleUp[group.name]

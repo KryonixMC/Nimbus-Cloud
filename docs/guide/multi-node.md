@@ -79,6 +79,10 @@ node_timeout = 15000                # ms before node is considered dead
 placement_strategy = "least-services"
 ```
 
+::: warning Security
+The cluster WebSocket uses **unencrypted `ws://`** by default. When running agents on separate machines over untrusted networks, use a reverse proxy with TLS (e.g. nginx, Caddy) to wrap the connection in `wss://`, or restrict access via firewall rules to agent IPs only. Nimbus logs a warning if the cluster server binds to a non-loopback address without TLS.
+:::
+
 ### 2. Set up an agent node
 
 Install the agent on each worker machine with a single command:

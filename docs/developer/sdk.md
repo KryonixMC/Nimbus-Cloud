@@ -37,7 +37,7 @@ The SDK auto-discovers its identity from JVM system properties and environment v
 
 | Source | Key | Example | Description |
 |---|---|---|---|
-| Env var | `NIMBUS_API_TOKEN` | `a1b2c3...` | API token (preferred, hidden from `ps`) |
+| Env var | `NIMBUS_API_TOKEN` | `a1b2c3...` | Service token (restricted scope, hidden from `ps`) |
 | Property | `nimbus.service.name` | `BedWars-1` | Service name |
 | `nimbus.service.group` | `BedWars` | Group name |
 | `nimbus.service.port` | `30001` | Server port |

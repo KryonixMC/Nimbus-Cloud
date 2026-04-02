@@ -59,6 +59,12 @@ class ClusterServer(
 
             server?.start(wait = false)
             logger.info("Cluster WebSocket server started on {}:{}", config.bind, config.agentPort)
+
+            // Warn if cluster is exposed on a non-loopback interface without TLS
+            if (config.bind != "127.0.0.1" && config.bind != "localhost") {
+                logger.warn("Cluster server is bound to '{}' without TLS — agent tokens and secrets are transmitted in plaintext!", config.bind)
+                logger.warn("For production multi-node setups, use a reverse proxy with TLS or restrict access via firewall rules.")
+            }
         } catch (e: Exception) {
             logger.error("Failed to start cluster server on {}:{}: {}", config.bind, config.agentPort, e.message)
             server = null

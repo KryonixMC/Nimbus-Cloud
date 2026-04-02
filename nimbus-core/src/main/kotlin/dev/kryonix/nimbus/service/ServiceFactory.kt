@@ -1,5 +1,6 @@
 package dev.kryonix.nimbus.service
 
+import dev.kryonix.nimbus.api.NimbusApi
 import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.config.ServerSoftware
 import dev.kryonix.nimbus.event.EventBus
@@ -251,7 +252,15 @@ class ServiceFactory(
             if (config.api.enabled) {
                 command.add("-Dnimbus.api.url=http://127.0.0.1:${config.api.port}")
                 if (config.api.token.isNotBlank()) {
-                    processEnv["NIMBUS_API_TOKEN"] = config.api.token
+                    // Proxy/bridge gets the full admin token (needs broad API access for /cloud commands).
+                    // Game servers get a derived service token with restricted API access
+                    // (no config changes, file access, stress tests, or cluster management).
+                    val token = if (software == ServerSoftware.VELOCITY) {
+                        config.api.token
+                    } else {
+                        NimbusApi.deriveServiceToken(config.api.token)
+                    }
+                    processEnv["NIMBUS_API_TOKEN"] = token
                 }
             }
 

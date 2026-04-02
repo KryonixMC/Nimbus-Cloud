@@ -114,8 +114,10 @@ class LocalProcessManager(
 
     suspend fun sendCommand(serviceName: String, command: String): Boolean {
         val handle = handles[serviceName] ?: return false
+        // Sanitize: strip newlines to prevent command injection via stdin
+        val sanitized = command.replace("\r", "").replace("\n", "")
         return try {
-            handle.sendCommand(command)
+            handle.sendCommand(sanitized)
             true
         } catch (e: Exception) {
             logger.error("Failed to send command to '{}': {}", serviceName, e.message)

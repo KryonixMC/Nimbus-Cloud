@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 
 /**
  * Checks GitHub Releases for new Nimbus versions on startup.
@@ -90,7 +91,8 @@ class UpdateChecker(
         val isPreRelease: Boolean,
         val downloadUrl: String,
         val releaseUrl: String,
-        val changelog: String
+        val changelog: String,
+        val expectedSize: Long = 0
     )
 
     data class UpdateResult(
@@ -100,7 +102,8 @@ class UpdateChecker(
         val downloadUrl: String,
         val releaseUrl: String,
         val changelog: String,
-        val isPreRelease: Boolean
+        val isPreRelease: Boolean,
+        val expectedSize: Long = 0
     )
 
     /**
@@ -165,7 +168,7 @@ class UpdateChecker(
                 val update = UpdateResult(
                     current, latestStable.version, classifyUpdate(current, latestStable.version),
                     latestStable.downloadUrl, latestStable.releaseUrl, latestStable.changelog,
-                    isPreRelease = false
+                    isPreRelease = false, expectedSize = latestStable.expectedSize
                 )
                 return applyUpdate(update)
             }
@@ -189,7 +192,7 @@ class UpdateChecker(
                 val update = UpdateResult(
                     current, latestPreRelease.version, classifyUpdate(current, latestPreRelease.version),
                     latestPreRelease.downloadUrl, latestPreRelease.releaseUrl, latestPreRelease.changelog,
-                    isPreRelease = true
+                    isPreRelease = true, expectedSize = latestPreRelease.expectedSize
                 )
                 return applyUpdate(update)
             }
@@ -224,7 +227,7 @@ class UpdateChecker(
         val update = UpdateResult(
             current, latestStable.version, type,
             latestStable.downloadUrl, latestStable.releaseUrl, latestStable.changelog,
-            isPreRelease = false
+            isPreRelease = false, expectedSize = latestStable.expectedSize
         )
 
         return when (type) {
@@ -294,6 +297,7 @@ class UpdateChecker(
 
                 val downloadUrl = jarAsset?.jsonObject?.get("browser_download_url")?.jsonPrimitive?.content
                     ?: return@mapNotNull null
+                val expectedSize = jarAsset.jsonObject["size"]?.jsonPrimitive?.long ?: 0L
 
                 ReleaseInfo(
                     version = if (isPreRelease && !version.isPreRelease) version.copy(preReleaseSuffix = "pre") else version,
@@ -301,7 +305,8 @@ class UpdateChecker(
                     isPreRelease = isPreRelease,
                     downloadUrl = downloadUrl,
                     releaseUrl = obj["html_url"]?.jsonPrimitive?.content ?: "",
-                    changelog = obj["body"]?.jsonPrimitive?.content ?: ""
+                    changelog = obj["body"]?.jsonPrimitive?.content ?: "",
+                    expectedSize = expectedSize
                 )
             }
         } catch (e: Exception) {
@@ -336,11 +341,23 @@ class UpdateChecker(
                 return false
             }
 
+            val bytes = withContext(Dispatchers.IO) { response.readRawBytes() }
+
+            // Verify download integrity: check file size matches GitHub API metadata
+            if (update.expectedSize > 0 && bytes.size.toLong() != update.expectedSize) {
+                println(ConsoleFormatter.error("failed (size mismatch: expected ${update.expectedSize} bytes, got ${bytes.size})"))
+                logger.error("Update download size mismatch — possible corruption or tampering. Expected {} bytes, got {}.", update.expectedSize, bytes.size)
+                return false
+            }
+
+            val sha256 = MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            logger.info("Update JAR SHA-256: {}", sha256)
+
             withContext(Dispatchers.IO) {
-                val bytes = response.readRawBytes()
                 Files.write(updateJar, bytes)
             }
-            println(ConsoleFormatter.success("done"))
+            println(ConsoleFormatter.success("done (SHA-256: ${sha256.take(16)}...)"))
 
             withContext(Dispatchers.IO) {
                 if (Files.exists(currentJar)) {

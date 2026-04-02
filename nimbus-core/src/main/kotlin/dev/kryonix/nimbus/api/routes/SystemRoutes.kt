@@ -10,8 +10,6 @@ import dev.kryonix.nimbus.service.ServiceManager
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.nio.file.Path
 import java.time.Instant
 
@@ -41,18 +39,6 @@ fun Route.systemRoutes(
                 groupsLoaded = 0,
                 message = "Reload failed: ${e.message}"
             ))
-        }
-    }
-
-    // POST /api/shutdown — Graceful shutdown
-    post("/api/shutdown") {
-        call.respond(ApiMessage(true, "Shutdown initiated — stopping all services..."))
-
-        // Run shutdown in background so the response is sent first
-        scope.launch {
-            delay(500)
-            serviceManager.stopAll()
-            Runtime.getRuntime().exit(0)
         }
     }
 }

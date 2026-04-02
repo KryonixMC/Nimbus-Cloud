@@ -605,26 +605,9 @@ class ApiRoutesTest {
     inner class ShutdownEndpoint {
 
         @Test
-        fun `POST shutdown returns 200 with success message`() = setupTestApplication {
-            // Mock Runtime.exit so it doesn't actually exit the JVM
-            mockkStatic(Runtime::class)
-            val mockRuntime = mockk<Runtime>(relaxed = true)
-            every { Runtime.getRuntime() } returns mockRuntime
-
+        fun `POST shutdown returns 404 since endpoint was removed`() = setupTestApplication {
             val response = client.post("/api/shutdown") { withAuth() }
-            assertEquals(HttpStatusCode.OK, response.status)
-
-            val body = json.decodeFromString<ApiMessage>(response.bodyAsText())
-            assertTrue(body.success)
-            assertTrue(body.message.contains("Shutdown"))
-
-            unmockkStatic(Runtime::class)
-        }
-
-        @Test
-        fun `POST shutdown without auth returns 401`() = setupTestApplication {
-            val response = client.post("/api/shutdown")
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
 }

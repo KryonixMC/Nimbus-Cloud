@@ -71,7 +71,7 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     private fun connectPostgresql(): Database {
         val port = if (config.port == 3306) 5432 else config.port
         return Database.connect(
-            url = "jdbc:postgresql://${config.host}:$port/${config.name}?sslmode=prefer",
+            url = "jdbc:postgresql://${config.host}:$port/${config.name}?sslmode=require",
             driver = "org.postgresql.Driver",
             user = config.username,
             password = config.password

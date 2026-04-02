@@ -51,6 +51,10 @@ val clusterJson = Json {
 
 The most complex message -- contains everything needed to launch a service: `serviceName`, `groupName`, `port`, `templateName`, `templateHash`, `software`, `version`, `memory`, `jvmArgs`, `jarName`, `forwardingMode`, `forwardingSecret`, `isStatic`, `isModded`, `apiUrl`, `apiToken`, `nimbusProperties`, `javaVersion`, `bedrockPort`, `bedrockEnabled`, and more. See `ClusterMessage.kt` for the full field list.
 
+::: info
+The `apiToken` sent to game servers is a restricted **service token** (HMAC-derived from the admin token), limiting API access to service-level endpoints only. Velocity proxy services receive the full admin token for bridge plugin access.
+:::
+
 ### AuthRequest
 
 Sent by the agent after connecting: `token`, `nodeName`, `maxMemory`, `maxServices`, `currentServices`, `agentVersion`, `os`, `arch`.

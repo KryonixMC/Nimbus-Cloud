@@ -21,11 +21,24 @@ token = "your-secret-token"
 ```
 
 ::: info Auto-generated token
-If no token is configured in `nimbus.toml`, Nimbus **auto-generates** a random token on each start and logs it to the console. The API is never unauthenticated. Set a permanent token in the config for production use.
+If no token is configured in `nimbus.toml`, Nimbus **auto-generates** a random token on each start and logs the first 8 characters to the console. The API is never unauthenticated. Set a permanent token in the config for production use.
 :::
 
+### Token Scopes
+
+Nimbus uses two token levels:
+
+| Token | Scope | Recipients |
+|---|---|---|
+| **Admin token** | Full API access (all endpoints) | Proxy/Bridge plugin, manual API calls |
+| **Service token** | Service-level endpoints only (services, permissions, groups, displays, proxy sync, maintenance, metrics, network) | Game servers (SDK, Perms plugin) |
+
+The service token is automatically derived from the admin token using HMAC-SHA256. Game servers receive the restricted service token via the `NIMBUS_API_TOKEN` environment variable, while the Velocity proxy receives the full admin token.
+
+Admin-only endpoints (require the admin token): `/api/reload`, `/api/stress/*`, `/api/files/*`, `/api/config`, `/api/loadbalancer`, `/api/nodes`.
+
 ::: info Rate limiting
-The API enforces rate limits: **120 requests/minute** globally and **5 requests/minute** for stress test endpoints. Exceeding the limit returns HTTP 429 (Too Many Requests).
+The API enforces **per-IP** rate limits: **120 requests/minute** globally and **5 requests/minute** for stress test endpoints. Exceeding the limit returns HTTP 429 (Too Many Requests).
 :::
 
 ## Response Format
@@ -1665,25 +1678,6 @@ Hot-reload all group configuration files.
   "message": "Reloaded 3 group config(s)"
 }
 ```
-
----
-
-### POST /api/shutdown
-
-Initiate a graceful shutdown. The response is sent before shutdown begins.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Shutdown initiated — stopping all services..."
-}
-```
-
-::: warning
-This will stop all services and terminate the Nimbus process. The shutdown order is: game servers, then lobbies, then proxies.
-:::
 
 ---
 

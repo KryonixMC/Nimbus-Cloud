@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory
 import java.io.PrintWriter
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
@@ -525,7 +526,14 @@ class SetupWizard(
         """.trimMargin() + "\n"
         val configDir = baseDir.resolve("config")
         Files.createDirectories(configDir)
-        Files.writeString(configDir.resolve("nimbus.toml"), content)
+        val configFile = configDir.resolve("nimbus.toml")
+        Files.writeString(configFile, content)
+        // Restrict permissions: nimbus.toml contains API token & database credentials
+        try {
+            Files.setPosixFilePermissions(configFile, PosixFilePermissions.fromString("rw-------"))
+        } catch (_: UnsupportedOperationException) {
+            // Windows doesn't support POSIX permissions
+        }
     }
 
     private fun generateToken(): String {

@@ -190,7 +190,11 @@ class ServiceManager(
             isStatic = service.isStatic,
             isModded = isModded,
             apiUrl = if (config.api.enabled) "http://${config.api.bind}:${config.api.port}" else "",
-            apiToken = config.api.token,
+            apiToken = if (groupConfig.software == dev.kryonix.nimbus.config.ServerSoftware.VELOCITY) {
+                config.api.token
+            } else {
+                dev.kryonix.nimbus.api.NimbusApi.deriveServiceToken(config.api.token)
+            },
             javaVersion = javaResolver.requiredJavaVersion(groupConfig.version, groupConfig.software),
             bedrockPort = service.bedrockPort ?: 0,
             bedrockEnabled = config.bedrock.enabled && groupConfig.software == dev.kryonix.nimbus.config.ServerSoftware.VELOCITY
@@ -543,9 +547,15 @@ class ServiceManager(
             return false
         }
 
+        // Sanitize: strip newlines to prevent command injection via stdin
+        val sanitized = command.replace("\r", "").replace("\n", "")
+        if (sanitized != command) {
+            logger.warn("Stripped newlines from command sent to '{}' (possible injection attempt)", serviceName)
+        }
+
         return try {
-            handle.sendCommand(command)
-            logger.debug("Executed command '{}' on service '{}'", command, serviceName)
+            handle.sendCommand(sanitized)
+            logger.debug("Executed command '{}' on service '{}'", sanitized, serviceName)
             true
         } catch (e: Exception) {
             logger.error("Failed to execute command on service '{}'", serviceName, e)

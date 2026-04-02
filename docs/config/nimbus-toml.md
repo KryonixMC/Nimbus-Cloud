@@ -108,7 +108,7 @@ Resource limits and scaling engine settings.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `max_memory` | String | `"10G"` | Total memory budget for all running services. Format: number + `M` or `G` (e.g., `"512M"`, `"8G"`). Nimbus will not start new services if the total allocated memory would exceed this limit. |
-| `max_services` | Int | `20` | Maximum number of concurrent services across all groups. |
+| `max_services` | Int | `20` | Maximum number of concurrent services across all groups. Enforced as a global hard cap by the scaling engine — no new instances are started once this limit is reached, regardless of per-group `max_instances` settings. |
 | `heartbeat_interval` | Long | `5000` | Interval in milliseconds between scaling engine evaluation cycles. Each cycle checks player counts and applies scaling rules. |
 
 ```toml
@@ -191,12 +191,20 @@ allowed_origins = ["http://localhost:3000"]
 The API token grants full control over your Nimbus instance. Keep it secret. If you expose the API beyond localhost, always use a strong token and consider placing it behind a reverse proxy with TLS.
 :::
 
+::: info Service token
+Nimbus automatically derives a restricted **service token** from the admin token. Game servers receive this service token (via `NIMBUS_API_TOKEN` env var) and can only access service-level endpoints. The Velocity proxy receives the full admin token for bridge plugin access. This limits the blast radius if a game server plugin is compromised.
+:::
+
+::: info File permissions
+`nimbus.toml` is automatically created with restricted file permissions (`600` / owner-only) on Linux/macOS, since it contains the API token and database credentials.
+:::
+
 ::: tip
 The `/api/health` endpoint is always public (no authentication required) and can be used for external health checks. All other endpoints, including `/api/metrics`, require authentication.
 :::
 
 ::: info Rate limiting
-The API enforces rate limits: 120 requests/minute globally, 5 requests/minute for stress test endpoints.
+The API enforces **per-IP** rate limits: 120 requests/minute globally, 5 requests/minute for stress test endpoints.
 :::
 
 ---
@@ -250,6 +258,10 @@ name = "nimbus"
 username = "nimbus"
 password = "secret"
 ```
+
+::: info SSL
+PostgreSQL connections require SSL by default (`sslmode=require`). Ensure your PostgreSQL server has SSL enabled.
+:::
 
 ::: tip
 SQLite is recommended for single-node setups. Use MySQL or PostgreSQL if you need shared database access across multiple machines or want external tooling for querying metrics.

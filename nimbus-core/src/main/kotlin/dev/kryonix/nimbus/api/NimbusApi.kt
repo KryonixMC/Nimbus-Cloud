@@ -35,6 +35,8 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 class NimbusApi(
     private val config: NimbusConfig,
@@ -77,7 +79,7 @@ class NimbusApi(
 
         val effectiveConfig = if (apiConfig.token.isBlank()) {
             val generated = generateToken()
-            logger.warn("REST API token is empty — auto-generated token: {}", generated)
+            logger.warn("REST API token is empty — auto-generated token: {}...", generated.take(8))
             logger.warn("Set [api] token in nimbus.toml to use a persistent token.")
             apiConfig.copy(token = generated)
         } else {
@@ -158,9 +160,15 @@ class NimbusApi(
         install(RateLimit) {
             global {
                 rateLimiter(limit = 120, refillPeriod = 60.seconds)
+                requestKey { call ->
+                    call.request.local.remoteAddress
+                }
             }
             register(RateLimitName("stress")) {
                 rateLimiter(limit = 5, refillPeriod = 60.seconds)
+                requestKey { call ->
+                    call.request.local.remoteAddress
+                }
             }
         }
 
@@ -175,13 +183,25 @@ class NimbusApi(
         }
 
         if (apiConfig.token.isNotBlank()) {
+            val serviceToken = deriveServiceToken(apiConfig.token)
             install(Authentication) {
+                // Full admin access — only for the master API token
                 bearer("api-token") {
                     authenticate { credential ->
                         if (timingSafeEquals(credential.token, apiConfig.token)) {
-                            UserIdPrincipal("nimbus-api")
+                            UserIdPrincipal("nimbus-admin")
                         } else {
                             null
+                        }
+                    }
+                }
+                // Service-level access — accepts both master token and derived service token
+                bearer("service-token") {
+                    authenticate { credential ->
+                        when {
+                            timingSafeEquals(credential.token, apiConfig.token) -> UserIdPrincipal("nimbus-admin")
+                            timingSafeEquals(credential.token, serviceToken) -> UserIdPrincipal("nimbus-service")
+                            else -> null
                         }
                     }
                 }
@@ -212,16 +232,21 @@ class NimbusApi(
             val readOnlyScopes = setOf("groups")
             val maxUploadBytes = 100L * 1024 * 1024 // 100 MB
 
-            val routeBlock: Route.() -> Unit = {
-                metricsRoutes(registry, groupManager, nodeManager, loadBalancer, proxySyncManager, startedAt)
+            // Service-level routes — accessible with both master and service tokens
+            val serviceRouteBlock: Route.() -> Unit = {
                 serviceRoutes(registry, serviceManager, groupManager, eventBus)
-                groupRoutes(registry, groupManager, groupsDir, eventBus)
                 permissionRoutes(permissionManager, eventBus)
-                networkRoutes(config, registry, groupManager, serviceManager, startedAt)
-                systemRoutes(config, groupManager, groupsDir, serviceManager, eventBus, scope, startedAt)
                 displayRoutes(displayManager)
                 proxySyncRoutes(proxySyncManager, eventBus)
+                groupRoutes(registry, groupManager, groupsDir, eventBus)
+                networkRoutes(config, registry, groupManager, serviceManager, startedAt)
                 maintenanceRoutes(proxySyncManager, eventBus)
+                metricsRoutes(registry, groupManager, nodeManager, loadBalancer, proxySyncManager, startedAt)
+            }
+
+            // Admin-only routes — only accessible with the master API token
+            val adminRouteBlock: Route.() -> Unit = {
+                systemRoutes(config, groupManager, groupsDir, serviceManager, eventBus, scope, startedAt)
                 if (stressTestManager != null) {
                     rateLimit(RateLimitName("stress")) {
                         stressRoutes(stressTestManager)
@@ -239,11 +264,15 @@ class NimbusApi(
             templateRoutes(templatesDir, config.cluster.token)
 
             if (token.isNotBlank()) {
+                authenticate("service-token") {
+                    serviceRouteBlock()
+                }
                 authenticate("api-token") {
-                    routeBlock()
+                    adminRouteBlock()
                 }
             } else {
-                routeBlock()
+                serviceRouteBlock()
+                adminRouteBlock()
             }
         }
     }
@@ -264,6 +293,19 @@ class NimbusApi(
             val bytes = ByteArray(32)
             SecureRandom().nextBytes(bytes)
             return bytes.joinToString("") { "%02x".format(it) }
+        }
+
+        /**
+         * Derives a restricted service token from the master API token using HMAC-SHA256.
+         * Game servers receive this token instead of the master token, limiting their API access
+         * to service-level endpoints only (no admin operations like config changes, file access,
+         * stress tests, or cluster management).
+         */
+        fun deriveServiceToken(masterToken: String): String {
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(masterToken.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+            return mac.doFinal("nimbus-service-token".toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
         }
     }
 }
