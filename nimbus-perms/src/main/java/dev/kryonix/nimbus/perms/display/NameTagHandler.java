@@ -19,7 +19,7 @@ import java.util.logging.Logger;
  * Manages player name tags (above head) using Scoreboard Teams.
  * Syncs prefix/suffix from the permission provider.
  * <p>
- * On Folia: uses per-player scoreboards (main scoreboard is read-only).
+ * On Folia: disabled (scoreboard API is read-only, needs packet-based solution).
  * On Bukkit/Paper: uses the main scoreboard (shared, efficient).
  */
 public class NameTagHandler {
@@ -31,8 +31,8 @@ public class NameTagHandler {
     private final ConcurrentHashMap<UUID, String> tabOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, String> playerTeams = new ConcurrentHashMap<>();
 
-    /** On Folia we use a shared custom scoreboard assigned to each player. */
-    private Scoreboard sharedScoreboard;
+    // TODO: Folia name tags — playerListName fallback doesn't work, needs packet-based solution (ProtocolLib/PacketEvents)
+    private boolean foliaMode = false;
 
     private static final String TEAM_PREFIX = "nimbus_";
 
@@ -43,16 +43,10 @@ public class NameTagHandler {
     }
 
     public void start() {
-        // On Folia, the main scoreboard is read-only — try to create a shared custom scoreboard
         if (VersionHelper.isFolia()) {
-            try {
-                sharedScoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-                logger.info("Folia detected — using custom shared scoreboard for name tags");
-            } catch (UnsupportedOperationException e) {
-                // Folia doesn't support creating new scoreboards — fall back to main scoreboard
-                sharedScoreboard = null;
-                logger.info("Folia detected — using main scoreboard for name tags");
-            }
+            foliaMode = true;
+            logger.info("Folia detected — name tag handler disabled (scoreboard teams not supported)");
+            return;
         }
 
         if (Nimbus.events() != null) {
@@ -102,15 +96,7 @@ public class NameTagHandler {
     }
 
     public void onJoin(Player player) {
-        // On Folia, assign the shared scoreboard to the player
-        if (sharedScoreboard != null) {
-            SchedulerCompat.runForEntity(plugin, player, () -> {
-                if (player.isOnline()) {
-                    player.setScoreboard(sharedScoreboard);
-                }
-            });
-        }
-
+        if (foliaMode) return;
         // Defer to allow provider to load display data first
         SchedulerCompat.runForEntityLater(plugin, player, () -> {
             if (!player.isOnline()) return;
@@ -125,6 +111,7 @@ public class NameTagHandler {
 
     /** Refresh the name tag for a player (e.g. after display data is loaded). */
     public void refresh(Player player) {
+        if (foliaMode) return;
         SchedulerCompat.runForEntity(plugin, player, () -> {
             if (player.isOnline()) applyNameTag(player);
         });
@@ -132,6 +119,7 @@ public class NameTagHandler {
 
     public void onQuit(Player player) {
         tabOverrides.remove(player.getUniqueId());
+        if (foliaMode) return;
         String teamName = playerTeams.remove(player.getUniqueId());
         if (teamName != null) {
             Scoreboard scoreboard = getScoreboard();
@@ -146,7 +134,6 @@ public class NameTagHandler {
     }
 
     private Scoreboard getScoreboard() {
-        if (sharedScoreboard != null) return sharedScoreboard;
         return Bukkit.getScoreboardManager().getMainScoreboard();
     }
 
