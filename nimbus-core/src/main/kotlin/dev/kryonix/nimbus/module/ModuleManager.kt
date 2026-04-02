@@ -2,10 +2,13 @@ package dev.kryonix.nimbus.module
 
 import org.slf4j.LoggerFactory
 import java.net.URLClassLoader
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.ServiceLoader
 import java.util.jar.JarFile
 import java.util.Properties
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
@@ -101,11 +104,88 @@ class ModuleManager(
         classLoaders.clear()
     }
 
+    val modulesDirectory: Path get() = modulesDir
+
     fun getModule(id: String): NimbusModule? = modules[id]
     fun getModules(): List<NimbusModule> = modules.values.toList()
     fun isLoaded(id: String): Boolean = modules.containsKey(id)
 
+    /**
+     * Discovers available module JARs embedded in the application resources.
+     * Returns metadata for all available modules (installed or not).
+     */
+    fun discoverAvailable(): List<ModuleInfo> {
+        val result = mutableListOf<ModuleInfo>()
+        for (name in EMBEDDED_MODULES) {
+            val resource = javaClass.classLoader.getResourceAsStream("controller-modules/$name") ?: continue
+            try {
+                val tempFile = Files.createTempFile("nimbus-module-", ".jar")
+                resource.use { Files.copy(it, tempFile, StandardCopyOption.REPLACE_EXISTING) }
+                val info = readModuleProperties(tempFile)
+                if (info != null) result.add(info.copy(fileName = name))
+                Files.deleteIfExists(tempFile)
+            } catch (_: Exception) {}
+        }
+        return result
+    }
+
+    /**
+     * Installs an embedded module by extracting its JAR to the modules directory.
+     * Returns true if installed successfully, false if not found or already installed.
+     */
+    fun install(moduleId: String): InstallResult {
+        val available = discoverAvailable()
+        val info = available.find { it.id == moduleId }
+            ?: return InstallResult.NOT_FOUND
+
+        val target = modulesDir.resolve(info.fileName)
+        if (target.exists()) return InstallResult.ALREADY_INSTALLED
+
+        val resource = javaClass.classLoader.getResourceAsStream("controller-modules/${info.fileName}")
+            ?: return InstallResult.NOT_FOUND
+
+        if (!modulesDir.exists()) Files.createDirectories(modulesDir)
+        resource.use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
+        logger.info("Installed module '{}' to {}", info.name, target)
+        return InstallResult.INSTALLED
+    }
+
+    /**
+     * Uninstalls a module by deleting its JAR from the modules directory.
+     * The module remains loaded until restart.
+     */
+    fun uninstall(moduleId: String): Boolean {
+        // Find the JAR file for this module
+        val available = discoverAvailable()
+        val info = available.find { it.id == moduleId }
+        val fileName = info?.fileName
+
+        // Also check installed JARs directly
+        val installedJars = if (modulesDir.exists()) modulesDir.listDirectoryEntries("*.jar") else emptyList()
+        val jarToDelete = if (fileName != null) {
+            modulesDir.resolve(fileName)
+        } else {
+            // Try to find by reading module.properties from installed JARs
+            installedJars.find { jar ->
+                readModuleProperties(jar)?.id == moduleId
+            }
+        }
+
+        if (jarToDelete == null || !jarToDelete.exists()) return false
+        jarToDelete.deleteIfExists()
+        logger.info("Uninstalled module '{}' — restart required", moduleId)
+        return true
+    }
+
+    enum class InstallResult { INSTALLED, ALREADY_INSTALLED, NOT_FOUND }
+
     companion object {
+        /** Known embedded module JAR filenames. */
+        private val EMBEDDED_MODULES = listOf(
+            "nimbus-module-perms.jar",
+            "nimbus-module-display.jar",
+            "nimbus-module-refinery.jar"
+        )
         /**
          * Reads module metadata from a JAR's `module.properties` resource
          * without loading the module class. Used by the SetupWizard.

@@ -229,6 +229,13 @@ class CommandDispatcher {
                         else -> emptyList()
                     }
                 }
+                "modules" -> {
+                    when (parts.size) {
+                        2 -> listOf("list", "install", "uninstall")
+                            .filter { it.startsWith(argPrefix, ignoreCase = true) }
+                        else -> emptyList()
+                    }
+                }
                 else -> emptyList()
             }
         }
