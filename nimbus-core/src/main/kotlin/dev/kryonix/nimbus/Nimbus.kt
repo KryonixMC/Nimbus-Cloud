@@ -338,6 +338,7 @@ fun nimbusMain() = runBlocking {
                 }
             }
             metricsJobs.forEach { it.cancel() }
+            scalingEngine.shutdown()
             scalingJob.cancel()
             moduleManager.disableAll()
             api.stop()
@@ -424,6 +425,7 @@ fun nimbusMain() = runBlocking {
         }
         metricsJobs.forEach { it.cancel() }
         updaterJob.cancel()
+        scalingEngine.shutdown()
         scalingJob.cancel()
         moduleManager.disableAll()
         api.stop()

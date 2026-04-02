@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ScalingEngine(
     private val registry: ServiceRegistry,
@@ -33,6 +34,9 @@ class ScalingEngine(
     private val globalMaxServices: Int = 0
 ) {
     private val logger = LoggerFactory.getLogger(ScalingEngine::class.java)
+
+    /** Set to true during shutdown to prevent the engine from starting new services. */
+    private val shuttingDown = AtomicBoolean(false)
 
     /** Optional stress test manager — when set, services with active overrides skip pinging. */
     var stressTestManager: StressTestManager? = null
@@ -52,6 +56,15 @@ class ScalingEngine(
     companion object {
         private const val SCALE_UP_COOLDOWN_SECONDS = 30L
         private const val SCALE_DOWN_COOLDOWN_SECONDS = 120L
+    }
+
+    /**
+     * Signals the engine to stop evaluating scaling rules.
+     * Must be called before stopping services to prevent the engine from
+     * starting new instances to satisfy minInstances during shutdown.
+     */
+    fun shutdown() {
+        shuttingDown.set(true)
     }
 
     /**
@@ -80,6 +93,9 @@ class ScalingEngine(
         } catch (_: kotlinx.coroutines.TimeoutCancellationException) {
             logger.warn("Player count update timed out (>15s), proceeding with stale data")
         }
+
+        // Skip all scaling decisions during shutdown to prevent starting new services
+        if (shuttingDown.get()) return
 
         // Skip scaling decisions entirely during active stress tests to avoid reacting to simulated players
         if (stressTestManager?.isActive() == true) {
