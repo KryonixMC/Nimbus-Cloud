@@ -69,6 +69,60 @@ class DisplayManager(private val displaysDir: Path) {
     fun getAllDisplays(): Map<String, DisplayConfig> = displays.toMap()
 
     /**
+     * Create a display config for a single group.
+     * Skips VELOCITY groups. No-op if the config already exists.
+     */
+    fun createDisplay(groupConfig: GroupConfig) {
+        val groupName = groupConfig.group.name
+        if (groupConfig.group.software == ServerSoftware.VELOCITY) return
+
+        val file = displaysDir.resolve("${groupName}.toml")
+        if (!file.exists()) {
+            generateDefault(file, groupConfig)
+            logger.info("Generated display config for new group '{}'", groupName)
+        }
+        // Load into memory
+        try {
+            val config = parseDisplayConfig(file)
+            displays[config.display.name] = config
+        } catch (e: Exception) {
+            logger.warn("Failed to load display config for '{}': {}", groupName, e.message)
+        }
+    }
+
+    /**
+     * Delete the display config for a group.
+     * Removes the file from disk and the entry from memory.
+     */
+    fun deleteDisplay(groupName: String) {
+        displays.remove(groupName)
+        val file = displaysDir.resolve("${groupName}.toml")
+        if (file.exists()) {
+            try {
+                Files.delete(file)
+                logger.info("Deleted display config for removed group '{}'", groupName)
+            } catch (e: Exception) {
+                logger.warn("Failed to delete display config for '{}': {}", groupName, e.message)
+            }
+        }
+    }
+
+    /**
+     * Reload a single display config from disk (e.g. after group update).
+     */
+    fun reloadDisplay(groupName: String) {
+        val file = displaysDir.resolve("${groupName}.toml")
+        if (!file.exists()) return
+        try {
+            val config = parseDisplayConfig(file)
+            displays[config.display.name] = config
+            logger.debug("Reloaded display config for '{}'", groupName)
+        } catch (e: Exception) {
+            logger.warn("Failed to reload display config for '{}': {}", groupName, e.message)
+        }
+    }
+
+    /**
      * Resolve a state label for display.
      * Falls back to the raw state if no label is configured.
      */
