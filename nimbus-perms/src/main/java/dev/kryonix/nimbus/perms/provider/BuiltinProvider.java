@@ -37,6 +37,7 @@ public class BuiltinProvider implements PermissionProvider {
 
     private final Map<UUID, PermissionAttachment> attachments = new ConcurrentHashMap<>();
     private final Map<UUID, DisplayInfo> displayCache = new ConcurrentHashMap<>();
+    private java.util.function.Consumer<Player> displayLoadedCallback;
 
     @Override
     public void enable(NimbusPermsPlugin plugin) {
@@ -115,6 +116,11 @@ public class BuiltinProvider implements PermissionProvider {
         return info != null ? info.priority : 0;
     }
 
+    /** Set a callback that is invoked on the main thread after display data is loaded for a player. */
+    public void setDisplayLoadedCallback(java.util.function.Consumer<Player> callback) {
+        this.displayLoadedCallback = callback;
+    }
+
     private void loadAndApply(Player player) {
         UUID uuid = player.getUniqueId();
         String name = player.getName();
@@ -156,13 +162,15 @@ public class BuiltinProvider implements PermissionProvider {
                         String prefix = json.has("prefix") && !json.get("prefix").isJsonNull() ? json.get("prefix").getAsString() : "";
                         String suffix = json.has("suffix") && !json.get("suffix").isJsonNull() ? json.get("suffix").getAsString() : "";
                         String displayGroup = json.has("displayGroup") && !json.get("displayGroup").isJsonNull() ? json.get("displayGroup").getAsString() : "";
-                        int priority = 0;
-                        // Priority is not in the standard response but we extract from display group
+                        int priority = json.has("priority") && !json.get("priority").isJsonNull() ? json.get("priority").getAsInt() : 0;
                         displayCache.put(uuid, new DisplayInfo(prefix, suffix, displayGroup, priority));
 
                         SchedulerCompat.runForEntity(plugin, player, () -> {
                             if (!player.isOnline()) return;
                             applyPermissions(player, granted, negated);
+                            if (displayLoadedCallback != null) {
+                                displayLoadedCallback.accept(player);
+                            }
                         });
                     } catch (Exception e) {
                         plugin.getLogger().log(Level.WARNING, "[Perms] Parse error for " + name, e);

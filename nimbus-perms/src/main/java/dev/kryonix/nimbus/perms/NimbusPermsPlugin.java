@@ -73,6 +73,11 @@ public class NimbusPermsPlugin extends JavaPlugin implements Listener {
         nameTagHandler = new NameTagHandler(this, provider);
         nameTagHandler.start();
 
+        // Refresh nametags when display data finishes loading from API
+        if (provider instanceof BuiltinProvider builtinProvider) {
+            builtinProvider.setDisplayLoadedCallback(nameTagHandler::refresh);
+        }
+
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
 

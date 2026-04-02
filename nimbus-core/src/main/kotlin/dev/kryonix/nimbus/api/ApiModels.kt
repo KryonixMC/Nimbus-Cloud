@@ -435,6 +435,7 @@ data class PlayerPermissionResponse(
     val prefix: String = "",
     val suffix: String = "",
     val displayGroup: String = "",
+    val priority: Int = 0,
     val meta: Map<String, String> = emptyMap()
 )
 
