@@ -1,7 +1,6 @@
 package dev.kryonix.nimbus.perms.display;
 
 import dev.kryonix.nimbus.perms.provider.PermissionProvider;
-import dev.kryonix.nimbus.sdk.ColorUtil;
 import dev.kryonix.nimbus.sdk.Nimbus;
 import dev.kryonix.nimbus.sdk.compat.SchedulerCompat;
 import dev.kryonix.nimbus.sdk.compat.TextCompat;
@@ -94,6 +93,13 @@ public class NameTagHandler {
         }, 5L);
     }
 
+    /** Refresh the name tag for a player (e.g. after display data is loaded). */
+    public void refresh(Player player) {
+        SchedulerCompat.runForEntity(plugin, player, () -> {
+            if (player.isOnline()) applyNameTag(player);
+        });
+    }
+
     public void onQuit(Player player) {
         tabOverrides.remove(player.getUniqueId());
         String teamName = playerTeams.remove(player.getUniqueId());
@@ -118,18 +124,17 @@ public class NameTagHandler {
         int priority = provider.getPriority(uuid);
 
         if (override != null) {
-            String translated = ColorUtil.translate(override);
-            int playerIdx = translated.indexOf("{player}");
+            int playerIdx = override.indexOf("{player}");
             if (playerIdx >= 0) {
-                prefix = translated.substring(0, playerIdx);
-                suffix = translated.substring(playerIdx + "{player}".length());
+                prefix = override.substring(0, playerIdx);
+                suffix = override.substring(playerIdx + "{player}".length());
             } else {
-                prefix = translated + " ";
+                prefix = override + " ";
                 suffix = "";
             }
         } else {
-            prefix = ColorUtil.translate(provider.getPrefix(uuid));
-            suffix = ColorUtil.translate(provider.getSuffix(uuid));
+            prefix = provider.getPrefix(uuid);
+            suffix = provider.getSuffix(uuid);
         }
 
         Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();

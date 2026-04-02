@@ -176,6 +176,7 @@ fun Route.permissionRoutes(
                     prefix = display.prefix,
                     suffix = display.suffix,
                     displayGroup = display.groupName,
+                    priority = display.priority,
                     meta = entry?.meta ?: emptyMap()
                 ))
             }
@@ -196,6 +197,7 @@ fun Route.permissionRoutes(
                     prefix = display.prefix,
                     suffix = display.suffix,
                     displayGroup = display.groupName,
+                    priority = display.priority,
                     meta = entry?.meta ?: emptyMap()
                 ))
             }
