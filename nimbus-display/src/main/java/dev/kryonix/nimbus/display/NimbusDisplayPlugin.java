@@ -58,7 +58,19 @@ public class NimbusDisplayPlugin extends JavaPlugin {
             npcManager.updateAll();
         }, interval, interval);
 
-        // Periodic display + group cache refresh (every 5 minutes)
+        // Refresh display + group caches when groups change (event-driven)
+        if (Nimbus.events() != null) {
+            Runnable refreshCaches = () -> SchedulerCompat.runTaskAsync(this, () -> {
+                signManager.refreshDisplays();
+                signManager.refreshGroups();
+                getLogger().info("Display configs refreshed (group change detected)");
+            });
+            Nimbus.events().onEvent("GROUP_CREATED", e -> refreshCaches.run());
+            Nimbus.events().onEvent("GROUP_UPDATED", e -> refreshCaches.run());
+            Nimbus.events().onEvent("GROUP_DELETED", e -> refreshCaches.run());
+        }
+
+        // Periodic display + group cache refresh (every 5 minutes, fallback)
         long refreshInterval = 20L * 60 * 5;
         SchedulerCompat.runTaskTimerAsync(this, () -> {
             signManager.refreshDisplays();

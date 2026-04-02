@@ -42,10 +42,16 @@ public class ServiceCache implements AutoCloseable {
     private final ConcurrentHashMap<String, List<Consumer<List<NimbusService>>>> groupListeners = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<Consumer<List<NimbusService>>> globalListeners = new CopyOnWriteArrayList<>();
     private NimbusEventStream eventStream;
+    private boolean ownsEventStream = false;
     private volatile boolean running = false;
 
     public ServiceCache(NimbusClient client) {
         this.client = client;
+    }
+
+    public ServiceCache(NimbusClient client, NimbusEventStream sharedEventStream) {
+        this.client = client;
+        this.eventStream = sharedEventStream;
     }
 
     /**
@@ -56,16 +62,25 @@ public class ServiceCache implements AutoCloseable {
     public CompletableFuture<Void> start() {
         running = true;
 
-        // Set up event stream
-        eventStream = client.createEventStream();
+        // Create own event stream only if none was provided via constructor
+        if (eventStream == null) {
+            eventStream = client.createEventStream();
+            ownsEventStream = true;
+        }
+
+        // Register handlers on the event stream
         eventStream.onEvent("SERVICE_READY", this::handleServiceReady);
         eventStream.onEvent("SERVICE_STOPPED", this::handleServiceRemoved);
         eventStream.onEvent("SERVICE_CRASHED", this::handleServiceRemoved);
         eventStream.onEvent("SERVICE_CUSTOM_STATE_CHANGED", this::handleCustomStateChanged);
         eventStream.onEvent("SERVICE_STARTING", this::handleServiceStarting);
 
-        // Fetch initial state, then connect event stream
-        return refresh().thenRun(() -> eventStream.connect());
+        // Fetch initial state, then connect event stream if we own it
+        if (ownsEventStream) {
+            return refresh().thenRun(() -> eventStream.connect());
+        } else {
+            return refresh();
+        }
     }
 
     /**
@@ -87,7 +102,7 @@ public class ServiceCache implements AutoCloseable {
     @Override
     public void close() {
         running = false;
-        if (eventStream != null) {
+        if (ownsEventStream && eventStream != null) {
             eventStream.close();
         }
     }

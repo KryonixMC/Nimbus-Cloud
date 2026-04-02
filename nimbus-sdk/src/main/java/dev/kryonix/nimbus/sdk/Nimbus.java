@@ -57,10 +57,10 @@ public final class Nimbus {
 
         self = NimbusSelfService.fromSystemProperties();
         clientRef = self.getClient();
-        cache = new ServiceCache(clientRef);
+        eventStream = clientRef.createEventStream();
+        cache = new ServiceCache(clientRef, eventStream);
         tracker = new PlayerTracker(clientRef);
         router = new ServiceRouter(clientRef);
-        eventStream = clientRef.createEventStream();
 
         cache.start();
         tracker.start();
@@ -76,10 +76,10 @@ public final class Nimbus {
         if (initialized) return;
 
         clientRef = new NimbusClient(apiUrl, token);
-        cache = new ServiceCache(clientRef);
+        eventStream = clientRef.createEventStream();
+        cache = new ServiceCache(clientRef, eventStream);
         tracker = new PlayerTracker(clientRef);
         router = new ServiceRouter(clientRef);
-        eventStream = clientRef.createEventStream();
 
         cache.start();
         tracker.start();

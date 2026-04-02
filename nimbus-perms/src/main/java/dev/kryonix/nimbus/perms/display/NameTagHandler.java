@@ -43,10 +43,16 @@ public class NameTagHandler {
     }
 
     public void start() {
-        // On Folia, the main scoreboard is read-only — create a shared custom scoreboard
+        // On Folia, the main scoreboard is read-only — try to create a shared custom scoreboard
         if (VersionHelper.isFolia()) {
-            sharedScoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
-            logger.info("Folia detected — using custom shared scoreboard for name tags");
+            try {
+                sharedScoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
+                logger.info("Folia detected — using custom shared scoreboard for name tags");
+            } catch (UnsupportedOperationException e) {
+                // Folia doesn't support creating new scoreboards — fall back to main scoreboard
+                sharedScoreboard = null;
+                logger.info("Folia detected — using main scoreboard for name tags");
+            }
         }
 
         if (Nimbus.events() != null) {
