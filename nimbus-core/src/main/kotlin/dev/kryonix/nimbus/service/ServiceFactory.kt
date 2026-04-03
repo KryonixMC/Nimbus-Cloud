@@ -183,7 +183,7 @@ class ServiceFactory(
             val forwardingMode = compatibilityChecker.determineForwardingMode()
             when (software) {
                 ServerSoftware.VELOCITY -> {
-                    configPatcher.patchVelocityConfig(workDir, port, forwardingMode)
+                    configPatcher.patchVelocityConfig(workDir, port, forwardingMode, bedrockEnabled = config.bedrock.enabled)
 
                     // Generate Geyser config for Bedrock support
                     if (config.bedrock.enabled) {
@@ -194,7 +194,7 @@ class ServiceFactory(
                     }
                 }
                 else -> {
-                    configPatcher.patchServerProperties(workDir, port)
+                    configPatcher.patchServerProperties(workDir, port, bedrockEnabled = config.bedrock.enabled)
 
                     val isPaperBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PUFFERFISH, ServerSoftware.PURPUR, ServerSoftware.FOLIA)
                     val velocityTemplateDir = templatesDir.resolve("proxy")

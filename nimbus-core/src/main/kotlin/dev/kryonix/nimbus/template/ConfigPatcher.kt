@@ -13,7 +13,7 @@ class ConfigPatcher {
 
     private val logger = LoggerFactory.getLogger(ConfigPatcher::class.java)
 
-    fun patchServerProperties(workDir: Path, port: Int) {
+    fun patchServerProperties(workDir: Path, port: Int, bedrockEnabled: Boolean = false) {
         val file = workDir.resolve("server.properties")
         if (!file.exists()) {
             // Create minimal server.properties so the server uses our port
@@ -21,34 +21,57 @@ class ConfigPatcher {
                 appendLine("server-port=$port")
                 appendLine("online-mode=false")
                 appendLine("server-ip=0.0.0.0")
+                if (bedrockEnabled) appendLine("enforce-secure-profile=false")
             })
             logger.debug("Created server.properties with port {} at {}", port, workDir)
             return
         }
 
+        var hasSecureProfile = false
         val patched = file.readLines().map { line ->
             when {
                 line.trimStart().startsWith("server-port") -> "server-port=$port"
                 line.trimStart().startsWith("online-mode") -> "online-mode=false"
+                line.trimStart().startsWith("enforce-secure-profile") -> {
+                    hasSecureProfile = true
+                    if (bedrockEnabled) "enforce-secure-profile=false" else line
+                }
                 else -> line
             }
+        }.toMutableList()
+
+        // Append if not present and bedrock is enabled
+        if (bedrockEnabled && !hasSecureProfile) {
+            patched.add("enforce-secure-profile=false")
         }
+
         file.writeLines(patched)
     }
 
-    fun patchVelocityConfig(workDir: Path, port: Int, forwardingMode: String = "modern", lbProxyProtocol: Boolean = false) {
+    fun patchVelocityConfig(workDir: Path, port: Int, forwardingMode: String = "modern", lbProxyProtocol: Boolean = false, bedrockEnabled: Boolean = false) {
         val file = workDir.resolve("velocity.toml")
         if (!file.exists()) return
 
+        var hasForceKey = false
         val patched = file.readLines().map { line ->
             when {
                 line.trimStart().startsWith("bind") && !line.contains("bungee") -> "bind = \"0.0.0.0:$port\""
                 line.trimStart().startsWith("player-info-forwarding-mode") -> "player-info-forwarding-mode = \"$forwardingMode\""
                 line.trimStart().startsWith("online-mode") && !line.contains("#") -> "online-mode = true"
                 lbProxyProtocol && line.trimStart().startsWith("haproxy-protocol") -> "haproxy-protocol = true"
+                line.trimStart().startsWith("force-key-authentication") -> {
+                    hasForceKey = true
+                    if (bedrockEnabled) "force-key-authentication = false" else line
+                }
                 else -> line
             }
+        }.toMutableList()
+
+        // Append if not present and bedrock is enabled
+        if (bedrockEnabled && !hasForceKey) {
+            patched.add("force-key-authentication = false")
         }
+
         file.writeLines(patched)
         logger.info("Velocity forwarding mode set to '{}'", forwardingMode)
     }

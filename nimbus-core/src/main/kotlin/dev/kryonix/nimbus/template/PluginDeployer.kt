@@ -27,9 +27,6 @@ class PluginDeployer(private val baseDir: Path) {
         // Deploy Nimbus SDK plugin to global (all backend servers: Paper, Purpur, etc.)
         deploySdkPlugin(globalTemplateDir)
 
-        // Clean up module-dependent plugins from global/ (now deployed per-service)
-        cleanStaleGlobalPlugins(globalTemplateDir)
-
         // Auto-update Nimbus plugins where the user has placed them (templates + static services)
         autoUpdateNimbusPlugins(templatesDir, staticDir)
 
@@ -243,34 +240,6 @@ class PluginDeployer(private val baseDir: Path) {
             Files.copy(proxyKeyFile, targetFile, StandardCopyOption.REPLACE_EXISTING)
         }
         logger.info("Distributed Floodgate key.pem to global templates")
-    }
-
-    /**
-     * Removes module-dependent plugins from global/ that were deployed by older versions.
-     * These plugins are now deployed per-service based on active modules.
-     */
-    private fun cleanStaleGlobalPlugins(globalDir: Path) {
-        val stalePlugins = listOf("nimbus-perms.jar", "FancyNpcs.jar", "nimbus-display.jar")
-        val pluginsDir = globalDir.resolve("plugins")
-        if (!pluginsDir.exists()) return
-
-        for (fileName in stalePlugins) {
-            val file = pluginsDir.resolve(fileName)
-            if (file.exists()) {
-                Files.deleteIfExists(file)
-                logger.info("Cleaned stale {} from global template (now deployed per-service)", fileName)
-            }
-        }
-
-        // Also clean from tracking file so they aren't considered "user-removed"
-        val trackingFile = globalDir.resolve(".nimbus-plugins")
-        if (trackingFile.exists()) {
-            val tracked = Files.readAllLines(trackingFile).map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
-            val removed = tracked.removeAll(stalePlugins.toSet())
-            if (removed) {
-                Files.write(trackingFile, tracked)
-            }
-        }
     }
 
     /**
