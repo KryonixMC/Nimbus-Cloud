@@ -374,6 +374,13 @@ data class DisplayListResponse(
     val total: Int
 )
 
+@Serializable
+data class UpdateDisplayRequest(
+    val sign: SignDisplayResponse? = null,
+    val npc: NpcDisplayResponse? = null,
+    val states: Map<String, String>? = null
+)
+
 // ── Permission DTOs ─────────────────────────────────────────────────
 
 @Serializable
@@ -518,6 +525,34 @@ data class DebugStepResponse(
     val permission: String,
     val type: String,
     val granted: Boolean
+)
+
+// ── Bulk Operations ────────────────────────────────────────────────
+
+@Serializable
+data class BulkPermissionRequest(
+    val groups: List<String>,
+    val permission: String,
+    val server: String? = null,
+    val world: String? = null,
+    val expiresAt: String? = null
+)
+
+@Serializable
+data class BulkGroupAssignRequest(
+    val players: List<String>,
+    val group: String,
+    val server: String? = null,
+    val world: String? = null,
+    val expiresAt: String? = null
+)
+
+@Serializable
+data class BulkOperationResponse(
+    val success: Boolean,
+    val processed: Int,
+    val failed: Int,
+    val errors: List<String> = emptyList()
 )
 
 // ── Audit ───────────────────────────────────────────────────────────

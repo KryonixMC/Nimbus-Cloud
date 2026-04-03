@@ -100,10 +100,14 @@ fun Route.permissionRoutes(
                     return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
                 }
                 val request = call.receive<PermissionModifyRequest>()
-                val context = PermissionContext(request.server, request.world, request.expiresAt)
-                permissionManager.addPermission(name, request.permission, context)
-                eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
-                call.respond(ApiMessage(true, "Permission '${request.permission}' added to '$name'"))
+                try {
+                    val context = PermissionContext(request.server, request.world, request.expiresAt)
+                    permissionManager.addPermission(name, request.permission, context)
+                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
+                    call.respond(ApiMessage(true, "Permission '${request.permission}' added to '$name'"))
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid permission"))
+                }
             }
 
             // DELETE /api/permissions/groups/{name}/permissions — Remove permission
@@ -158,11 +162,13 @@ fun Route.permissionRoutes(
 
         route("players") {
 
-            // GET /api/permissions/players/{uuid}
+            // GET /api/permissions/players/{uuid}?server=&world=
             get("{uuid}") {
                 val uuid = call.parameters["uuid"]!!
+                val server = call.request.queryParameters["server"]
+                val world = call.request.queryParameters["world"]
                 val entry = permissionManager.getPlayer(uuid)
-                val effective = permissionManager.getEffectivePermissions(uuid)
+                val effective = permissionManager.getEffectivePermissions(uuid, server, world)
                 val display = permissionManager.getPlayerDisplay(uuid)
                 call.respond(PlayerPermissionResponse(
                     uuid = uuid,
@@ -177,12 +183,14 @@ fun Route.permissionRoutes(
                 ))
             }
 
-            // PUT /api/permissions/players/{uuid} — Register/update player (called on join)
+            // PUT /api/permissions/players/{uuid}?server=&world= — Register/update player (called on join)
             put("{uuid}") {
                 val uuid = call.parameters["uuid"]!!
+                val server = call.request.queryParameters["server"]
+                val world = call.request.queryParameters["world"]
                 val request = call.receive<PlayerRegisterRequest>()
                 permissionManager.registerPlayer(uuid, request.name)
-                val effective = permissionManager.getEffectivePermissions(uuid)
+                val effective = permissionManager.getEffectivePermissions(uuid, server, world)
                 val display = permissionManager.getPlayerDisplay(uuid)
                 val entry = permissionManager.getPlayer(uuid)
                 call.respond(PlayerPermissionResponse(
@@ -268,17 +276,19 @@ fun Route.permissionRoutes(
 
         // ── Permission Check ────────────────────────────────
 
-        // GET /api/permissions/check/{uuid}/{permission}
+        // GET /api/permissions/check/{uuid}/{permission}?server=&world=
         get("check/{uuid}/{permission...}") {
             val uuid = call.parameters["uuid"]!!
             val permission = call.parameters["permission"]!!
-            val allowed = permissionManager.hasPermission(uuid, permission)
+            val server = call.request.queryParameters["server"]
+            val world = call.request.queryParameters["world"]
+            val allowed = permissionManager.hasPermission(uuid, permission, server, world)
             call.respond(PermissionCheckResponse(uuid, permission, allowed))
         }
 
         // ── Permission Debug ────────────────────────────────
 
-        // GET /api/permissions/debug/{uuid}/{permission}
+        // GET /api/permissions/debug/{uuid}/{permission}?server=&world=
         get("debug/{uuid}/{permission...}") {
             val uuid = call.parameters["uuid"]!!
             val permission = call.parameters["permission"]!!
@@ -382,6 +392,74 @@ fun Route.permissionRoutes(
             }
         }
 
+        // ── Bulk Operations ─────────────────────────────────
+
+        route("bulk") {
+
+            // POST /api/permissions/bulk/permissions — Add a permission to multiple groups
+            post("permissions") {
+                val request = call.receive<BulkPermissionRequest>()
+                try {
+                    PermissionManager.validatePermission(request.permission)
+                } catch (e: IllegalArgumentException) {
+                    return@post call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid permission"))
+                }
+
+                val context = PermissionContext(request.server, request.world, request.expiresAt)
+                var processed = 0
+                val errors = mutableListOf<String>()
+
+                for (groupName in request.groups) {
+                    try {
+                        permissionManager.addPermission(groupName, request.permission, context)
+                        eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+                        processed++
+                    } catch (e: Exception) {
+                        errors.add("$groupName: ${e.message}")
+                    }
+                }
+
+                permissionManager.logAudit("api", "bulk.addperm", request.permission,
+                    "Added '${request.permission}' to ${processed}/${request.groups.size} groups")
+
+                call.respond(BulkOperationResponse(
+                    success = errors.isEmpty(),
+                    processed = processed,
+                    failed = errors.size,
+                    errors = errors
+                ))
+            }
+
+            // POST /api/permissions/bulk/groups — Add a group to multiple players
+            post("groups") {
+                val request = call.receive<BulkGroupAssignRequest>()
+                val context = PermissionContext(request.server, request.world, request.expiresAt)
+                var processed = 0
+                val errors = mutableListOf<String>()
+
+                for (uuid in request.players) {
+                    try {
+                        val playerName = permissionManager.getPlayer(uuid)?.name ?: uuid
+                        permissionManager.setPlayerGroup(uuid, playerName, request.group, context)
+                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        processed++
+                    } catch (e: Exception) {
+                        errors.add("$uuid: ${e.message}")
+                    }
+                }
+
+                permissionManager.logAudit("api", "bulk.addgroup", request.group,
+                    "Added group '${request.group}' to ${processed}/${request.players.size} players")
+
+                call.respond(BulkOperationResponse(
+                    success = errors.isEmpty(),
+                    processed = processed,
+                    failed = errors.size,
+                    errors = errors
+                ))
+            }
+        }
+
         // ── Audit Log ───────────────────────────────────────
 
         // GET /api/permissions/audit
@@ -404,7 +482,7 @@ private fun dev.kryonix.nimbus.module.perms.PermissionGroup.toResponse() = Permi
     suffix = suffix,
     priority = priority,
     weight = weight,
-    permissions = permissions.toList(),
+    permissions = permissions.toList() + contextualPermissions.keys.toList(),
     parents = parents.toList(),
     meta = meta.toMap()
 )

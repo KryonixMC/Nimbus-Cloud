@@ -8,3 +8,4 @@ depend:
 folia-supported: true
 softdepend:
   - LuckPerms
+  - packetevents

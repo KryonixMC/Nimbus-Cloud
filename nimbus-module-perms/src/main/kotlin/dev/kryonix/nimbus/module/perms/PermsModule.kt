@@ -8,6 +8,9 @@ import dev.kryonix.nimbus.module.NimbusModule
 import dev.kryonix.nimbus.module.service
 import dev.kryonix.nimbus.module.perms.commands.PermsCommand
 import dev.kryonix.nimbus.module.perms.routes.permissionRoutes
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class PermsModule : NimbusModule {
     override val id = "perms"
@@ -32,6 +35,16 @@ class PermsModule : NimbusModule {
 
         permissionManager = PermissionManager(db)
         permissionManager.init()
+
+        // Auto-cleanup expired permission contexts every 60 seconds
+        context.scope.launch {
+            while (isActive) {
+                delay(60_000)
+                try {
+                    permissionManager.cleanupExpired()
+                } catch (_: Exception) {}
+            }
+        }
 
         context.registerCommand(PermsCommand(permissionManager, eventBus))
         context.registerRoutes({ permissionRoutes(permissionManager, eventBus) })

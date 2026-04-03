@@ -6,5 +6,6 @@ package dev.kryonix.nimbus.module.perms
 data class PlayerEntry(
     val name: String,
     val groups: MutableList<String> = mutableListOf(),
+    val groupContexts: MutableMap<String, MutableList<PermissionContext>> = mutableMapOf(),
     val meta: MutableMap<String, String> = mutableMapOf()
 )

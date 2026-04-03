@@ -11,6 +11,7 @@ data class PermissionGroup(
     val priority: Int = 0,
     val weight: Int = 0,
     val permissions: MutableList<String> = mutableListOf(),
+    val contextualPermissions: MutableMap<String, MutableList<PermissionContext>> = mutableMapOf(),
     val parents: MutableList<String> = mutableListOf(),
     val meta: MutableMap<String, String> = mutableMapOf()
 )

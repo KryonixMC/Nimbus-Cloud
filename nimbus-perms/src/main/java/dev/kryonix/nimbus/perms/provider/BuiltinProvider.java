@@ -126,8 +126,15 @@ public class BuiltinProvider implements PermissionProvider {
         JsonObject body = new JsonObject();
         body.addProperty("name", name);
 
+        // Pass server name for context-aware permission resolution
+        String urlStr = apiUrl + "/api/permissions/players/" + uuid;
+        String serverName = System.getProperty("nimbus.service.name", "");
+        if (!serverName.isEmpty()) {
+            urlStr += "?server=" + java.net.URLEncoder.encode(serverName, java.nio.charset.StandardCharsets.UTF_8);
+        }
+
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(apiUrl + "/api/permissions/players/" + uuid))
+                .uri(URI.create(urlStr))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + token)
                 .timeout(Duration.ofSeconds(10))

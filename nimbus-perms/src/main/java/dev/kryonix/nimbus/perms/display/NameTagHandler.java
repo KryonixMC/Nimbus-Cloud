@@ -19,7 +19,8 @@ import java.util.logging.Logger;
  * Manages player name tags (above head) using Scoreboard Teams.
  * Syncs prefix/suffix from the permission provider.
  * <p>
- * On Folia: disabled (scoreboard API is read-only, needs packet-based solution).
+ * On Folia with PacketEvents: uses packet-based teams via {@link PacketNameTagHandler}.
+ * On Folia without PacketEvents: disabled (scoreboard API is read-only).
  * On Bukkit/Paper: uses the main scoreboard (shared, efficient).
  */
 public class NameTagHandler {
@@ -31,8 +32,10 @@ public class NameTagHandler {
     private final ConcurrentHashMap<UUID, String> tabOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, String> playerTeams = new ConcurrentHashMap<>();
 
-    // TODO: Folia name tags — playerListName fallback doesn't work, needs packet-based solution (ProtocolLib/PacketEvents)
-    private boolean foliaMode = false;
+    private boolean disabled = false;
+
+    /** Packet-based handler for Folia (null if not on Folia or PacketEvents not available). */
+    private PacketNameTagHandler packetHandler;
 
     private static final String TEAM_PREFIX = "nimbus_";
 
@@ -44,9 +47,21 @@ public class NameTagHandler {
 
     public void start() {
         if (VersionHelper.isFolia()) {
-            foliaMode = true;
-            logger.info("Folia detected — name tag handler disabled (scoreboard teams not supported)");
-            return;
+            // Folia: scoreboard API is read-only — need PacketEvents for name tags
+            if (Bukkit.getPluginManager().getPlugin("packetevents") != null) {
+                try {
+                    packetHandler = new PacketNameTagHandler(logger);
+                    logger.info("Folia detected — using PacketEvents for packet-based name tags");
+                } catch (Exception e) {
+                    disabled = true;
+                    logger.warning("Folia detected — PacketEvents found but failed to initialize: " + e.getMessage());
+                    return;
+                }
+            } else {
+                disabled = true;
+                logger.info("Folia detected — name tag handler disabled (install PacketEvents for name tag support)");
+                return;
+            }
         }
 
         if (Nimbus.events() != null) {
@@ -92,11 +107,17 @@ public class NameTagHandler {
             });
         }
 
-        logger.info("Name tag handler started");
+        logger.info("Name tag handler started" + (packetHandler != null ? " (packet mode)" : ""));
     }
 
     public void onJoin(Player player) {
-        if (foliaMode) return;
+        if (disabled) return;
+
+        // Send existing teams to the new player (packet mode only)
+        if (packetHandler != null) {
+            packetHandler.sendExistingTeams(player);
+        }
+
         // Defer to allow provider to load display data first
         SchedulerCompat.runForEntityLater(plugin, player, () -> {
             if (!player.isOnline()) return;
@@ -111,7 +132,7 @@ public class NameTagHandler {
 
     /** Refresh the name tag for a player (e.g. after display data is loaded). */
     public void refresh(Player player) {
-        if (foliaMode) return;
+        if (disabled) return;
         SchedulerCompat.runForEntity(plugin, player, () -> {
             if (player.isOnline()) applyNameTag(player);
         });
@@ -119,15 +140,20 @@ public class NameTagHandler {
 
     public void onQuit(Player player) {
         tabOverrides.remove(player.getUniqueId());
-        if (foliaMode) return;
-        String teamName = playerTeams.remove(player.getUniqueId());
-        if (teamName != null) {
-            Scoreboard scoreboard = getScoreboard();
-            Team team = scoreboard.getTeam(teamName);
-            if (team != null) {
-                team.removeEntry(player.getName());
-                if (team.getEntries().isEmpty()) {
-                    team.unregister();
+        if (disabled) return;
+
+        if (packetHandler != null) {
+            packetHandler.removePlayer(player);
+        } else {
+            String teamName = playerTeams.remove(player.getUniqueId());
+            if (teamName != null) {
+                Scoreboard scoreboard = getScoreboard();
+                Team team = scoreboard.getTeam(teamName);
+                if (team != null) {
+                    team.removeEntry(player.getName());
+                    if (team.getEntries().isEmpty()) {
+                        team.unregister();
+                    }
                 }
             }
         }
@@ -159,6 +185,17 @@ public class NameTagHandler {
             suffix = provider.getSuffix(uuid);
         }
 
+        if (packetHandler != null) {
+            // Packet-based (Folia with PacketEvents)
+            packetHandler.applyNameTag(player, prefix, suffix, priority);
+        } else {
+            // Scoreboard-based (Bukkit/Paper)
+            applyScoreboardNameTag(player, prefix, suffix, priority, override != null);
+        }
+    }
+
+    private void applyScoreboardNameTag(Player player, String prefix, String suffix, int priority, boolean isOverride) {
+        UUID uuid = player.getUniqueId();
         Scoreboard scoreboard = getScoreboard();
 
         String oldTeamName = playerTeams.get(uuid);
@@ -173,7 +210,7 @@ public class NameTagHandler {
         }
 
         String teamName;
-        if (override != null) {
+        if (isOverride) {
             teamName = TEAM_PREFIX + player.getName().substring(0, Math.min(player.getName().length(), 8));
         } else {
             String sortKey = String.format("%04d", 9999 - Math.max(0, Math.min(9999, priority)));

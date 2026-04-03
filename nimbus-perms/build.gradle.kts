@@ -6,6 +6,7 @@ plugins {
 repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.luckperms.net/releases/") // LuckPerms API
+    maven("https://repo.codemc.io/repository/maven-releases/") // PacketEvents
 }
 
 dependencies {
@@ -14,6 +15,8 @@ dependencies {
     compileOnly("com.google.code.gson:gson:2.11.0")
     // LuckPerms API (only present at runtime if LP installed)
     compileOnly("net.luckperms:api:5.4")
+    // PacketEvents API (only present at runtime if PE installed — used for Folia name tags)
+    compileOnly("com.github.retrooper.packetevents:spigot:2.3.0")
 }
 
 java {
