@@ -135,7 +135,8 @@ tasks.jar {
 // Module JARs to embed in the fat JAR (auto-discovered at runtime via modules.list)
 val embeddedModules = mapOf(
     ":nimbus-module-perms" to "nimbus-module-perms.jar",
-    ":nimbus-module-display" to "nimbus-module-display.jar"
+    ":nimbus-module-display" to "nimbus-module-display.jar",
+    ":nimbus-module-scaling" to "nimbus-module-scaling.jar"
 )
 
 tasks.shadowJar {

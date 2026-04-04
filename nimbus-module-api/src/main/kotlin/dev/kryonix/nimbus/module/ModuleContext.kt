@@ -86,10 +86,17 @@ interface ModuleContext {
      * - `dev.kryonix.nimbus.event.EventBus`
      * - `dev.kryonix.nimbus.database.DatabaseManager`
      * - `dev.kryonix.nimbus.service.ServiceRegistry`
+     * - `dev.kryonix.nimbus.service.ServiceManager`
      * - `dev.kryonix.nimbus.group.GroupManager`
      * - `dev.kryonix.nimbus.config.NimbusConfig`
      */
     fun <T : Any> getService(type: Class<T>): T?
+
+    /**
+     * Register an additional service that modules can access via [getService].
+     * Used by the core to expose services that are created after module loading.
+     */
+    fun <T : Any> registerService(type: Class<T>, instance: T) {}
 }
 
 /** Convenience reified version of [ModuleContext.getService]. */

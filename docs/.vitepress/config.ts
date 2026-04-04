@@ -94,6 +94,7 @@ export default defineConfig({
           text: 'Modules',
           items: [
             { text: 'Module Development', link: '/developer/modules' },
+            { text: 'Smart Scaling', link: '/developer/scaling' },
           ],
         },
         {

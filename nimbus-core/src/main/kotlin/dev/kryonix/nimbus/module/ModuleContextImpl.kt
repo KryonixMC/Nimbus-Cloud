@@ -95,4 +95,8 @@ class ModuleContextImpl(
     override fun <T : Any> getService(type: Class<T>): T? {
         return services[type] as? T
     }
+
+    override fun <T : Any> registerService(type: Class<T>, instance: T) {
+        services[type] = instance
+    }
 }
