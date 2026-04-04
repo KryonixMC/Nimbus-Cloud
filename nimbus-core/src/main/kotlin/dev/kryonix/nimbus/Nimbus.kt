@@ -163,10 +163,11 @@ fun nimbusMain() = runBlocking {
     val globalProxyTemplateDir = templatesDir.resolve("global_proxy")
 
     val modulesDir = configDir.resolve("modules")
+    val displaysDir = modulesDir.resolve("display")
     val proxyDir = modulesDir.resolve("syncproxy")
 
     listOf(
-        templatesDir, staticDir, tempDir, logsDir, configDir, groupsDir, modulesDir, proxyDir,
+        templatesDir, staticDir, tempDir, logsDir, configDir, groupsDir, modulesDir, displaysDir, proxyDir,
         globalTemplateDir, globalTemplateDir.resolve("plugins"),
         globalProxyTemplateDir, globalProxyTemplateDir.resolve("plugins")
     ).forEach { dir ->
@@ -269,11 +270,8 @@ fun nimbusMain() = runBlocking {
         scope = scope,
         softwareResolver = softwareResolver,
         nodeManager = nodeManager,
-        moduleContext = moduleContext
+        moduleManager = moduleManager
     )
-
-    // Expose ServiceManager to modules (created after module loading, accessed lazily)
-    moduleContext.registerService(ServiceManager::class.java, serviceManager)
 
     // Start scaling engine
     val scalingEngine = ScalingEngine(
@@ -288,10 +286,8 @@ fun nimbusMain() = runBlocking {
     val stressTestManager = StressTestManager(registry, groupManager, eventBus, proxySyncManager, scope)
     scalingEngine.stressTestManager = stressTestManager
 
-    // Scaling engine is created here but started AFTER startMinimumInstances()
-    // to prevent it from racing the phased startup (proxy must be READY before backends).
-    var scalingJob: kotlinx.coroutines.Job? = null
-    logger.info("Scaling engine created (interval: {}ms, start deferred until after initial boot)", config.controller.heartbeatInterval)
+    val scalingJob = scalingEngine.start()
+    logger.info("Scaling engine started (interval: {}ms)", config.controller.heartbeatInterval)
     if (config.bedrock.enabled) {
         logger.info("Bedrock support enabled (Geyser + Floodgate, base port {})", config.bedrock.basePort)
     }
@@ -322,8 +318,7 @@ fun nimbusMain() = runBlocking {
         templatesDir = templatesDir,
         stressTestManager = stressTestManager,
         moduleContext = moduleContext,
-        moduleManager = moduleManager,
-        dispatcher = dispatcher
+        moduleManager = moduleManager
     )
 
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)
@@ -346,7 +341,7 @@ fun nimbusMain() = runBlocking {
             metricsCollector.shutdown()
             metricsJobs.forEach { it.cancel() }
             scalingEngine.shutdown()
-            scalingJob?.cancel()
+            scalingJob.cancel()
             moduleManager.disableAll()
             api.stop()
             try {
@@ -413,13 +408,7 @@ fun nimbusMain() = runBlocking {
     val updaterJob = velocityUpdater.start()
 
     // Start minimum instances for all groups (auto-downloads JARs if missing)
-    // This runs phased: proxy first (waits for READY), then backends.
     serviceManager.startMinimumInstances()
-
-    // Start scaling engine AFTER initial boot completes — prevents the engine from
-    // racing the phased startup (e.g. starting backends before the proxy is ready).
-    scalingJob = scalingEngine.start()
-    logger.info("Scaling engine started")
 
     // Start interactive console REPL (blocks until shutdown)
     console.start()
@@ -440,7 +429,7 @@ fun nimbusMain() = runBlocking {
         metricsJobs.forEach { it.cancel() }
         updaterJob.cancel()
         scalingEngine.shutdown()
-        scalingJob?.cancel()
+        scalingJob.cancel()
         moduleManager.disableAll()
         api.stop()
         serviceManager.stopAll()

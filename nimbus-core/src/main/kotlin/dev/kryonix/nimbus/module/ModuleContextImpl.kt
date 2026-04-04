@@ -2,7 +2,6 @@ package dev.kryonix.nimbus.module
 
 import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.console.CommandDispatcher
-import dev.kryonix.nimbus.console.ConsoleFormatter
 import dev.kryonix.nimbus.database.DatabaseManager
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.group.GroupManager
@@ -40,10 +39,6 @@ class ModuleContextImpl(
     val serviceRoutes: List<Route.() -> Unit> get() = _serviceRoutes
     val adminRoutes: List<Route.() -> Unit> get() = _adminRoutes
     val publicRoutes: List<Route.() -> Unit> get() = _publicRoutes
-
-    /** Plugin deployments registered by modules. */
-    private val _pluginDeployments = mutableListOf<PluginDeployment>()
-    val pluginDeployments: List<PluginDeployment> get() = _pluginDeployments
 
     /** Service registry for getService() lookups. */
     private val services = mutableMapOf<Class<*>, Any>()
@@ -83,20 +78,8 @@ class ModuleContextImpl(
         }
     }
 
-    override fun registerPluginDeployment(deployment: PluginDeployment) {
-        _pluginDeployments.add(deployment)
-    }
-
-    override fun registerEventFormatter(eventType: String, formatter: (data: Map<String, String>) -> String) {
-        ConsoleFormatter.registerModuleEventFormatter(eventType, formatter)
-    }
-
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> getService(type: Class<T>): T? {
         return services[type] as? T
-    }
-
-    override fun <T : Any> registerService(type: Class<T>, instance: T) {
-        services[type] = instance
     }
 }

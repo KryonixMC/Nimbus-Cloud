@@ -30,7 +30,7 @@ Install scripts: `install.sh`, `install.ps1`, `install-agent.sh`, `install-agent
 java -jar nimbus-core/build/libs/nimbus-core-<version>-all.jar
 ```
 
-`shadowJar` also builds and embeds module JARs (perms, display, scaling) into `controller-modules/` inside the fat JAR.
+`shadowJar` also builds and embeds module JARs (perms, display) into `controller-modules/` inside the fat JAR.
 
 Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 
@@ -63,7 +63,6 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 - `nimbus-module-api` — Module API: interfaces for external module developers (NimbusModule, ModuleContext, ModuleCommand)
 - `nimbus-module-perms` — Permissions module: groups, tracks, prefix/suffix, audit log (extracted from core)
 - `nimbus-module-display` — Display module: server selector signs + NPCs config (extracted from core)
-- `nimbus-module-scaling` — Smart Scaling module: time-based schedules, predictive warmup, player count history
 
 ## Tech Stack
 
@@ -105,7 +104,6 @@ nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 - `config/groups/*.toml` — One file per server group (proxy, lobby, game servers)
 - `data/nimbus.db` — SQLite database (default, configurable to MySQL/PostgreSQL)
 - `config/modules/display/*.toml` — Display configs per group (signs + NPCs)
-- `config/modules/scaling/*.toml` — Smart Scaling configs per group (schedules + warmup)
 - `config/modules/syncproxy/motd.toml` — MOTD + maintenance mode config
 - `config/modules/syncproxy/tablist.toml` — Tab list header, footer, player format
 - `config/modules/syncproxy/chat.toml` — Chat format settings
@@ -129,20 +127,16 @@ nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 - Folia: SDK + NimbusPerms are Folia-compatible via SchedulerCompat
 - Performance optimizer: Aikar's JVM flags + Paper/Purpur/Pufferfish/Folia config tuning (optimize=true default)
 - Process ready detection: watches stdout for "Done" pattern (120s timeout, 180s for modded)
-- Phased startup order: proxies first (waits for READY) → then backends; ScalingEngine starts after initial boot
 - Graceful shutdown order: game servers → lobbies → proxies
 - Shutdown requires confirmation: `shutdown` then `shutdown confirm` within 30s
-- NimbusPerms auto-deployed to backend servers via module-registered `PluginDeployment`
+- NimbusPerms auto-deployed to backend servers (configurable via `[permissions].deploy_plugin`)
 - Bedrock support: Geyser + Floodgate auto-downloaded from GeyserMC API, key.pem centrally managed
 - Permission system: groups, inheritance, tracks, meta, weight, audit log, debug — central DB on controller
 - LuckPerms support: optional provider in NimbusPerms, syncs display data to controller for proxy features
 - Modules loaded from `modules/*.jar` via ServiceLoader + URLClassLoader
 - Module lifecycle: init() → enable() → disable()
-- Modules register commands, routes, plugin deployments, and event formatters via ModuleContext
-- Modules can access late-registered services (e.g. ServiceManager) via `ModuleContext.registerService()`
-- Embedded modules auto-discovered via build-generated `controller-modules/modules.list`
+- Modules register commands/routes dynamically via ModuleContext
 - SetupWizard lets users choose which modules to install
-- `plugins` command: live search on Hangar + Modrinth with multi-select, version-aware, auto-installs dependencies
 
 ## Cross-Version Compatibility
 
@@ -161,14 +155,13 @@ nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 
 - Kotlin, no frameworks (no Spring/DI). Direct object wiring in `Nimbus.kt`
 - Coroutines for all async work (no raw threads)
-- Sealed classes for events (`Events.kt`) with generic `ModuleEvent` for module-fired events
-- Enums for state (`ServiceState.kt`)
+- Sealed classes for events (`Events.kt`) and enums for state (`ServiceState.kt`)
 - ANSI-colored console output via `ConsoleFormatter`
 
 ## API (v0.2)
 
 - Bearer token auth (`Authorization: Bearer <token>`), auto-generated if not configured
-- REST: `/api/services`, `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`, `/api/scaling/*` (smart scaling module), `/api/permissions/*` (perms module), `/api/displays/*` (display module)
+- REST: `/api/services`, `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`
 - WebSocket: `/api/events` (live events), `/api/services/{name}/console` (bidirectional) — auth via `Authorization` header or `?token=` query param
 - `/api/health` is always public (no auth), all other endpoints (including `/api/metrics`) require auth
 - Rate limiting: 120 requests/minute global, 5 requests/minute for stress endpoints

@@ -206,10 +206,45 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
                 putAll(data)
             }
         )
-        is NimbusEvent.ModuleEvent -> EventMessage(
-            type = type,
+        is NimbusEvent.PermissionGroupCreated -> EventMessage(
+            type = "PERMISSION_GROUP_CREATED",
             timestamp = timestamp.toString(),
-            data = data
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.PermissionGroupUpdated -> EventMessage(
+            type = "PERMISSION_GROUP_UPDATED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.PermissionGroupDeleted -> EventMessage(
+            type = "PERMISSION_GROUP_DELETED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName)
+        )
+        is NimbusEvent.PlayerPermissionsUpdated -> EventMessage(
+            type = "PLAYER_PERMISSIONS_UPDATED",
+            timestamp = timestamp.toString(),
+            data = mapOf("uuid" to uuid, "player" to playerName)
+        )
+        is NimbusEvent.PermissionTrackCreated -> EventMessage(
+            type = "PERMISSION_TRACK_CREATED",
+            timestamp = timestamp.toString(),
+            data = mapOf("track" to trackName)
+        )
+        is NimbusEvent.PermissionTrackDeleted -> EventMessage(
+            type = "PERMISSION_TRACK_DELETED",
+            timestamp = timestamp.toString(),
+            data = mapOf("track" to trackName)
+        )
+        is NimbusEvent.PlayerPromoted -> EventMessage(
+            type = "PLAYER_PROMOTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("uuid" to uuid, "player" to playerName, "track" to trackName, "newGroup" to newGroup)
+        )
+        is NimbusEvent.PlayerDemoted -> EventMessage(
+            type = "PLAYER_DEMOTED",
+            timestamp = timestamp.toString(),
+            data = mapOf("uuid" to uuid, "player" to playerName, "track" to trackName, "newGroup" to newGroup)
         )
         is NimbusEvent.TabListUpdated -> EventMessage(
             type = "TABLIST_UPDATED",

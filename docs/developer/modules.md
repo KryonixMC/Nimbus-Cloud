@@ -135,11 +135,7 @@ The `ModuleContext` is passed to `init()` and provides access to the Nimbus runt
 | `registerCommand(cmd)` | — | Register a console command. |
 | `unregisterCommand(name)` | — | Unregister a command by name. |
 | `registerRoutes(block, auth)` | — | Register API routes with the given auth level. |
-| `registerPluginDeployment(d)` | — | Register a plugin JAR to deploy to backend services. |
-| `registerEventFormatter(type, fn)` | — | Register a console formatter for module events. |
-| `registerCompleter(cmd, fn)` | — | Register tab completion for a command. |
 | `getService(type)` | `T?` | Retrieve a core service by class. Returns null if unavailable. |
-| `registerService(type, instance)` | — | Register a late-initialized service (used by core for ServiceManager). |
 
 ### Convenience Extension
 
@@ -297,7 +293,6 @@ Use `getService()` or `service<T>()` to access core Nimbus components. Available
 | `dev.kryonix.nimbus.event.EventBus` | Publish and subscribe to events. |
 | `dev.kryonix.nimbus.database.DatabaseManager` | Database operations, table creation. |
 | `dev.kryonix.nimbus.service.ServiceRegistry` | Query running services, get by name or group. |
-| `dev.kryonix.nimbus.service.ServiceManager` | Start/stop services programmatically. Available after initial boot (lazy access in background loops). |
 | `dev.kryonix.nimbus.group.GroupManager` | Access server group configurations. |
 | `dev.kryonix.nimbus.config.NimbusConfig` | Read the main Nimbus configuration. |
 

@@ -4,7 +4,7 @@ This page covers Nimbus's internal architecture for developers who want to under
 
 ## Module structure
 
-Nimbus is organized into twelve modules:
+Nimbus is organized into eleven modules:
 
 ```
 nimbus-core (Controller)
@@ -87,11 +87,6 @@ nimbus-module-display (Display Module)
 ├── DisplayManager, DisplayConfig
 └── DisplayRoutes
 
-nimbus-module-scaling (Smart Scaling Module)
-├── SmartScalingManager, SmartScalingConfigManager
-├── ScalingCommand, ScalingRoutes
-└── ScalingSnapshots, ScalingDecisions (Exposed DB tables)
-
 ```
 
 ## Bootstrap flow
@@ -112,8 +107,8 @@ When Nimbus starts (`Nimbus.kt` → `nimbusMain()`), components are initialized 
                             ServiceLoader, calls init() then enable().
                             Modules register their own commands and API routes
                             during init.
-10. ServiceManager        → Wire up all dependencies, register in ModuleContext
-11. ScalingEngine         → Create (but DON'T start yet — deferred until after boot)
+10. ServiceManager        → Wire up all dependencies
+11. ScalingEngine         → Start periodic scaling loop
 12. NimbusApi             → Create (but don't start) Ktor server
 13. NodeManager           → If cluster.enabled: init cluster coordination
 14. ClusterServer         → If cluster.enabled: separate Ktor server on agent_port for agent WebSocket connections
@@ -125,11 +120,8 @@ When Nimbus starts (`Nimbus.kt` → `nimbusMain()`), components are initialized 
 18. Api.start()           → Start Ktor HTTP server (+ /cluster WS if cluster enabled)
 19. LoadBalancer.start()  → If enabled: start TCP listener on LB port + health check loop
 20. VelocityUpdater       → Start periodic update check (first check after 60s)
-21. startMinimumInstances → Phased startup:
-                            Phase 1: Start proxy groups, wait for READY (120s timeout)
-                            Phase 2: Start backend groups
-22. ScalingEngine.start() → Start periodic scaling loop (AFTER boot completes)
-23. Console.start()       → JLine3 REPL (blocks until shutdown)
+21. startMinimumInstances → Start min_instances for all groups
+22. Console.start()       → JLine3 REPL (blocks until shutdown)
 ```
 
 ::: info
@@ -296,7 +288,6 @@ The core design principle is **no frameworks** -- no Spring, no dependency injec
 ## Next steps
 
 - [Module Development](/developer/modules) -- Building custom modules
-- [Smart Scaling Module](/developer/scaling) -- Time-based schedules + predictive warmup
 - [SDK](/developer/sdk) -- Backend server plugin API
 - [Bridge Plugin](/developer/bridge) -- Velocity proxy plugin
 - [Display Plugin](/developer/display) -- Signs + NPC management
