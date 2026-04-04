@@ -14,6 +14,7 @@ import dev.kryonix.nimbus.template.PerformanceOptimizer
 import dev.kryonix.nimbus.template.SoftwareResolver
 import dev.kryonix.nimbus.template.TemplateManager
 import dev.kryonix.nimbus.velocity.VelocityConfigGen
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -486,22 +487,97 @@ class ServiceManager(
 
     fun determineForwardingMode() = compatibilityChecker.determineForwardingMode()
 
+    /**
+     * Starts minimum instances for all groups in a phased order:
+     * 1. Proxy groups first — waits until all proxies are READY
+     * 2. Backend groups after proxies are ready
+     *
+     * This ensures the forwarding secret is available and the proxy is accepting
+     * connections before any backend server attempts to register.
+     */
     suspend fun startMinimumInstances() {
         logger.info("Starting minimum instances for all groups")
-        // Start proxy groups first so forwarding.secret exists before backends need it
-        val groups = groupManager.getAllGroups().sortedByDescending {
-            it.config.group.software == ServerSoftware.VELOCITY
+
+        val allGroups = groupManager.getAllGroups()
+        val proxyGroups = allGroups.filter { it.config.group.software == ServerSoftware.VELOCITY }
+        val backendGroups = allGroups.filter { it.config.group.software != ServerSoftware.VELOCITY }
+
+        // Phase 1: Start proxy groups and wait for them to become READY
+        if (proxyGroups.isNotEmpty()) {
+            logger.info("Startup phase 1: Starting proxy group(s)...")
+            val proxyServices = startGroupsAndCollect(proxyGroups)
+            if (proxyServices.isNotEmpty()) {
+                logger.info("Waiting for {} proxy service(s) to become ready...", proxyServices.size)
+                val allReady = awaitServicesReady(proxyServices, timeoutMs = 120_000)
+                if (allReady) {
+                    logger.info("All proxy services are ready")
+                } else {
+                    logger.warn("Not all proxy services became ready within timeout — starting backends anyway")
+                }
+            }
         }
+
+        // Phase 2: Start all backend groups
+        if (backendGroups.isNotEmpty()) {
+            logger.info("Startup phase 2: Starting backend group(s)...")
+            startGroupsAndCollect(backendGroups)
+        }
+    }
+
+    private suspend fun startGroupsAndCollect(groups: List<dev.kryonix.nimbus.group.ServerGroup>): List<Service> {
+        val started = mutableListOf<Service>()
         for (group in groups) {
             val currentCount = registry.countByGroup(group.name)
             val needed = group.minInstances - currentCount
             if (needed > 0) {
                 logger.info("Group '{}' needs {} more instance(s) (current: {}, min: {})", group.name, needed, currentCount, group.minInstances)
                 repeat(needed) {
-                    startService(group.name)
+                    val service = startService(group.name)
+                    if (service != null) started.add(service)
                 }
             }
         }
+        return started
+    }
+
+    /**
+     * Waits until all given services have reached READY or CRASHED state,
+     * or until the timeout expires. Uses the EventBus to listen for state changes.
+     */
+    private suspend fun awaitServicesReady(services: List<Service>, timeoutMs: Long): Boolean {
+        if (services.isEmpty()) return true
+
+        val pending = services.map { it.name }.toMutableSet()
+        val done = CompletableDeferred<Boolean>()
+
+        // Listen for ready/crashed events
+        val readyJob = eventBus.on<NimbusEvent.ServiceReady> { event ->
+            pending.remove(event.serviceName)
+            if (pending.isEmpty() && !done.isCompleted) done.complete(true)
+        }
+        val crashedJob = eventBus.on<NimbusEvent.ServiceCrashed> { event ->
+            pending.remove(event.serviceName)
+            if (pending.isEmpty() && !done.isCompleted) done.complete(true)
+        }
+
+        // Timeout fallback
+        val timeoutJob = scope.launch {
+            delay(timeoutMs)
+            if (!done.isCompleted) done.complete(false)
+        }
+
+        // Check if any services already reached their state before we subscribed
+        pending.removeAll { name ->
+            val svc = registry.get(name)
+            svc == null || svc.state == ServiceState.READY || svc.state == ServiceState.CRASHED || svc.state == ServiceState.STOPPED
+        }
+        if (pending.isEmpty() && !done.isCompleted) done.complete(true)
+
+        val result = done.await()
+        readyJob.cancel()
+        crashedJob.cancel()
+        timeoutJob.cancel()
+        return result
     }
 
     suspend fun stopAll() {
