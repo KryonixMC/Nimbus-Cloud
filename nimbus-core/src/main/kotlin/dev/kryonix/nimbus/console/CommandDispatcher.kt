@@ -236,7 +236,7 @@ class CommandDispatcher {
                     }
                 }
                 "plugins" -> {
-                    val pluginNames = listOf("sdk", "perms", "display", "fancynpcs", "viaversion", "viabackwards", "viarewind", "geyser", "floodgate")
+                    val pluginNames = listOf("sdk", "viaversion", "viabackwards", "viarewind", "geyser", "floodgate")
                     when (parts.size) {
                         2 -> listOf("list", "install", "remove", "check")
                             .filter { it.startsWith(argPrefix, ignoreCase = true) }

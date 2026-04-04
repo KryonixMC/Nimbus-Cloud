@@ -163,11 +163,10 @@ fun nimbusMain() = runBlocking {
     val globalProxyTemplateDir = templatesDir.resolve("global_proxy")
 
     val modulesDir = configDir.resolve("modules")
-    val displaysDir = modulesDir.resolve("display")
     val proxyDir = modulesDir.resolve("syncproxy")
 
     listOf(
-        templatesDir, staticDir, tempDir, logsDir, configDir, groupsDir, modulesDir, displaysDir, proxyDir,
+        templatesDir, staticDir, tempDir, logsDir, configDir, groupsDir, modulesDir, proxyDir,
         globalTemplateDir, globalTemplateDir.resolve("plugins"),
         globalProxyTemplateDir, globalProxyTemplateDir.resolve("plugins")
     ).forEach { dir ->
@@ -270,7 +269,7 @@ fun nimbusMain() = runBlocking {
         scope = scope,
         softwareResolver = softwareResolver,
         nodeManager = nodeManager,
-        moduleManager = moduleManager
+        moduleContext = moduleContext
     )
 
     // Start scaling engine

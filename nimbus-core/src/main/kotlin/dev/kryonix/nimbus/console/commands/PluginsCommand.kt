@@ -49,9 +49,6 @@ class PluginsCommand(
         val backendOnly: Boolean = false
     ) {
         SDK("sdk", "Nimbus SDK", "nimbus-sdk.jar", true, backendOnly = true),
-        PERMS("perms", "NimbusPerms", "nimbus-perms.jar", true, backendOnly = true),
-        DISPLAY("display", "NimbusDisplay", "nimbus-display.jar", true, backendOnly = true),
-        FANCY_NPCS("fancynpcs", "FancyNpcs", "FancyNpcs.jar", true, backendOnly = true),
         VIA_VERSION("viaversion", "ViaVersion", "ViaVersion-*.jar", false, backendOnly = true),
         VIA_BACKWARDS("viabackwards", "ViaBackwards", "ViaBackwards-*.jar", false, backendOnly = true),
         VIA_REWIND("viarewind", "ViaRewind", "ViaRewind-*.jar", false, backendOnly = true),

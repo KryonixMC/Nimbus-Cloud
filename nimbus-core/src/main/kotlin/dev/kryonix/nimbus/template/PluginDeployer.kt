@@ -100,12 +100,10 @@ class PluginDeployer(private val baseDir: Path) {
 
     /**
      * Scans template directories and static service directories for Nimbus plugins
-     * (nimbus-display.jar, etc.) and replaces them with the latest
-     * version from embedded resources. Only updates where the user has already
-     * placed the plugin -- does NOT deploy to new locations.
+     * (nimbus-*.jar) and replaces them with the latest version from embedded resources.
+     * Only updates where the user has already placed the plugin -- does NOT deploy to new locations.
      */
     private fun autoUpdateNimbusPlugins(templatesDir: Path, staticDir: Path) {
-        val nimbusPlugins = listOf("nimbus-display.jar", "nimbus-perms.jar")
         var updated = 0
 
         // Scan all template directories (except global/global_proxy which are handled separately)
@@ -114,7 +112,7 @@ class PluginDeployer(private val baseDir: Path) {
                 .filter { Files.isDirectory(it) }
                 .filter { it.fileName.toString() !in listOf("global", "global_proxy") }
                 .forEach { templateDir ->
-                    updated += updatePluginsInDir(templateDir.resolve("plugins"), nimbusPlugins)
+                    updated += updatePluginsInDir(templateDir.resolve("plugins"))
                 }
         }
 
@@ -123,7 +121,7 @@ class PluginDeployer(private val baseDir: Path) {
             Files.list(staticDir)
                 .filter { Files.isDirectory(it) }
                 .forEach { serviceDir ->
-                    updated += updatePluginsInDir(serviceDir.resolve("plugins"), nimbusPlugins)
+                    updated += updatePluginsInDir(serviceDir.resolve("plugins"))
                 }
         }
 
@@ -132,22 +130,32 @@ class PluginDeployer(private val baseDir: Path) {
         }
     }
 
-    private fun updatePluginsInDir(pluginsDir: Path, pluginNames: List<String>): Int {
+    /**
+     * Updates nimbus-*.jar plugins in a directory by replacing them with
+     * the latest embedded version. Only updates JARs that already exist
+     * and have a matching embedded resource.
+     */
+    private fun updatePluginsInDir(pluginsDir: Path): Int {
         if (!pluginsDir.exists()) return 0
         var count = 0
 
-        for (fileName in pluginNames) {
-            val targetFile = pluginsDir.resolve(fileName)
-            if (!targetFile.exists()) continue // User hasn't placed it here -- skip
+        // Scan for any nimbus-*.jar files the user has placed
+        Files.list(pluginsDir).use { stream ->
+            stream.filter { it.fileName.toString().let { name -> name.startsWith("nimbus-") && name.endsWith(".jar") } }
+                .forEach { targetFile ->
+                    val fileName = targetFile.fileName.toString()
+                    // Skip bridge and sdk — handled separately
+                    if (fileName == "nimbus-bridge.jar" || fileName == "nimbus-sdk.jar") return@forEach
 
-            val resource = object {}.javaClass.classLoader.getResourceAsStream("plugins/$fileName")
-            if (resource == null) continue
-
-            resource.use { input ->
-                Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-            }
-            logger.debug("Updated {} in {}", fileName, pluginsDir)
-            count++
+                    val resource = object {}.javaClass.classLoader.getResourceAsStream("plugins/$fileName")
+                    if (resource != null) {
+                        resource.use { input ->
+                            Files.copy(input, targetFile, StandardCopyOption.REPLACE_EXISTING)
+                        }
+                        logger.debug("Updated {} in {}", fileName, pluginsDir)
+                        count++
+                    }
+                }
         }
         return count
     }
@@ -243,30 +251,18 @@ class PluginDeployer(private val baseDir: Path) {
     }
 
     /**
-     * Extracts optional plugins (SDK, Display) from the embedded resources
-     * into the plugins/ directory at the Nimbus root. Users can then copy
-     * these JARs to their server's plugins/ folder as needed.
+     * Extracts the SDK plugin from the embedded resources into the plugins/ directory
+     * at the Nimbus root. Module plugins are deployed automatically by their respective modules.
      */
     private fun extractOptionalPlugins(pluginsDir: Path) {
         if (!pluginsDir.exists()) pluginsDir.createDirectories()
 
-        val optionalPlugins = mapOf(
-            "nimbus-sdk.jar" to "plugins/nimbus-sdk.jar",
-            "nimbus-display.jar" to "plugins/nimbus-display.jar",
-            "nimbus-perms.jar" to "plugins/nimbus-perms.jar"
-        )
-
-        for ((fileName, resourcePath) in optionalPlugins) {
-            val targetFile = pluginsDir.resolve(fileName)
-            val resource = object {}.javaClass.classLoader.getResourceAsStream(resourcePath)
-            if (resource == null) continue
-
-            resource.use { input ->
-                Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-            }
-            logger.debug("Extracted {} to {}", fileName, pluginsDir)
+        val targetFile = pluginsDir.resolve("nimbus-sdk.jar")
+        val resource = object {}.javaClass.classLoader.getResourceAsStream("plugins/nimbus-sdk.jar") ?: return
+        resource.use { input ->
+            Files.copy(input, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         }
-
-        logger.info("Optional plugins available in {}/", pluginsDir)
+        logger.debug("Extracted nimbus-sdk.jar to {}", pluginsDir)
     }
+
 }

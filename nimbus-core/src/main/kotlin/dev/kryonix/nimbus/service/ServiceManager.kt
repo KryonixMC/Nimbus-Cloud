@@ -5,7 +5,7 @@ import dev.kryonix.nimbus.cluster.RemoteServiceHandle
 import dev.kryonix.nimbus.config.GroupDefinition
 import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.config.ServerSoftware
-import dev.kryonix.nimbus.module.ModuleManager
+import dev.kryonix.nimbus.module.ModuleContextImpl
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.event.NimbusEvent
 import dev.kryonix.nimbus.group.GroupManager
@@ -41,7 +41,7 @@ class ServiceManager(
     private val scope: CoroutineScope,
     private val softwareResolver: SoftwareResolver,
     private val nodeManager: NodeManager? = null,
-    private val moduleManager: ModuleManager? = null
+    private val moduleContext: ModuleContextImpl? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
@@ -62,7 +62,7 @@ class ServiceManager(
         compatibilityChecker = compatibilityChecker,
         eventBus = eventBus,
         velocityConfigGen = velocityConfigGen,
-        moduleManager = moduleManager
+        moduleContext = moduleContext
     )
 
     suspend fun startService(groupName: String): Service? {
