@@ -132,6 +132,13 @@ tasks.jar {
     }
 }
 
+// Module JARs to embed in the fat JAR (auto-discovered at runtime via modules.list)
+val embeddedModules = mapOf(
+    ":nimbus-module-perms" to "nimbus-module-perms.jar",
+    ":nimbus-module-display" to "nimbus-module-display.jar",
+    ":nimbus-module-scaling" to "nimbus-module-scaling.jar"
+)
+
 tasks.shadowJar {
     archiveClassifier.set("all")
     mergeServiceFiles()
@@ -139,13 +146,21 @@ tasks.shadowJar {
 
     // Embed controller module JARs (extracted by SetupWizard to modules/)
     // These are added only to shadowJar to avoid circular dependency during compileKotlin
-    from(project(":nimbus-module-perms").tasks.named("jar").map { (it as Jar).archiveFile }) {
-        into("controller-modules")
-        rename { "nimbus-module-perms.jar" }
+    for ((projectPath, jarName) in embeddedModules) {
+        from(project(projectPath).tasks.named("jar").map { (it as Jar).archiveFile }) {
+            into("controller-modules")
+            rename { jarName }
+        }
     }
-    from(project(":nimbus-module-display").tasks.named("jar").map { (it as Jar).archiveFile }) {
-        into("controller-modules")
-        rename { "nimbus-module-display.jar" }
+
+    // Generate modules.list index so ModuleManager can discover embedded modules without hardcoding
+    doFirst {
+        val indexFile = layout.buildDirectory.file("tmp/controller-modules/modules.list").get().asFile
+        indexFile.parentFile.mkdirs()
+        indexFile.writeText(embeddedModules.values.joinToString("\n") + "\n")
+    }
+    from(layout.buildDirectory.dir("tmp")) {
+        include("controller-modules/modules.list")
     }
 }
 

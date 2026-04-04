@@ -54,7 +54,8 @@ class NimbusApi(
     private val templatesDir: Path = baseDir.resolve("templates"),
     private val stressTestManager: dev.kryonix.nimbus.stress.StressTestManager? = null,
     private val moduleContext: ModuleContextImpl? = null,
-    private val moduleManager: dev.kryonix.nimbus.module.ModuleManager? = null
+    private val moduleManager: dev.kryonix.nimbus.module.ModuleManager? = null,
+    private val dispatcher: dev.kryonix.nimbus.console.CommandDispatcher? = null
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -240,6 +241,8 @@ class NimbusApi(
                 networkRoutes(config, registry, groupManager, serviceManager, startedAt)
                 maintenanceRoutes(proxySyncManager, eventBus)
                 metricsRoutes(registry, groupManager, nodeManager, loadBalancer, proxySyncManager, startedAt)
+                // Command proxy routes (for Bridge dynamic commands)
+                if (dispatcher != null) commandRoutes(dispatcher)
                 // Module service-level routes
                 moduleContext?.serviceRoutes?.forEach { block -> block() }
             }

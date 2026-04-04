@@ -1,8 +1,8 @@
 package dev.kryonix.nimbus.module.perms.routes
 
-import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiMessage
 import dev.kryonix.nimbus.event.EventBus
-import dev.kryonix.nimbus.event.NimbusEvent
+import dev.kryonix.nimbus.module.perms.*
 import dev.kryonix.nimbus.module.perms.PermissionContext
 import dev.kryonix.nimbus.module.perms.PermissionManager
 import io.ktor.http.*
@@ -46,7 +46,7 @@ fun Route.permissionRoutes(
 
                 val group = permissionManager.createGroup(request.name, request.default)
                 permissionManager.logAudit("api", "group.create", group.name, "Created group '${group.name}'")
-                eventBus.emit(NimbusEvent.PermissionGroupCreated(group.name))
+                eventBus.emit(PermsEvents.groupCreated(group.name))
                 call.respond(HttpStatusCode.Created, ApiMessage(true, "Permission group '${group.name}' created"))
             }
 
@@ -76,7 +76,7 @@ fun Route.permissionRoutes(
                 }
 
                 permissionManager.logAudit("api", "group.update", group.name, "Updated group '${group.name}'")
-                eventBus.emit(NimbusEvent.PermissionGroupUpdated(group.name))
+                eventBus.emit(PermsEvents.groupUpdated(group.name))
                 call.respond(ApiMessage(true, "Permission group '${group.name}' updated"))
             }
 
@@ -89,7 +89,7 @@ fun Route.permissionRoutes(
 
                 permissionManager.deleteGroup(name)
                 permissionManager.logAudit("api", "group.delete", name, "Deleted group '$name'")
-                eventBus.emit(NimbusEvent.PermissionGroupDeleted(name))
+                eventBus.emit(PermsEvents.groupDeleted(name))
                 call.respond(ApiMessage(true, "Permission group '$name' deleted"))
             }
 
@@ -103,7 +103,7 @@ fun Route.permissionRoutes(
                 try {
                     val context = PermissionContext(request.server, request.world, request.expiresAt)
                     permissionManager.addPermission(name, request.permission, context)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
+                    eventBus.emit(PermsEvents.groupUpdated(name))
                     call.respond(ApiMessage(true, "Permission '${request.permission}' added to '$name'"))
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid permission"))
@@ -118,7 +118,7 @@ fun Route.permissionRoutes(
                 }
                 val request = call.receive<PermissionModifyRequest>()
                 permissionManager.removePermission(name, request.permission)
-                eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
+                eventBus.emit(PermsEvents.groupUpdated(name))
                 call.respond(ApiMessage(true, "Permission '${request.permission}' removed from '$name'"))
             }
 
@@ -141,7 +141,7 @@ fun Route.permissionRoutes(
                 }
                 val request = call.receive<MetaSetRequest>()
                 permissionManager.setGroupMeta(name, request.key, request.value)
-                eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
+                eventBus.emit(PermsEvents.groupUpdated(name))
                 call.respond(ApiMessage(true, "Meta '${request.key}' set on group '$name'"))
             }
 
@@ -153,7 +153,7 @@ fun Route.permissionRoutes(
                     return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
                 }
                 permissionManager.removeGroupMeta(name, key)
-                eventBus.emit(NimbusEvent.PermissionGroupUpdated(name))
+                eventBus.emit(PermsEvents.groupUpdated(name))
                 call.respond(ApiMessage(true, "Meta '$key' removed from group '$name'"))
             }
         }
@@ -216,7 +216,7 @@ fun Route.permissionRoutes(
                     val context = PermissionContext(request.server, request.world, request.expiresAt)
                     permissionManager.setPlayerGroup(uuid, playerName, request.group, context)
                     permissionManager.logAudit("api", "user.addgroup", uuid, "Added group '${request.group}' to '$playerName'")
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     call.respond(ApiMessage(true, "Group '${request.group}' added to player '$playerName'"))
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
@@ -232,7 +232,7 @@ fun Route.permissionRoutes(
                 try {
                     permissionManager.removePlayerGroup(uuid, request.group)
                     permissionManager.logAudit("api", "user.removegroup", uuid, "Removed group '${request.group}' from '$playerName'")
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     call.respond(ApiMessage(true, "Group '${request.group}' removed from player '$playerName'"))
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
@@ -256,7 +256,7 @@ fun Route.permissionRoutes(
                 val request = call.receive<MetaSetRequest>()
                 permissionManager.setPlayerMeta(uuid, request.key, request.value)
                 val playerName = permissionManager.getPlayer(uuid)?.name ?: "unknown"
-                eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                 call.respond(ApiMessage(true, "Meta '${request.key}' set on player '$playerName'"))
             }
 
@@ -269,7 +269,7 @@ fun Route.permissionRoutes(
                 }
                 permissionManager.removePlayerMeta(uuid, key)
                 val playerName = permissionManager.getPlayer(uuid)?.name ?: "unknown"
-                eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                 call.respond(ApiMessage(true, "Meta '$key' removed from player"))
             }
         }
@@ -329,7 +329,7 @@ fun Route.permissionRoutes(
                 try {
                     val track = permissionManager.createTrack(request.name, request.groups)
                     permissionManager.logAudit("api", "track.create", track.name, "Created track with groups: ${track.groups.joinToString(", ")}")
-                    eventBus.emit(NimbusEvent.PermissionTrackCreated(track.name))
+                    eventBus.emit(PermsEvents.trackCreated(track.name))
                     call.respond(HttpStatusCode.Created, ApiMessage(true, "Track '${track.name}' created"))
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
@@ -342,7 +342,7 @@ fun Route.permissionRoutes(
                 try {
                     permissionManager.deleteTrack(name)
                     permissionManager.logAudit("api", "track.delete", name, "Deleted track '$name'")
-                    eventBus.emit(NimbusEvent.PermissionTrackDeleted(name))
+                    eventBus.emit(PermsEvents.trackDeleted(name))
                     call.respond(ApiMessage(true, "Track '$name' deleted"))
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.NotFound, ApiMessage(false, e.message ?: "Track not found"))
@@ -359,8 +359,8 @@ fun Route.permissionRoutes(
                     val playerName = permissionManager.getPlayer(uuid)?.name ?: "unknown"
                     if (newGroup != null) {
                         permissionManager.logAudit("api", "user.promote", uuid, "Promoted '$playerName' to '$newGroup' on track '$trackName'")
-                        eventBus.emit(NimbusEvent.PlayerPromoted(uuid, playerName, trackName, newGroup))
-                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        eventBus.emit(PermsEvents.playerPromoted(uuid, playerName, trackName, newGroup))
+                        eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                         call.respond(PromoteDemoteResponse(true, null, newGroup, "Promoted to '$newGroup'"))
                     } else {
                         call.respond(PromoteDemoteResponse(false, null, null, "Player is already at the highest rank on track '$trackName'"))
@@ -380,8 +380,8 @@ fun Route.permissionRoutes(
                     val playerName = permissionManager.getPlayer(uuid)?.name ?: "unknown"
                     if (newGroup != null) {
                         permissionManager.logAudit("api", "user.demote", uuid, "Demoted '$playerName' to '$newGroup' on track '$trackName'")
-                        eventBus.emit(NimbusEvent.PlayerDemoted(uuid, playerName, trackName, newGroup))
-                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        eventBus.emit(PermsEvents.playerDemoted(uuid, playerName, trackName, newGroup))
+                        eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                         call.respond(PromoteDemoteResponse(true, null, newGroup, "Demoted to '$newGroup'"))
                     } else {
                         call.respond(PromoteDemoteResponse(false, null, null, "Player is already at the lowest rank on track '$trackName'"))
@@ -412,7 +412,7 @@ fun Route.permissionRoutes(
                 for (groupName in request.groups) {
                     try {
                         permissionManager.addPermission(groupName, request.permission, context)
-                        eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+                        eventBus.emit(PermsEvents.groupUpdated(groupName))
                         processed++
                     } catch (e: Exception) {
                         errors.add("$groupName: ${e.message}")
@@ -441,7 +441,7 @@ fun Route.permissionRoutes(
                     try {
                         val playerName = permissionManager.getPlayer(uuid)?.name ?: uuid
                         permissionManager.setPlayerGroup(uuid, playerName, request.group, context)
-                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                         processed++
                     } catch (e: Exception) {
                         errors.add("$uuid: ${e.message}")

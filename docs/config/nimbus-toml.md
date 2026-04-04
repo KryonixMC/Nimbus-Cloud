@@ -326,11 +326,11 @@ When the load balancer is enabled, Velocity proxies are allocated backend ports 
 
 ## `[permissions]`
 
-Controls deployment of the NimbusPerms plugin to backend servers.
+Controls deployment of the NimbusPerms plugin to backend servers. This section is read by the Permissions module at startup.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `deploy_plugin` | Boolean | `true` | Deploy the NimbusPerms plugin to all backend servers via the global template. Disable if you prefer to manage permissions with LuckPerms or another system. |
+| `deploy_plugin` | Boolean | `true` | Deploy the NimbusPerms plugin to all backend servers. Disable if you prefer to manage permissions with LuckPerms or another system. |
 
 ```toml
 [permissions]
@@ -338,7 +338,7 @@ deploy_plugin = true
 ```
 
 ::: tip
-Even with `deploy_plugin = false`, the permission system on the controller (groups, players, API, console commands) remains fully functional. This setting only controls whether the NimbusPerms Paper plugin is auto-deployed to backend servers.
+Even with `deploy_plugin = false`, the permission system on the controller (groups, players, API, console commands) remains fully functional. This setting only controls whether the NimbusPerms plugin is auto-deployed to new service instances. To fully disable the permission system, uninstall the module with `modules uninstall perms`.
 :::
 
 ---

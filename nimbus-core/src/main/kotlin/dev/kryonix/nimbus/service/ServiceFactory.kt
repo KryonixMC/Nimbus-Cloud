@@ -8,7 +8,7 @@ import dev.kryonix.nimbus.event.NimbusEvent
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.template.ConfigPatcher
 import dev.kryonix.nimbus.template.GeyserConfigGen
-import dev.kryonix.nimbus.module.ModuleManager
+import dev.kryonix.nimbus.module.ModuleContextImpl
 import dev.kryonix.nimbus.template.PerformanceOptimizer
 import dev.kryonix.nimbus.template.SoftwareResolver
 import dev.kryonix.nimbus.template.TemplateManager
@@ -37,7 +37,7 @@ class ServiceFactory(
     private val compatibilityChecker: CompatibilityChecker,
     private val eventBus: EventBus,
     private val velocityConfigGen: VelocityConfigGen,
-    private val moduleManager: ModuleManager? = null
+    private val moduleContext: ModuleContextImpl? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceFactory::class.java)
@@ -315,11 +315,12 @@ class ServiceFactory(
     }
 
     /**
-     * Deploys module-dependent plugins to a service's working directory based on
-     * which controller modules are active and the service's software compatibility.
+     * Deploys module-registered plugins to a service's working directory based on
+     * registered [PluginDeployment]s and the service's software compatibility.
      */
     private suspend fun resolveModulePlugins(software: ServerSoftware, version: String, workDir: Path, serviceName: String) {
-        if (moduleManager == null || software == ServerSoftware.VELOCITY) return
+        val deployments = moduleContext?.pluginDeployments
+        if (deployments.isNullOrEmpty() || software == ServerSoftware.VELOCITY) return
 
         val isPaperBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PURPUR, ServerSoftware.PUFFERFISH, ServerSoftware.FOLIA)
         if (!isPaperBased) return
@@ -328,26 +329,26 @@ class ServiceFactory(
         if (!pluginsDir.exists()) pluginsDir.createDirectories()
 
         val minor = version.split(".").getOrNull(1)?.toIntOrNull() ?: 0
+        var needsPacketEvents = false
 
-        // Perms module → deploy nimbus-perms.jar (respects deploy_plugin config as opt-out)
-        if (moduleManager.isLoaded("perms") && config.permissions.deployPlugin) {
-            deployResourcePlugin(pluginsDir, "nimbus-perms.jar", "plugins/nimbus-perms.jar")
+        for (deployment in deployments) {
+            // Skip plugins that require a newer Minecraft version
+            val minVersion = deployment.minMinecraftVersion
+            if (minVersion != null && minor < minVersion) {
+                logger.info("Service '{}': {} skipped (requires 1.{}+, got {})", serviceName, deployment.displayName, minVersion, version)
+                continue
+            }
 
-            // Folia needs PacketEvents for packet-based name tags (Scoreboard API is read-only)
-            if (software == ServerSoftware.FOLIA) {
-                softwareResolver.ensurePacketEventsPlugin(pluginsDir, version)
+            deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
+
+            // Track if any deployed plugin needs PacketEvents on Folia
+            if (deployment.foliaRequiresPacketEvents && software == ServerSoftware.FOLIA) {
+                needsPacketEvents = true
             }
         }
 
-        // Display module → deploy nimbus-display.jar + FancyNpcs (if version compatible)
-        if (moduleManager.isLoaded("display")) {
-            deployResourcePlugin(pluginsDir, "nimbus-display.jar", "plugins/nimbus-display.jar")
-
-            if (minor >= 20) {
-                deployResourcePlugin(pluginsDir, "FancyNpcs.jar", "plugins/FancyNpcs.jar")
-            } else {
-                logger.info("Service '{}': FancyNpcs skipped (requires 1.20+, got {})", serviceName, version)
-            }
+        if (needsPacketEvents) {
+            softwareResolver.ensurePacketEventsPlugin(pluginsDir, version)
         }
     }
 

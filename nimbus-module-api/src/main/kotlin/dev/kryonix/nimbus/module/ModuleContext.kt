@@ -56,6 +56,23 @@ interface ModuleContext {
      */
     fun registerRoutes(block: Route.() -> Unit, auth: AuthLevel = AuthLevel.SERVICE)
 
+    /**
+     * Register a server-side plugin that should be deployed to backend services.
+     * Called during [NimbusModule.init]. The core ServiceFactory will deploy
+     * all registered plugins when creating service instances.
+     */
+    fun registerPluginDeployment(deployment: PluginDeployment)
+
+    /**
+     * Register a console formatter for a module event type.
+     * When a [ModuleEvent][dev.kryonix.nimbus.event.NimbusEvent.ModuleEvent] with the
+     * given [eventType] is logged, the [formatter] produces the console output.
+     *
+     * @param eventType The event type string (e.g. "PERMISSION_GROUP_CREATED")
+     * @param formatter Receives the event data map, returns formatted ANSI string
+     */
+    fun registerEventFormatter(eventType: String, formatter: (data: Map<String, String>) -> String)
+
     // ── Typed service accessors ─────────────────────────────
     // These return core types. Modules with compileOnly on nimbus-core
     // can cast them to the concrete types. Without core dependency,
@@ -69,10 +86,17 @@ interface ModuleContext {
      * - `dev.kryonix.nimbus.event.EventBus`
      * - `dev.kryonix.nimbus.database.DatabaseManager`
      * - `dev.kryonix.nimbus.service.ServiceRegistry`
+     * - `dev.kryonix.nimbus.service.ServiceManager`
      * - `dev.kryonix.nimbus.group.GroupManager`
      * - `dev.kryonix.nimbus.config.NimbusConfig`
      */
     fun <T : Any> getService(type: Class<T>): T?
+
+    /**
+     * Register an additional service that modules can access via [getService].
+     * Used by the core to expose services that are created after module loading.
+     */
+    fun <T : Any> registerService(type: Class<T>, instance: T) {}
 }
 
 /** Convenience reified version of [ModuleContext.getService]. */

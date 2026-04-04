@@ -172,6 +172,8 @@ public class NimbusBridgePlugin {
                     if (result.isSuccess()) {
                         if (!controllerReachable) {
                             logger.info("Controller is now reachable");
+                            // Refresh remote commands on (re)connect
+                            if (cloudCommand != null) cloudCommand.refreshRemoteCommands();
                         }
                         controllerReachable = true;
                     } else {
@@ -279,6 +281,9 @@ public class NimbusBridgePlugin {
 
             ensureSharedClients(config);
             cloudCommand = new CloudCommand(sharedApiClient, sharedSdkClient, server);
+
+            // Discover available module commands from Controller
+            cloudCommand.refreshRemoteCommands();
 
             // Register /cloud and /nimbus
             for (String alias : new String[]{"cloud", "nimbus"}) {

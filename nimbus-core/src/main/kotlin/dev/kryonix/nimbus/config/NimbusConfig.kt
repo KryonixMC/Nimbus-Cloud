@@ -13,6 +13,7 @@ data class NimbusConfig(
     val java: JavaConfig = JavaConfig(),
     val database: DatabaseConfig = DatabaseConfig(),
     val loadbalancer: LoadBalancerConfig = LoadBalancerConfig(),
+    @Suppress("unused") // backward compat: old configs may have [permissions] section
     val permissions: PermissionsConfig = PermissionsConfig(),
     val bedrock: BedrockConfig = BedrockConfig(),
     val cluster: ClusterConfig = ClusterConfig()
