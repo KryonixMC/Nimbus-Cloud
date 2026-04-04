@@ -1,6 +1,6 @@
 package dev.kryonix.nimbus.module.display.routes
 
-import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiMessage
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.module.display.*
 import io.ktor.http.*

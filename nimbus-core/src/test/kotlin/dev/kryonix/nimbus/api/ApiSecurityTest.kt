@@ -4,11 +4,9 @@ import dev.kryonix.nimbus.api.routes.*
 import dev.kryonix.nimbus.config.ApiConfig
 import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.config.PathsConfig
-import dev.kryonix.nimbus.display.DisplayManager
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.event.NimbusEvent
 import dev.kryonix.nimbus.group.GroupManager
-import dev.kryonix.nimbus.permissions.PermissionManager
 import dev.kryonix.nimbus.proxy.ProxySyncManager
 import dev.kryonix.nimbus.service.ServiceManager
 import dev.kryonix.nimbus.service.ServiceRegistry
@@ -48,8 +46,6 @@ class ApiSecurityTest {
     private lateinit var serviceManager: ServiceManager
     private lateinit var groupManager: GroupManager
     private lateinit var eventBus: EventBus
-    private lateinit var permissionManager: PermissionManager
-    private lateinit var displayManager: DisplayManager
     private lateinit var proxySyncManager: ProxySyncManager
     private lateinit var scope: CoroutineScope
     private lateinit var tempDir: Path
@@ -63,8 +59,6 @@ class ApiSecurityTest {
         serviceManager = mockk(relaxed = true)
         groupManager = mockk(relaxed = true)
         eventBus = mockk(relaxed = true)
-        permissionManager = mockk(relaxed = true)
-        displayManager = mockk(relaxed = true)
         proxySyncManager = mockk(relaxed = true)
         scope = CoroutineScope(Dispatchers.Default)
 

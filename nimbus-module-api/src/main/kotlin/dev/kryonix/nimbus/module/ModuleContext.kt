@@ -56,6 +56,23 @@ interface ModuleContext {
      */
     fun registerRoutes(block: Route.() -> Unit, auth: AuthLevel = AuthLevel.SERVICE)
 
+    /**
+     * Register a server-side plugin that should be deployed to backend services.
+     * Called during [NimbusModule.init]. The core ServiceFactory will deploy
+     * all registered plugins when creating service instances.
+     */
+    fun registerPluginDeployment(deployment: PluginDeployment)
+
+    /**
+     * Register a console formatter for a module event type.
+     * When a [ModuleEvent][dev.kryonix.nimbus.event.NimbusEvent.ModuleEvent] with the
+     * given [eventType] is logged, the [formatter] produces the console output.
+     *
+     * @param eventType The event type string (e.g. "PERMISSION_GROUP_CREATED")
+     * @param formatter Receives the event data map, returns formatted ANSI string
+     */
+    fun registerEventFormatter(eventType: String, formatter: (data: Map<String, String>) -> String)
+
     // ── Typed service accessors ─────────────────────────────
     // These return core types. Modules with compileOnly on nimbus-core
     // can cast them to the concrete types. Without core dependency,

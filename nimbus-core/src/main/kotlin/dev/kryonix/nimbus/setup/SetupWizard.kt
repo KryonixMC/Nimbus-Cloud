@@ -352,12 +352,10 @@ class SetupWizard(
 
                     // --- Step 5: Save config ---
                     5 -> {
-                        val permsEnabled = "perms" in selectedModules
-
                         stepHeader(w, 6, "Saving configuration")
                         w.println()
 
-                        writeNimbusToml(networkName, permsEnabled, bedrockEnabled)
+                        writeNimbusToml(networkName, bedrockEnabled = bedrockEnabled)
                         w.println("  ${ConsoleFormatter.colorize("+", ConsoleFormatter.GREEN)} config/nimbus.toml")
 
                         writeProxyToml(velocityVersion)
@@ -440,15 +438,18 @@ class SetupWizard(
 
     /**
      * Discovers module JARs embedded in the application JAR under `controller-modules/`.
-     * Reads each JAR's `module.properties` to get metadata without loading classes.
+     * Reads the auto-generated `modules.list` index, then reads each JAR's
+     * `module.properties` to get metadata without loading classes.
      */
     private fun discoverEmbeddedModules(): List<ModuleInfo> {
-        val modules = mutableListOf<ModuleInfo>()
-        val resourceNames = listOf(
-            "nimbus-module-perms.jar",
-            "nimbus-module-display.jar"
-        )
+        // Read the build-generated index of embedded modules
+        val indexResource = javaClass.classLoader.getResourceAsStream("controller-modules/modules.list")
+        val resourceNames = indexResource?.bufferedReader()?.readLines()
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: return emptyList()
 
+        val modules = mutableListOf<ModuleInfo>()
         for (name in resourceNames) {
             val resource = javaClass.classLoader.getResourceAsStream("controller-modules/$name") ?: continue
             try {
@@ -631,13 +632,8 @@ class SetupWizard(
 
     // ── Config writers ──────────────────────────────────────────
 
-    private fun writeNimbusToml(networkName: String, permsEnabled: Boolean = true, bedrockEnabled: Boolean = false) {
+    private fun writeNimbusToml(networkName: String, bedrockEnabled: Boolean = false) {
         val token = generateToken()
-        val permsSection = if (!permsEnabled) """
-            |
-            |[permissions]
-            |deploy_plugin = false
-        """.trimMargin() else ""
 
         val bedrockSection = if (bedrockEnabled) """
             |
@@ -683,7 +679,7 @@ class SetupWizard(
             |# name = "nimbus"
             |# username = ""
             |# password = ""
-            |$permsSection$bedrockSection
+            |$bedrockSection
         """.trimMargin() + "\n"
         val configDir = baseDir.resolve("config")
         Files.createDirectories(configDir)

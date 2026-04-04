@@ -129,14 +129,16 @@ nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 - Process ready detection: watches stdout for "Done" pattern (120s timeout, 180s for modded)
 - Graceful shutdown order: game servers → lobbies → proxies
 - Shutdown requires confirmation: `shutdown` then `shutdown confirm` within 30s
-- NimbusPerms auto-deployed to backend servers (configurable via `[permissions].deploy_plugin`)
+- NimbusPerms auto-deployed to backend servers via module-registered `PluginDeployment`
 - Bedrock support: Geyser + Floodgate auto-downloaded from GeyserMC API, key.pem centrally managed
 - Permission system: groups, inheritance, tracks, meta, weight, audit log, debug — central DB on controller
 - LuckPerms support: optional provider in NimbusPerms, syncs display data to controller for proxy features
 - Modules loaded from `modules/*.jar` via ServiceLoader + URLClassLoader
 - Module lifecycle: init() → enable() → disable()
-- Modules register commands/routes dynamically via ModuleContext
+- Modules register commands, routes, plugin deployments, and event formatters via ModuleContext
+- Embedded modules auto-discovered via build-generated `controller-modules/modules.list`
 - SetupWizard lets users choose which modules to install
+- `plugins` command: live search on Hangar + Modrinth with multi-select, version-aware, auto-installs dependencies
 
 ## Cross-Version Compatibility
 
@@ -155,7 +157,8 @@ nimbus-core/src/main/kotlin/dev/kryonix/nimbus/
 
 - Kotlin, no frameworks (no Spring/DI). Direct object wiring in `Nimbus.kt`
 - Coroutines for all async work (no raw threads)
-- Sealed classes for events (`Events.kt`) and enums for state (`ServiceState.kt`)
+- Sealed classes for events (`Events.kt`) with generic `ModuleEvent` for module-fired events
+- Enums for state (`ServiceState.kt`)
 - ANSI-colored console output via `ConsoleFormatter`
 
 ## API (v0.2)

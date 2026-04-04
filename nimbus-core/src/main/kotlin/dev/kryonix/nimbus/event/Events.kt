@@ -42,17 +42,8 @@ sealed class NimbusEvent {
         val data: Map<String, String>
     ) : NimbusEvent()
 
-    // Permissions
-    data class PermissionGroupCreated(val groupName: String) : NimbusEvent()
-    data class PermissionGroupUpdated(val groupName: String) : NimbusEvent()
-    data class PermissionGroupDeleted(val groupName: String) : NimbusEvent()
-    data class PlayerPermissionsUpdated(val uuid: String, val playerName: String) : NimbusEvent()
-
-    // Permission Tracks
-    data class PermissionTrackCreated(val trackName: String) : NimbusEvent()
-    data class PermissionTrackDeleted(val trackName: String) : NimbusEvent()
-    data class PlayerPromoted(val uuid: String, val playerName: String, val trackName: String, val newGroup: String) : NimbusEvent()
-    data class PlayerDemoted(val uuid: String, val playerName: String, val trackName: String, val newGroup: String) : NimbusEvent()
+    // Module events (fired by controller modules — perms, display, etc.)
+    data class ModuleEvent(val moduleId: String, val type: String, val data: Map<String, String>) : NimbusEvent()
 
     // Updates
     data class ProxyUpdateAvailable(val currentVersion: String, val newVersion: String) : NimbusEvent()

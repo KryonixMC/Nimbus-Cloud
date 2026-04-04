@@ -3,7 +3,7 @@ package dev.kryonix.nimbus.module.perms.commands
 import dev.kryonix.nimbus.console.Command
 import dev.kryonix.nimbus.console.ConsoleFormatter
 import dev.kryonix.nimbus.event.EventBus
-import dev.kryonix.nimbus.event.NimbusEvent
+import dev.kryonix.nimbus.module.perms.PermsEvents
 import dev.kryonix.nimbus.module.CommandOutput
 import dev.kryonix.nimbus.module.CompletionMeta
 import dev.kryonix.nimbus.module.CompletionType
@@ -280,7 +280,7 @@ class PermsCommand(
         try {
             permissionManager.createGroup(name)
             permissionManager.logAudit("console", "group.create", name, "Created group '$name'")
-            eventBus.emit(NimbusEvent.PermissionGroupCreated(name))
+            eventBus.emit(PermsEvents.groupCreated(name))
             println(ConsoleFormatter.success("Permission group '$name' created."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed to create group"))
@@ -291,7 +291,7 @@ class PermsCommand(
         try {
             permissionManager.deleteGroup(name)
             permissionManager.logAudit("console", "group.delete", name, "Deleted group '$name'")
-            eventBus.emit(NimbusEvent.PermissionGroupDeleted(name))
+            eventBus.emit(PermsEvents.groupDeleted(name))
             println(ConsoleFormatter.success("Permission group '$name' deleted."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed to delete group"))
@@ -302,7 +302,7 @@ class PermsCommand(
         try {
             permissionManager.addPermission(groupName, permission)
             permissionManager.logAudit("console", "group.addperm", groupName, "Added permission '$permission'")
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Added '$permission' to group '$groupName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -313,7 +313,7 @@ class PermsCommand(
         try {
             permissionManager.removePermission(groupName, permission)
             permissionManager.logAudit("console", "group.removeperm", groupName, "Removed permission '$permission'")
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Removed '$permission' from group '$groupName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -323,7 +323,7 @@ class PermsCommand(
     private suspend fun groupSetDefault(groupName: String, value: Boolean) {
         try {
             permissionManager.setDefault(groupName, value)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Group '$groupName' default set to $value."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -333,7 +333,7 @@ class PermsCommand(
     private suspend fun groupAddParent(groupName: String, parentName: String) {
         try {
             permissionManager.addParent(groupName, parentName)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Added parent '$parentName' to group '$groupName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -343,7 +343,7 @@ class PermsCommand(
     private suspend fun groupRemoveParent(groupName: String, parentName: String) {
         try {
             permissionManager.removeParent(groupName, parentName)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Removed parent '$parentName' from group '$groupName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -353,7 +353,7 @@ class PermsCommand(
     private suspend fun groupSetPrefix(groupName: String, prefix: String) {
         try {
             permissionManager.updateGroupDisplay(groupName, prefix = prefix, suffix = null, priority = null)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Prefix for '$groupName' set to: $prefix"))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -363,7 +363,7 @@ class PermsCommand(
     private suspend fun groupSetSuffix(groupName: String, suffix: String) {
         try {
             permissionManager.updateGroupDisplay(groupName, prefix = null, suffix = suffix, priority = null)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Suffix for '$groupName' set to: $suffix"))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -373,7 +373,7 @@ class PermsCommand(
     private suspend fun groupSetPriority(groupName: String, priority: Int) {
         try {
             permissionManager.updateGroupDisplay(groupName, prefix = null, suffix = null, priority = priority)
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Priority for '$groupName' set to $priority."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -384,7 +384,7 @@ class PermsCommand(
         try {
             permissionManager.setGroupWeight(groupName, weight)
             permissionManager.logAudit("console", "group.setweight", groupName, "Set weight to $weight")
-            eventBus.emit(NimbusEvent.PermissionGroupUpdated(groupName))
+            eventBus.emit(PermsEvents.groupUpdated(groupName))
             println(ConsoleFormatter.success("Weight for '$groupName' set to $weight."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -419,7 +419,7 @@ class PermsCommand(
                 val value = args.drop(3).joinToString(" ")
                 try {
                     permissionManager.setGroupMeta(args[1], args[2], value)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     println(ConsoleFormatter.success("Meta '${args[2]}' set to '$value' on group '${args[1]}'."))
                 } catch (e: IllegalArgumentException) {
                     println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -429,7 +429,7 @@ class PermsCommand(
                 if (args.size < 3) return println(ConsoleFormatter.error("Usage: perms group meta remove <group> <key>"))
                 try {
                     permissionManager.removeGroupMeta(args[1], args[2])
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     println(ConsoleFormatter.success("Meta '${args[2]}' removed from group '${args[1]}'."))
                 } catch (e: IllegalArgumentException) {
                     println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -522,7 +522,7 @@ class PermsCommand(
         try {
             permissionManager.setPlayerGroup(uuid, playerName, groupName)
             permissionManager.logAudit("console", "user.addgroup", uuid, "Added group '$groupName' to '$playerName'")
-            eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+            eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
             println(ConsoleFormatter.success("Added group '$groupName' to player '$playerName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -534,7 +534,7 @@ class PermsCommand(
         try {
             permissionManager.removePlayerGroup(uuid, groupName)
             permissionManager.logAudit("console", "user.removegroup", uuid, "Removed group '$groupName' from '$playerName'")
-            eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+            eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
             println(ConsoleFormatter.success("Removed group '$groupName' from player '$playerName'."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -547,8 +547,8 @@ class PermsCommand(
             val newGroup = permissionManager.promote(uuid, trackName)
             if (newGroup != null) {
                 permissionManager.logAudit("console", "user.promote", uuid, "Promoted '$playerName' to '$newGroup' on track '$trackName'")
-                eventBus.emit(NimbusEvent.PlayerPromoted(uuid, playerName, trackName, newGroup))
-                eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                eventBus.emit(PermsEvents.playerPromoted(uuid, playerName, trackName, newGroup))
+                eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                 println(ConsoleFormatter.success("Promoted '$playerName' to '$newGroup' on track '$trackName'."))
             } else {
                 println(ConsoleFormatter.warn("Player '$playerName' is already at the highest rank on track '$trackName'."))
@@ -564,8 +564,8 @@ class PermsCommand(
             val newGroup = permissionManager.demote(uuid, trackName)
             if (newGroup != null) {
                 permissionManager.logAudit("console", "user.demote", uuid, "Demoted '$playerName' to '$newGroup' on track '$trackName'")
-                eventBus.emit(NimbusEvent.PlayerDemoted(uuid, playerName, trackName, newGroup))
-                eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                eventBus.emit(PermsEvents.playerDemoted(uuid, playerName, trackName, newGroup))
+                eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                 println(ConsoleFormatter.success("Demoted '$playerName' to '$newGroup' on track '$trackName'."))
             } else {
                 println(ConsoleFormatter.warn("Player '$playerName' is already at the lowest rank on track '$trackName'."))
@@ -624,7 +624,7 @@ class PermsCommand(
                 val value = args.drop(3).joinToString(" ")
                 try {
                     permissionManager.setPlayerMeta(uuid, args[2], value)
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     println(ConsoleFormatter.success("Meta '${args[2]}' set to '$value' on player '$playerName'."))
                 } catch (e: IllegalArgumentException) {
                     println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -635,7 +635,7 @@ class PermsCommand(
                 val (uuid, playerName) = resolvePlayerReadOnly(args[1]) ?: return
                 try {
                     permissionManager.removePlayerMeta(uuid, args[2])
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     println(ConsoleFormatter.success("Meta '${args[2]}' removed from player '$playerName'."))
                 } catch (e: IllegalArgumentException) {
                     println(ConsoleFormatter.error(e.message ?: "Failed"))
@@ -714,7 +714,7 @@ class PermsCommand(
         try {
             val track = permissionManager.createTrack(name, groups)
             permissionManager.logAudit("console", "track.create", name, "Created track with groups: ${track.groups.joinToString(", ")}")
-            eventBus.emit(NimbusEvent.PermissionTrackCreated(name))
+            eventBus.emit(PermsEvents.trackCreated(name))
             println(ConsoleFormatter.success("Track '$name' created: ${track.groups.joinToString(" → ")}"))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed to create track"))
@@ -725,7 +725,7 @@ class PermsCommand(
         try {
             permissionManager.deleteTrack(name)
             permissionManager.logAudit("console", "track.delete", name, "Deleted track '$name'")
-            eventBus.emit(NimbusEvent.PermissionTrackDeleted(name))
+            eventBus.emit(PermsEvents.trackDeleted(name))
             println(ConsoleFormatter.success("Track '$name' deleted."))
         } catch (e: IllegalArgumentException) {
             println(ConsoleFormatter.error(e.message ?: "Failed to delete track"))
@@ -921,7 +921,7 @@ class PermsCommand(
                 try {
                     permissionManager.createGroup(args[1])
                     permissionManager.logAudit("bridge", "group.create", args[1], "Created group '${args[1]}'")
-                    eventBus.emit(NimbusEvent.PermissionGroupCreated(args[1]))
+                    eventBus.emit(PermsEvents.groupCreated(args[1]))
                     out.success("Permission group '${args[1]}' created.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed to create group") }
             }
@@ -930,7 +930,7 @@ class PermsCommand(
                 try {
                     permissionManager.deleteGroup(args[1])
                     permissionManager.logAudit("bridge", "group.delete", args[1], "Deleted group '${args[1]}'")
-                    eventBus.emit(NimbusEvent.PermissionGroupDeleted(args[1]))
+                    eventBus.emit(PermsEvents.groupDeleted(args[1]))
                     out.success("Permission group '${args[1]}' deleted.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed to delete group") }
             }
@@ -939,7 +939,7 @@ class PermsCommand(
                 try {
                     permissionManager.addPermission(args[1], args[2])
                     permissionManager.logAudit("bridge", "group.addperm", args[1], "Added permission '${args[2]}'")
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Added '${args[2]}' to group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -948,7 +948,7 @@ class PermsCommand(
                 try {
                     permissionManager.removePermission(args[1], args[2])
                     permissionManager.logAudit("bridge", "group.removeperm", args[1], "Removed permission '${args[2]}'")
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Removed '${args[2]}' from group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -957,7 +957,7 @@ class PermsCommand(
                 val value = args.getOrNull(2)?.toBooleanStrictOrNull() ?: true
                 try {
                     permissionManager.setDefault(args[1], value)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Group '${args[1]}' default set to $value.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -965,7 +965,7 @@ class PermsCommand(
                 if (args.size < 3) { out.error("Usage: perms group addparent <group> <parent>"); return }
                 try {
                     permissionManager.addParent(args[1], args[2])
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Added parent '${args[2]}' to group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -973,7 +973,7 @@ class PermsCommand(
                 if (args.size < 3) { out.error("Usage: perms group removeparent <group> <parent>"); return }
                 try {
                     permissionManager.removeParent(args[1], args[2])
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Removed parent '${args[2]}' from group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -982,7 +982,7 @@ class PermsCommand(
                 val prefix = args.drop(2).joinToString(" ")
                 try {
                     permissionManager.updateGroupDisplay(args[1], prefix = prefix, suffix = null, priority = null)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Prefix for '${args[1]}' set to: $prefix")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -991,7 +991,7 @@ class PermsCommand(
                 val suffix = args.drop(2).joinToString(" ")
                 try {
                     permissionManager.updateGroupDisplay(args[1], prefix = null, suffix = suffix, priority = null)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Suffix for '${args[1]}' set to: $suffix")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1001,7 +1001,7 @@ class PermsCommand(
                 if (priority == null) { out.error("Priority must be a number."); return }
                 try {
                     permissionManager.updateGroupDisplay(args[1], prefix = null, suffix = null, priority = priority)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Priority for '${args[1]}' set to $priority.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1012,7 +1012,7 @@ class PermsCommand(
                 try {
                     permissionManager.setGroupWeight(args[1], weight)
                     permissionManager.logAudit("bridge", "group.setweight", args[1], "Set weight to $weight")
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Weight for '${args[1]}' set to $weight.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1038,7 +1038,7 @@ class PermsCommand(
                 val value = args.drop(3).joinToString(" ")
                 try {
                     permissionManager.setGroupMeta(args[1], args[2], value)
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Meta '${args[2]}' set to '$value' on group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1046,7 +1046,7 @@ class PermsCommand(
                 if (args.size < 3) { out.error("Usage: perms group meta remove <group> <key>"); return }
                 try {
                     permissionManager.removeGroupMeta(args[1], args[2])
-                    eventBus.emit(NimbusEvent.PermissionGroupUpdated(args[1]))
+                    eventBus.emit(PermsEvents.groupUpdated(args[1]))
                     out.success("Meta '${args[2]}' removed from group '${args[1]}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1112,7 +1112,7 @@ class PermsCommand(
                 try {
                     permissionManager.setPlayerGroup(uuid, playerName, args[2])
                     permissionManager.logAudit("bridge", "user.addgroup", uuid, "Added group '${args[2]}' to '$playerName'")
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     out.success("Added group '${args[2]}' to player '$playerName'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1122,7 +1122,7 @@ class PermsCommand(
                 try {
                     permissionManager.removePlayerGroup(uuid, args[2])
                     permissionManager.logAudit("bridge", "user.removegroup", uuid, "Removed group '${args[2]}' from '$playerName'")
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                    eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     out.success("Removed group '${args[2]}' from player '$playerName'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1133,8 +1133,8 @@ class PermsCommand(
                     val newGroup = permissionManager.promote(uuid, args[2])
                     if (newGroup != null) {
                         permissionManager.logAudit("bridge", "user.promote", uuid, "Promoted '$playerName' to '$newGroup' on track '${args[2]}'")
-                        eventBus.emit(NimbusEvent.PlayerPromoted(uuid, playerName, args[2], newGroup))
-                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        eventBus.emit(PermsEvents.playerPromoted(uuid, playerName, args[2], newGroup))
+                        eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                         out.success("Promoted '$playerName' to '$newGroup' on track '${args[2]}'.")
                     } else {
                         out.info("Player '$playerName' is already at the highest rank on track '${args[2]}'.")
@@ -1148,8 +1148,8 @@ class PermsCommand(
                     val newGroup = permissionManager.demote(uuid, args[2])
                     if (newGroup != null) {
                         permissionManager.logAudit("bridge", "user.demote", uuid, "Demoted '$playerName' to '$newGroup' on track '${args[2]}'")
-                        eventBus.emit(NimbusEvent.PlayerDemoted(uuid, playerName, args[2], newGroup))
-                        eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(uuid, playerName))
+                        eventBus.emit(PermsEvents.playerDemoted(uuid, playerName, args[2], newGroup))
+                        eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                         out.success("Demoted '$playerName' to '$newGroup' on track '${args[2]}'.")
                     } else {
                         out.info("Player '$playerName' is already at the lowest rank on track '${args[2]}'.")
@@ -1178,7 +1178,7 @@ class PermsCommand(
                 val value = args.drop(3).joinToString(" ")
                 try {
                     permissionManager.setPlayerMeta(resolved.first, args[2], value)
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(resolved.first, resolved.second))
+                    eventBus.emit(PermsEvents.playerUpdated(resolved.first, resolved.second))
                     out.success("Meta '${args[2]}' set to '$value' on player '${resolved.second}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1187,7 +1187,7 @@ class PermsCommand(
                 val resolved = resolvePlayerReadOnlyForRemote(args[1], out) ?: return
                 try {
                     permissionManager.removePlayerMeta(resolved.first, args[2])
-                    eventBus.emit(NimbusEvent.PlayerPermissionsUpdated(resolved.first, resolved.second))
+                    eventBus.emit(PermsEvents.playerUpdated(resolved.first, resolved.second))
                     out.success("Meta '${args[2]}' removed from player '${resolved.second}'.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed") }
             }
@@ -1225,7 +1225,7 @@ class PermsCommand(
                 try {
                     val track = permissionManager.createTrack(args[1], groups)
                     permissionManager.logAudit("bridge", "track.create", args[1], "Created track with groups: ${track.groups.joinToString(", ")}")
-                    eventBus.emit(NimbusEvent.PermissionTrackCreated(args[1]))
+                    eventBus.emit(PermsEvents.trackCreated(args[1]))
                     out.success("Track '${args[1]}' created: ${track.groups.joinToString(" -> ")}")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed to create track") }
             }
@@ -1234,7 +1234,7 @@ class PermsCommand(
                 try {
                     permissionManager.deleteTrack(args[1])
                     permissionManager.logAudit("bridge", "track.delete", args[1], "Deleted track '${args[1]}'")
-                    eventBus.emit(NimbusEvent.PermissionTrackDeleted(args[1]))
+                    eventBus.emit(PermsEvents.trackDeleted(args[1]))
                     out.success("Track '${args[1]}' deleted.")
                 } catch (e: IllegalArgumentException) { out.error(e.message ?: "Failed to delete track") }
             }
