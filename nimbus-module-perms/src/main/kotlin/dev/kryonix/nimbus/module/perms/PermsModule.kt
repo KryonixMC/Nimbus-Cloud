@@ -1,18 +1,10 @@
 package dev.kryonix.nimbus.module.perms
 
 import dev.kryonix.nimbus.NimbusVersion
-import dev.kryonix.nimbus.config.NimbusConfig
-import dev.kryonix.nimbus.console.ConsoleFormatter.BOLD
-import dev.kryonix.nimbus.console.ConsoleFormatter.DIM
-import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
-import dev.kryonix.nimbus.console.ConsoleFormatter.info
-import dev.kryonix.nimbus.console.ConsoleFormatter.success
-import dev.kryonix.nimbus.console.ConsoleFormatter.warn
 import dev.kryonix.nimbus.database.DatabaseManager
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.module.ModuleContext
 import dev.kryonix.nimbus.module.NimbusModule
-import dev.kryonix.nimbus.module.PluginDeployment
 import dev.kryonix.nimbus.module.service
 import dev.kryonix.nimbus.module.perms.commands.PermsCommand
 import dev.kryonix.nimbus.module.perms.routes.permissionRoutes
@@ -54,20 +46,6 @@ class PermsModule : NimbusModule {
             }
         }
 
-        // Register plugin deployments (respects deploy_plugin config as opt-out)
-        val config = context.service<NimbusConfig>()
-        if (config?.permissions?.deployPlugin != false) {
-            context.registerPluginDeployment(PluginDeployment(
-                resourcePath = "plugins/nimbus-perms.jar",
-                fileName = "nimbus-perms.jar",
-                displayName = "NimbusPerms",
-                foliaRequiresPacketEvents = true
-            ))
-        }
-
-        // Register console event formatters
-        registerEventFormatters(context)
-
         context.registerCommand(PermsCommand(permissionManager, eventBus))
         context.registerRoutes({ permissionRoutes(permissionManager, eventBus) })
 
@@ -94,33 +72,6 @@ class PermsModule : NimbusModule {
                 }
                 else -> emptyList()
             }
-        }
-    }
-
-    private fun registerEventFormatters(context: ModuleContext) {
-        context.registerEventFormatter("PERMISSION_GROUP_CREATED") { data ->
-            "${success("+ PERM")} group ${BOLD}${data["group"]}${RESET} created"
-        }
-        context.registerEventFormatter("PERMISSION_GROUP_UPDATED") { data ->
-            "${info("~ PERM")} group ${BOLD}${data["group"]}${RESET} updated"
-        }
-        context.registerEventFormatter("PERMISSION_GROUP_DELETED") { data ->
-            "${warn("- PERM")} group ${BOLD}${data["group"]}${RESET} deleted"
-        }
-        context.registerEventFormatter("PLAYER_PERMISSIONS_UPDATED") { data ->
-            "${info("~ PERM")} ${BOLD}${data["player"]}${RESET} ${DIM}(${data["uuid"]})${RESET} updated"
-        }
-        context.registerEventFormatter("PERMISSION_TRACK_CREATED") { data ->
-            "${success("+ TRACK")} ${BOLD}${data["track"]}${RESET} created"
-        }
-        context.registerEventFormatter("PERMISSION_TRACK_DELETED") { data ->
-            "${warn("- TRACK")} ${BOLD}${data["track"]}${RESET} deleted"
-        }
-        context.registerEventFormatter("PLAYER_PROMOTED") { data ->
-            "${success("↑ PROMOTE")} ${BOLD}${data["player"]}${RESET} → ${BOLD}${data["newGroup"]}${RESET} ${DIM}(track=${data["track"]})${RESET}"
-        }
-        context.registerEventFormatter("PLAYER_DEMOTED") { data ->
-            "${warn("↓ DEMOTE")} ${BOLD}${data["player"]}${RESET} → ${BOLD}${data["newGroup"]}${RESET} ${DIM}(track=${data["track"]})${RESET}"
         }
     }
 

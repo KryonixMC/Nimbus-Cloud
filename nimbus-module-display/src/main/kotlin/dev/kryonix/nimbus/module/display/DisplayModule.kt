@@ -7,7 +7,6 @@ import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.module.display.routes.displayRoutes
 import dev.kryonix.nimbus.module.ModuleContext
 import dev.kryonix.nimbus.module.NimbusModule
-import dev.kryonix.nimbus.module.PluginDeployment
 import dev.kryonix.nimbus.module.service
 
 class DisplayModule : NimbusModule {
@@ -25,19 +24,6 @@ class DisplayModule : NimbusModule {
         val configDir = context.moduleConfigDir("display")
         displayManager = DisplayManager(configDir)
         displayManager.init()
-
-        // Register plugin deployments
-        context.registerPluginDeployment(PluginDeployment(
-            resourcePath = "plugins/nimbus-display.jar",
-            fileName = "nimbus-display.jar",
-            displayName = "NimbusDisplay"
-        ))
-        context.registerPluginDeployment(PluginDeployment(
-            resourcePath = "plugins/FancyNpcs.jar",
-            fileName = "FancyNpcs.jar",
-            displayName = "FancyNpcs",
-            minMinecraftVersion = 20
-        ))
 
         // Auto-generate display configs for existing groups
         val groupConfigs = groupManager.getAllGroups().map { it.config }

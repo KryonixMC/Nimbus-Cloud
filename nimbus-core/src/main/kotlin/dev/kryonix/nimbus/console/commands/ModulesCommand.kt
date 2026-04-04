@@ -13,7 +13,6 @@ import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.module.ModuleInfo
 import dev.kryonix.nimbus.module.ModuleManager
-import dev.kryonix.nimbus.module.ModulePluginInfo
 import org.jline.terminal.Terminal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -32,6 +31,20 @@ class ModulesCommand(
     override val name = "modules"
     override val description = "Manage controller modules"
     override val usage = "modules [list|install|uninstall <id>]"
+
+    /**
+     * Maps module IDs to the server-side plugins they need deployed on backend groups.
+     * Key = module id, Value = list of (plugin resource path, target filename)
+     */
+    private val modulePlugins = mapOf(
+        "perms" to listOf(PluginMapping("plugins/nimbus-perms.jar", "nimbus-perms.jar", "NimbusPerms")),
+        "display" to listOf(
+            PluginMapping("plugins/nimbus-display.jar", "nimbus-display.jar", "NimbusDisplay"),
+            PluginMapping("plugins/FancyNpcs.jar", "FancyNpcs.jar", "FancyNpcs")
+        )
+    )
+
+    private data class PluginMapping(val resource: String, val fileName: String, val displayName: String)
 
     override suspend fun execute(args: List<String>) {
         val sub = args.firstOrNull()?.lowercase() ?: "list"
@@ -65,16 +78,13 @@ class ModulesCommand(
         val available = moduleManager.discoverAvailable()
         val loadedIds = loaded.map { it.id }.toSet()
 
-        // Build plugin info from module.properties metadata
-        val pluginsByModuleId = available.associate { it.id to it.plugins }
-
         println("${BOLD}Modules:$RESET")
         println()
 
         if (loaded.isNotEmpty()) {
             for (module in loaded) {
-                val pluginInfo = pluginsByModuleId[module.id]
-                val pluginHint = if (!pluginInfo.isNullOrEmpty()) {
+                val pluginInfo = modulePlugins[module.id]
+                val pluginHint = if (pluginInfo != null) {
                     " ${DIM}(plugins: ${pluginInfo.joinToString(", ") { it.displayName }})$RESET"
                 } else ""
                 println("  ${GREEN}●$RESET ${CYAN}${module.name}$RESET ${DIM}v${module.version}$RESET — ${module.description}$pluginHint")
@@ -127,7 +137,7 @@ class ModulesCommand(
                 val info = available.find { it.id == id }
                 println("  ${GREEN}●$RESET Installed ${CYAN}${info?.name ?: id}$RESET")
                 installed++
-                if (info != null) offerPluginDeploy(info)
+                offerPluginDeploy(id, info?.name ?: id)
             }
         }
         if (installed > 0) {
@@ -144,7 +154,7 @@ class ModulesCommand(
             ModuleManager.InstallResult.INSTALLED -> {
                 val info = moduleManager.discoverAvailable().find { it.id == id }
                 println("${GREEN}●$RESET Installed ${CYAN}${info?.name ?: id}$RESET")
-                if (info != null) offerPluginDeploy(info)
+                offerPluginDeploy(id, info?.name ?: id)
                 println("  ${YELLOW}Restart Nimbus to activate the module.$RESET")
             }
             ModuleManager.InstallResult.ALREADY_INSTALLED -> {
@@ -170,9 +180,7 @@ class ModulesCommand(
             println("  ${YELLOW}Module is still active until restart.$RESET")
         }
 
-        // Read plugin info from available modules metadata
-        val info = moduleManager.discoverAvailable().find { it.id == id }
-        if (info != null) warnOrphanedPlugins(info)
+        warnOrphanedPlugins(id)
     }
 
     // ── Plugin linkage ─────────────────────────────────────
@@ -181,9 +189,9 @@ class ModulesCommand(
      * After installing a module, offer to deploy its related plugins
      * to all backend groups via `global/plugins/`.
      */
-    private fun offerPluginDeploy(info: ModuleInfo) {
-        val plugins = info.plugins
-        if (plugins.isEmpty() || templatesDir == null) return
+    private fun offerPluginDeploy(moduleId: String, moduleName: String) {
+        val plugins = modulePlugins[moduleId] ?: return
+        if (templatesDir == null) return
 
         val globalPluginsDir = templatesDir.resolve("global").resolve("plugins")
 
@@ -195,7 +203,7 @@ class ModulesCommand(
 
         println()
         val pluginNames = missing.joinToString(", ") { "${CYAN}${it.displayName}$RESET" }
-        println("  ${DIM}${info.name} needs server-side plugins: $pluginNames$RESET")
+        println("  ${DIM}$moduleName needs server-side plugins: $pluginNames$RESET")
 
         val options = listOf(
             InteractivePicker.Option("global", "Deploy to all backends", "install to templates/global/plugins/"),
@@ -205,7 +213,7 @@ class ModulesCommand(
         if (choice == 0) {
             if (!globalPluginsDir.exists()) globalPluginsDir.createDirectories()
             for (plugin in missing) {
-                val resource = javaClass.classLoader.getResourceAsStream(plugin.resourcePath)
+                val resource = javaClass.classLoader.getResourceAsStream(plugin.resource)
                 if (resource != null) {
                     resource.use { Files.copy(it, globalPluginsDir.resolve(plugin.fileName), StandardCopyOption.REPLACE_EXISTING) }
                     println("    ${GREEN}+$RESET ${plugin.fileName} → global/plugins/")
@@ -217,12 +225,12 @@ class ModulesCommand(
     /**
      * After uninstalling a module, warn about orphaned server-side plugins.
      */
-    private fun warnOrphanedPlugins(info: ModuleInfo) {
-        val plugins = info.plugins
-        if (plugins.isEmpty() || templatesDir == null) return
+    private fun warnOrphanedPlugins(moduleId: String) {
+        val plugins = modulePlugins[moduleId] ?: return
+        if (templatesDir == null) return
 
         // Find where these plugins are installed
-        val locations = mutableListOf<Pair<ModulePluginInfo, String>>()
+        val locations = mutableListOf<Pair<PluginMapping, String>>()
 
         // Check global
         val globalDir = templatesDir.resolve("global").resolve("plugins")

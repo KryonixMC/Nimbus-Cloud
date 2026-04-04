@@ -58,10 +58,21 @@ If you're starting fresh, the built-in system is simpler — everything works ou
 
 ## Setup Wizard
 
-During the initial setup, Nimbus asks which modules to install. If the **Permissions** module is selected (default), the NimbusPerms plugin is automatically deployed to all backend servers.
+During the initial setup, Nimbus asks whether to install the built-in permissions plugin:
 
-- **Selected (default)**: NimbusPerms module is installed and its plugin deployed to backends
-- **Not selected**: You can install LuckPerms or add the module later with `modules install perms`
+```
+Install built-in permissions plugin? (prefix, suffix, groups, tracks) [Y/n]:
+```
+
+- **Yes (default)**: NimbusPerms is deployed to all backend servers via the `global` template
+- **No**: NimbusPerms is skipped — you can install LuckPerms or add NimbusPerms later
+
+This setting is stored in `nimbus.toml`:
+
+```toml
+[permissions]
+deploy_plugin = false  # only present if disabled; default is true
+```
 
 ---
 

@@ -1052,35 +1052,6 @@ Show the permission audit log with recent changes. Defaults to 20 entries.
 
 ---
 
-## Plugin Management
-
-### `plugins`
-
-Search, install, and manage third-party server plugins from [Hangar](https://hangar.papermc.io) and [Modrinth](https://modrinth.com).
-
-Running `plugins` with no arguments (or `plugins search`) opens the **interactive live search**:
-
-1. Select a target (global or a specific group)
-2. Type to search — results from Hangar + Modrinth appear live (version-aware)
-3. Use **↑↓** to navigate, **Space** to select multiple plugins, **Enter** to confirm
-4. Required dependencies are automatically downloaded
-
-```
-plugins                        # Open interactive search
-plugins search global          # Search for plugins targeting all backends
-plugins search Lobby WorldEdit # Search "WorldEdit" for Lobby group's MC version
-plugins list                   # Show all installed plugins across all targets
-plugins list global            # Show plugins in global/plugins/
-plugins list Lobby             # Show plugins in Lobby template
-plugins remove WorldEdit.jar global  # Remove a specific plugin JAR
-```
-
-::: tip Multi-Select
-Press **Space** on multiple search results before pressing **Enter** — all selected plugins (plus their dependencies) are installed in a single batch.
-:::
-
----
-
 ## Network & System
 
 ### `status`

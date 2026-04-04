@@ -27,13 +27,6 @@ object ConsoleFormatter {
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
         .withZone(ZoneId.systemDefault())
 
-    // Module event formatters registered by controller modules
-    private val moduleEventFormatters = mutableMapOf<String, (Map<String, String>) -> String>()
-
-    fun registerModuleEventFormatter(type: String, formatter: (Map<String, String>) -> String) {
-        moduleEventFormatters[type] = formatter
-    }
-
     // ── Basic colorizers ────────────────────────────────────────
 
     fun colorize(text: String, color: String): String = "$color$text$RESET"
@@ -207,11 +200,22 @@ object ConsoleFormatter {
                 "${info("~ STATE")} ${BOLD}${event.serviceName}${RESET} ${DIM}${event.oldState ?: "-"} → ${event.newState ?: "-"}${RESET}"
             is NimbusEvent.ServiceMessage ->
                 "${info("✉ MSG")} ${BOLD}${event.fromService}${RESET} → ${BOLD}${event.toService}${RESET} ${DIM}[${event.channel}]${RESET}"
-            is NimbusEvent.ModuleEvent -> {
-                val formatter = moduleEventFormatters[event.type]
-                if (formatter != null) formatter(event.data)
-                else "${info("~ ${event.moduleId.uppercase()}")} ${event.type} ${DIM}${event.data}${RESET}"
-            }
+            is NimbusEvent.PermissionGroupCreated ->
+                "${success("+ PERM")} group ${BOLD}${event.groupName}${RESET} created"
+            is NimbusEvent.PermissionGroupUpdated ->
+                "${info("~ PERM")} group ${BOLD}${event.groupName}${RESET} updated"
+            is NimbusEvent.PermissionGroupDeleted ->
+                "${warn("- PERM")} group ${BOLD}${event.groupName}${RESET} deleted"
+            is NimbusEvent.PlayerPermissionsUpdated ->
+                "${info("~ PERM")} ${BOLD}${event.playerName}${RESET} ${DIM}(${event.uuid})${RESET} updated"
+            is NimbusEvent.PermissionTrackCreated ->
+                "${success("+ TRACK")} ${BOLD}${event.trackName}${RESET} created"
+            is NimbusEvent.PermissionTrackDeleted ->
+                "${warn("- TRACK")} ${BOLD}${event.trackName}${RESET} deleted"
+            is NimbusEvent.PlayerPromoted ->
+                "${success("↑ PROMOTE")} ${BOLD}${event.playerName}${RESET} → ${BOLD}${event.newGroup}${RESET} ${DIM}(track=${event.trackName})${RESET}"
+            is NimbusEvent.PlayerDemoted ->
+                "${warn("↓ DEMOTE")} ${BOLD}${event.playerName}${RESET} → ${BOLD}${event.newGroup}${RESET} ${DIM}(track=${event.trackName})${RESET}"
             is NimbusEvent.ProxyUpdateAvailable ->
                 "${warn("↑ UPDATE")} Velocity ${BOLD}${event.currentVersion}${RESET} → ${BOLD}${event.newVersion}${RESET} available"
             is NimbusEvent.ProxyUpdateApplied ->
