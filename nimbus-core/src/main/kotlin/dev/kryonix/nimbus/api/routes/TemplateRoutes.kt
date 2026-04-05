@@ -1,7 +1,9 @@
 package dev.kryonix.nimbus.api.routes
 
+import dev.kryonix.nimbus.api.ApiErrors
 import dev.kryonix.nimbus.api.ApiMessage
 import dev.kryonix.nimbus.api.NimbusApi
+import dev.kryonix.nimbus.api.apiError
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -22,7 +24,7 @@ fun Route.templateRoutes(
     get("/api/templates/{name}/download") {
         val clientToken = call.queryParameters["token"] ?: ""
         if (clusterToken.isNotBlank() && !NimbusApi.timingSafeEquals(clientToken, clusterToken)) {
-            return@get call.respond(HttpStatusCode.Unauthorized, ApiMessage(false, "Invalid token"))
+            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
         }
 
         val templateName = call.parameters["name"]!!
@@ -30,7 +32,7 @@ fun Route.templateRoutes(
         val templateDir = templatesDir.resolve(templateName)
 
         if (!templateDir.toFile().exists() || !templateDir.toFile().isDirectory) {
-            return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Template '$templateName' not found"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiErrors.NOT_FOUND))
         }
 
         // Collect directories to include: group template + applicable global templates
@@ -60,7 +62,7 @@ fun Route.templateRoutes(
     get("/api/templates/{name}/hash") {
         val clientToken = call.queryParameters["token"] ?: ""
         if (clusterToken.isNotBlank() && !NimbusApi.timingSafeEquals(clientToken, clusterToken)) {
-            return@get call.respond(HttpStatusCode.Unauthorized, ApiMessage(false, "Invalid token"))
+            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
         }
 
         val templateName = call.parameters["name"]!!
@@ -68,7 +70,7 @@ fun Route.templateRoutes(
         val templateDir = templatesDir.resolve(templateName)
 
         if (!templateDir.toFile().exists()) {
-            return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Template '$templateName' not found"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiErrors.NOT_FOUND))
         }
 
         val digest = java.security.MessageDigest.getInstance("SHA-256")

@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.console.CommandDispatcher
 import dev.kryonix.nimbus.module.CommandOutput
 import io.ktor.http.*
@@ -46,7 +48,7 @@ fun Route.commandRoutes(dispatcher: CommandDispatcher) {
             val command = dispatcher.getCommand(name)
 
             if (command == null || command.permission.isEmpty()) {
-                call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Command '$name' not found"))
+                call.respond(HttpStatusCode.NotFound, apiError("Command '$name' not found", ApiErrors.COMMAND_NOT_FOUND))
                 return@post
             }
 
@@ -58,7 +60,7 @@ fun Route.commandRoutes(dispatcher: CommandDispatcher) {
                 if (!handled) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        ApiMessage(false, "Command '$name' does not support remote execution")
+                        apiError("Command '$name' does not support remote execution", ApiErrors.COMMAND_NOT_REMOTE)
                     )
                     return@post
                 }

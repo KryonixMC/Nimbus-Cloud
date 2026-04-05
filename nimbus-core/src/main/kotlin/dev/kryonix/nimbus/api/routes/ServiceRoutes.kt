@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.event.NimbusEvent
 import dev.kryonix.nimbus.group.GroupManager
@@ -40,7 +42,7 @@ fun Route.serviceRoutes(
                 } catch (_: IllegalArgumentException) {
                     return@get call.respond(
                         HttpStatusCode.BadRequest,
-                        ApiMessage(false, "Invalid state: '$stateParam'. Valid: ${ServiceState.entries.joinToString()}")
+                        apiError("Invalid state: '$stateParam'. Valid: ${ServiceState.entries.joinToString()}", ApiErrors.INVALID_INPUT)
                     )
                 }
                 services = services.filter { it.state == stateFilter }
@@ -59,7 +61,7 @@ fun Route.serviceRoutes(
         get("{name}") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
             call.respond(service.toResponse())
         }
 
@@ -68,14 +70,14 @@ fun Route.serviceRoutes(
             val groupName = call.parameters["name"]!!
 
             if (groupManager.getGroup(groupName) == null) {
-                return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$groupName' not found"))
+                return@post call.respond(HttpStatusCode.NotFound, apiError("Group '$groupName' not found", ApiErrors.GROUP_NOT_FOUND))
             }
 
             val service = serviceManager.startService(groupName)
             if (service != null) {
                 call.respond(HttpStatusCode.Created, ApiMessage(true, "Service '${service.name}' starting on port ${service.port}"))
             } else {
-                call.respond(HttpStatusCode.Conflict, ApiMessage(false, "Failed to start service for group '$groupName' — max instances reached or JAR unavailable"))
+                call.respond(HttpStatusCode.Conflict, apiError("Failed to start service for group '$groupName' — max instances reached or JAR unavailable", ApiErrors.SERVICE_START_FAILED))
             }
         }
 
@@ -83,13 +85,13 @@ fun Route.serviceRoutes(
         post("{name}/stop") {
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val stopped = serviceManager.stopService(name)
             if (stopped) {
                 call.respond(ApiMessage(true, "Service '$name' stopped"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to stop service '$name'"))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to stop service '$name'", ApiErrors.SERVICE_STOP_FAILED))
             }
         }
 
@@ -97,13 +99,13 @@ fun Route.serviceRoutes(
         post("{name}/restart") {
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val newService = serviceManager.restartService(name)
             if (newService != null) {
                 call.respond(ApiMessage(true, "Service restarted as '${newService.name}' on port ${newService.port}"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to restart service '$name'"))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
             }
         }
 
@@ -111,7 +113,7 @@ fun Route.serviceRoutes(
         post("{name}/exec") {
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val request = call.receive<ExecRequest>()
             val success = serviceManager.executeCommand(name, request.command)
@@ -122,10 +124,10 @@ fun Route.serviceRoutes(
         put("{name}/state") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             if (service.state != ServiceState.READY) {
-                return@put call.respond(HttpStatusCode.Conflict, ApiMessage(false, "Service '$name' is not READY (current: ${service.state})"))
+                return@put call.respond(HttpStatusCode.Conflict, apiError("Service '$name' is not READY (current: ${service.state})", ApiErrors.SERVICE_NOT_READY))
             }
 
             val request = call.receive<SetCustomStateRequest>()
@@ -148,7 +150,7 @@ fun Route.serviceRoutes(
         get("{name}/state") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             call.respond(CustomStateResponse(name, service.customState))
         }
@@ -157,7 +159,7 @@ fun Route.serviceRoutes(
         put("{name}/health") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val request = call.receive<ReportHealthRequest>()
             service.updateHealth(request.tps, request.memoryUsedMb, request.memoryMaxMb)
@@ -169,7 +171,7 @@ fun Route.serviceRoutes(
         put("{name}/players") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val request = call.receive<ReportPlayerCountRequest>()
             service.playerCount = request.playerCount
@@ -182,7 +184,7 @@ fun Route.serviceRoutes(
         get("{name}/logs") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$name' not found"))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
 
             val logFile = service.workingDirectory.resolve("logs/latest.log").toFile()
             if (!logFile.exists()) {
@@ -202,7 +204,7 @@ fun Route.serviceRoutes(
             // without requiring a registered service entry (the controller itself isn't a service)
             if (targetName != "controller") {
                 registry.get(targetName)
-                    ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Service '$targetName' not found"))
+                    ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$targetName' not found", ApiErrors.SERVICE_NOT_FOUND))
             }
 
             val request = call.receive<SendMessageRequest>()

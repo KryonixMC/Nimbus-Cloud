@@ -253,7 +253,8 @@ data class SendMessageRequest(
 @Serializable
 data class ApiMessage(
     val success: Boolean,
-    val message: String
+    val message: String,
+    val error: String? = null
 )
 
 // ── File API DTOs ──────────────────────────────────────────────────

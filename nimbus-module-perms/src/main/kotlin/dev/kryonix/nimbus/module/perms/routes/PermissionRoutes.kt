@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.module.perms.routes
 
+import dev.kryonix.nimbus.api.ApiErrors
 import dev.kryonix.nimbus.api.ApiMessage
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.event.EventBus
 import dev.kryonix.nimbus.module.perms.*
 import dev.kryonix.nimbus.module.perms.PermissionContext
@@ -30,7 +32,7 @@ fun Route.permissionRoutes(
             get("{name}") {
                 val name = call.parameters["name"]!!
                 val group = permissionManager.getGroup(name)
-                    ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
+                    ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Permission group '$name' not found", ApiErrors.NOT_FOUND))
                 call.respond(group.toResponse())
             }
 
@@ -38,10 +40,10 @@ fun Route.permissionRoutes(
             post {
                 val request = call.receive<CreatePermissionGroupRequest>()
                 if (request.name.isBlank() || !request.name.matches(Regex("^[a-zA-Z0-9_-]{1,64}$"))) {
-                    return@post call.respond(HttpStatusCode.BadRequest, ApiMessage(false, "Invalid group name"))
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
                 }
                 if (permissionManager.getGroup(request.name) != null) {
-                    return@post call.respond(HttpStatusCode.Conflict, ApiMessage(false, "Group '${request.name}' already exists"))
+                    return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.name}' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
                 }
 
                 val group = permissionManager.createGroup(request.name, request.default)
@@ -54,7 +56,7 @@ fun Route.permissionRoutes(
             put("{name}") {
                 val name = call.parameters["name"]!!
                 val group = permissionManager.getGroup(name)
-                    ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
+                    ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Permission group '$name' not found", ApiErrors.NOT_FOUND))
 
                 val request = call.receive<UpdatePermissionGroupRequest>()
                 request.default?.let { permissionManager.setDefault(group.name, it) }
@@ -84,7 +86,7 @@ fun Route.permissionRoutes(
             delete("{name}") {
                 val name = call.parameters["name"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
+                    return@delete call.respond(HttpStatusCode.NotFound, apiError("Permission group '$name' not found", ApiErrors.NOT_FOUND))
                 }
 
                 permissionManager.deleteGroup(name)
@@ -97,7 +99,7 @@ fun Route.permissionRoutes(
             post("{name}/permissions") {
                 val name = call.parameters["name"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
+                    return@post call.respond(HttpStatusCode.NotFound, apiError("Permission group '$name' not found", ApiErrors.NOT_FOUND))
                 }
                 val request = call.receive<PermissionModifyRequest>()
                 try {
@@ -106,7 +108,7 @@ fun Route.permissionRoutes(
                     eventBus.emit(PermsEvents.groupUpdated(name))
                     call.respond(ApiMessage(true, "Permission '${request.permission}' added to '$name'"))
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid permission"))
+                    call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid permission", ApiErrors.VALIDATION_FAILED))
                 }
             }
 
@@ -114,7 +116,7 @@ fun Route.permissionRoutes(
             delete("{name}/permissions") {
                 val name = call.parameters["name"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Permission group '$name' not found"))
+                    return@delete call.respond(HttpStatusCode.NotFound, apiError("Permission group '$name' not found", ApiErrors.NOT_FOUND))
                 }
                 val request = call.receive<PermissionModifyRequest>()
                 permissionManager.removePermission(name, request.permission)
@@ -128,7 +130,7 @@ fun Route.permissionRoutes(
             get("{name}/meta") {
                 val name = call.parameters["name"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                    return@get call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.NOT_FOUND))
                 }
                 call.respond(MetaResponse(permissionManager.getGroupMeta(name)))
             }
@@ -137,7 +139,7 @@ fun Route.permissionRoutes(
             put("{name}/meta") {
                 val name = call.parameters["name"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                    return@put call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.NOT_FOUND))
                 }
                 val request = call.receive<MetaSetRequest>()
                 permissionManager.setGroupMeta(name, request.key, request.value)
@@ -150,7 +152,7 @@ fun Route.permissionRoutes(
                 val name = call.parameters["name"]!!
                 val key = call.parameters["key"]!!
                 if (permissionManager.getGroup(name) == null) {
-                    return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                    return@delete call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.NOT_FOUND))
                 }
                 permissionManager.removeGroupMeta(name, key)
                 eventBus.emit(PermsEvents.groupUpdated(name))
@@ -219,7 +221,7 @@ fun Route.permissionRoutes(
                     eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     call.respond(ApiMessage(true, "Group '${request.group}' added to player '$playerName'"))
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
+                    call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid request", ApiErrors.VALIDATION_FAILED))
                 }
             }
 
@@ -235,7 +237,7 @@ fun Route.permissionRoutes(
                     eventBus.emit(PermsEvents.playerUpdated(uuid, playerName))
                     call.respond(ApiMessage(true, "Group '${request.group}' removed from player '$playerName'"))
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
+                    call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid request", ApiErrors.VALIDATION_FAILED))
                 }
             }
 
@@ -251,7 +253,7 @@ fun Route.permissionRoutes(
             put("{uuid}/meta") {
                 val uuid = call.parameters["uuid"]!!
                 if (permissionManager.getPlayer(uuid) == null) {
-                    return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Player not found"))
+                    return@put call.respond(HttpStatusCode.NotFound, apiError("Player not found", ApiErrors.NOT_FOUND))
                 }
                 val request = call.receive<MetaSetRequest>()
                 permissionManager.setPlayerMeta(uuid, request.key, request.value)
@@ -265,7 +267,7 @@ fun Route.permissionRoutes(
                 val uuid = call.parameters["uuid"]!!
                 val key = call.parameters["key"]!!
                 if (permissionManager.getPlayer(uuid) == null) {
-                    return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Player not found"))
+                    return@delete call.respond(HttpStatusCode.NotFound, apiError("Player not found", ApiErrors.NOT_FOUND))
                 }
                 permissionManager.removePlayerMeta(uuid, key)
                 val playerName = permissionManager.getPlayer(uuid)?.name ?: "unknown"
@@ -319,7 +321,7 @@ fun Route.permissionRoutes(
             get("{name}") {
                 val name = call.parameters["name"]!!
                 val track = permissionManager.getTrack(name)
-                    ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Track '$name' not found"))
+                    ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Track '$name' not found", ApiErrors.NOT_FOUND))
                 call.respond(PermissionTrackResponse(track.name, track.groups))
             }
 
@@ -332,7 +334,7 @@ fun Route.permissionRoutes(
                     eventBus.emit(PermsEvents.trackCreated(track.name))
                     call.respond(HttpStatusCode.Created, ApiMessage(true, "Track '${track.name}' created"))
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid request"))
+                    call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid request", ApiErrors.VALIDATION_FAILED))
                 }
             }
 
@@ -345,7 +347,7 @@ fun Route.permissionRoutes(
                     eventBus.emit(PermsEvents.trackDeleted(name))
                     call.respond(ApiMessage(true, "Track '$name' deleted"))
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.NotFound, ApiMessage(false, e.message ?: "Track not found"))
+                    call.respond(HttpStatusCode.NotFound, apiError(e.message ?: "Track not found", ApiErrors.NOT_FOUND))
                 }
             }
 
@@ -402,7 +404,7 @@ fun Route.permissionRoutes(
                 try {
                     PermissionManager.validatePermission(request.permission)
                 } catch (e: IllegalArgumentException) {
-                    return@post call.respond(HttpStatusCode.BadRequest, ApiMessage(false, e.message ?: "Invalid permission"))
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid permission", ApiErrors.VALIDATION_FAILED))
                 }
 
                 val context = PermissionContext(request.server, request.world, request.expiresAt)

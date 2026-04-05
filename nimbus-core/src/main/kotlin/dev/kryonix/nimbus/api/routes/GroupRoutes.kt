@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.config.GroupConfig
 import dev.kryonix.nimbus.config.GroupDefinition
 import dev.kryonix.nimbus.config.GroupType
@@ -43,7 +45,7 @@ fun Route.groupRoutes(
         get("{name}") {
             val name = call.parameters["name"]!!
             val group = groupManager.getGroup(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
             call.respond(group.toResponse(registry))
         }
 
@@ -53,11 +55,11 @@ fun Route.groupRoutes(
 
             val errors = validateGroupRequest(request)
             if (errors.isNotEmpty()) {
-                return@post call.respond(HttpStatusCode.BadRequest, ApiMessage(false, errors.joinToString("; ")))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
             }
 
             if (groupManager.getGroup(request.name) != null) {
-                return@post call.respond(HttpStatusCode.Conflict, ApiMessage(false, "Group '${request.name}' already exists"))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.name}' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
             }
 
             val software = ServerSoftware.valueOf(request.software.uppercase())
@@ -80,13 +82,13 @@ fun Route.groupRoutes(
         put("{name}") {
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
 
             val request = call.receive<CreateGroupRequest>()
 
             val errors = validateGroupRequest(request)
             if (errors.isNotEmpty()) {
-                return@put call.respond(HttpStatusCode.BadRequest, ApiMessage(false, errors.joinToString("; ")))
+                return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
             }
 
             val software = ServerSoftware.valueOf(request.software.uppercase())
@@ -110,13 +112,13 @@ fun Route.groupRoutes(
         delete("{name}") {
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
-                ?: return@delete call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Group '$name' not found"))
+                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
 
             val running = registry.getByGroup(name)
             if (running.isNotEmpty()) {
                 return@delete call.respond(
                     HttpStatusCode.Conflict,
-                    ApiMessage(false, "Group '$name' has ${running.size} running instance(s). Stop them first.")
+                    apiError("Group '$name' has ${running.size} running instance(s). Stop them first.", ApiErrors.GROUP_HAS_RUNNING_INSTANCES)
                 )
             }
 

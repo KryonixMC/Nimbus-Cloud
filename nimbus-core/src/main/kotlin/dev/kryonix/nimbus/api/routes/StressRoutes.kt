@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.stress.StressTestManager
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -32,21 +34,21 @@ fun Route.stressRoutes(stressTestManager: StressTestManager) {
     post("/api/stress/start") {
         val req = call.receive<StressStartRequest>()
         if (req.players <= 0) {
-            call.respond(ApiMessage(false, "Player count must be positive"))
+            call.respond(apiError("Player count must be positive", ApiErrors.INVALID_INPUT))
             return@post
         }
         val started = stressTestManager.start(req.group, req.players, req.rampSeconds * 1000)
         if (started) {
             call.respond(ApiMessage(true, "Stress test started: ${req.players} players on ${req.group ?: "all groups"}"))
         } else {
-            call.respond(ApiMessage(false, "A stress test is already running or the target group is a proxy"))
+            call.respond(apiError("A stress test is already running or the target group is a proxy", ApiErrors.STRESS_ALREADY_RUNNING))
         }
     }
 
     // POST /api/stress/stop — Stop the stress test
     post("/api/stress/stop") {
         if (!stressTestManager.isActive()) {
-            call.respond(ApiMessage(false, "No stress test is running"))
+            call.respond(apiError("No stress test is running", ApiErrors.STRESS_NOT_RUNNING))
             return@post
         }
         stressTestManager.stop()
@@ -57,14 +59,14 @@ fun Route.stressRoutes(stressTestManager: StressTestManager) {
     post("/api/stress/ramp") {
         val req = call.receive<StressRampRequest>()
         if (req.players < 0) {
-            call.respond(ApiMessage(false, "Player count cannot be negative"))
+            call.respond(apiError("Player count cannot be negative", ApiErrors.INVALID_INPUT))
             return@post
         }
         val ramped = stressTestManager.ramp(req.players, req.durationSeconds * 1000)
         if (ramped) {
             call.respond(ApiMessage(true, "Ramping to ${req.players} players over ${req.durationSeconds}s"))
         } else {
-            call.respond(ApiMessage(false, "No stress test is running"))
+            call.respond(apiError("No stress test is running", ApiErrors.STRESS_NOT_RUNNING))
         }
     }
 }

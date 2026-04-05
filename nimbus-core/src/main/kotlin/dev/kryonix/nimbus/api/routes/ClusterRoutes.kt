@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.cluster.NodeManager
 import dev.kryonix.nimbus.loadbalancer.TcpLoadBalancer
 import dev.kryonix.nimbus.service.ServiceRegistry
@@ -16,7 +18,7 @@ fun Route.clusterRoutes(
     // GET /api/nodes — List all cluster nodes
     get("/api/nodes") {
         if (nodeManager == null) {
-            return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Cluster mode not enabled"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Cluster mode not enabled", ApiErrors.CLUSTER_NOT_ENABLED))
         }
         val nodes = nodeManager.getAllNodes().map { node ->
             val nodeServices = registry.getAll().filter { it.nodeId == node.nodeId }
@@ -42,7 +44,7 @@ fun Route.clusterRoutes(
     // GET /api/loadbalancer — Load balancer status
     get("/api/loadbalancer") {
         if (loadBalancer == null) {
-            return@get call.respond(HttpStatusCode.NotFound, ApiMessage(false, "Load balancer not enabled"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Load balancer not enabled", ApiErrors.LOAD_BALANCER_NOT_ENABLED))
         }
         val healthStates = loadBalancer.healthManager.getAll()
         val backends = healthStates.map { state ->

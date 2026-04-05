@@ -1,6 +1,8 @@
 package dev.kryonix.nimbus.api.routes
 
 import dev.kryonix.nimbus.api.*
+import dev.kryonix.nimbus.api.ApiErrors
+import dev.kryonix.nimbus.api.apiError
 import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.config.ServerSoftware
 import dev.kryonix.nimbus.group.GroupManager
@@ -90,7 +92,7 @@ fun Route.networkRoutes(
         }
 
         if (proxyService == null) {
-            return@post call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage(false, "No Velocity proxy available"))
+            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiErrors.PROXY_NOT_AVAILABLE))
         }
 
         // Send player via Velocity's /send command
@@ -98,7 +100,7 @@ fun Route.networkRoutes(
         if (success) {
             call.respond(ApiMessage(true, "Player '$playerName' sent to '${request.targetService}'"))
         } else {
-            call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to send player transfer command"))
+            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to send player transfer command", ApiErrors.INTERNAL_ERROR))
         }
     }
 
@@ -113,7 +115,7 @@ fun Route.networkRoutes(
         }
 
         if (proxyService == null) {
-            return@post call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage(false, "No Velocity proxy available"))
+            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiErrors.PROXY_NOT_AVAILABLE))
         }
 
         // Velocity's /velocity kick command: velocity kick <player> <reason>
@@ -121,7 +123,7 @@ fun Route.networkRoutes(
         if (success) {
             call.respond(ApiMessage(true, "Player '$playerName' kicked from the network"))
         } else {
-            call.respond(HttpStatusCode.InternalServerError, ApiMessage(false, "Failed to execute kick command"))
+            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to execute kick command", ApiErrors.INTERNAL_ERROR))
         }
     }
 
@@ -137,7 +139,7 @@ fun Route.networkRoutes(
 
         if (targetServices.isEmpty()) {
             val scope = request.group?.let { "group '${it}'" } ?: "network"
-            return@post call.respond(HttpStatusCode.NotFound, ApiMessage(false, "No ready services found in $scope"))
+            return@post call.respond(HttpStatusCode.NotFound, apiError("No ready services found in $scope", ApiErrors.NOT_FOUND))
         }
 
         var successCount = 0
