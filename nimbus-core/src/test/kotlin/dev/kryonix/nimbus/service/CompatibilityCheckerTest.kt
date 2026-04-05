@@ -165,8 +165,8 @@ class CompatibilityCheckerTest {
         val legacy = makeGroup("OldServer", ServerSoftware.PAPER, "1.12.2")
         val fabric = makeGroup("FabricServer", ServerSoftware.FABRIC, "1.21.4")
         every { groupManager.getAllGroups() } returns listOf(legacy, fabric)
-        every { javaResolver.requiredJavaVersion("1.12.2", ServerSoftware.PAPER) } returns 8
-        every { javaResolver.maxJavaVersion("1.12.2", ServerSoftware.PAPER) } returns 11
+        every { javaResolver.requiredJavaVersion("1.12.2", ServerSoftware.PAPER) } returns 16
+        every { javaResolver.maxJavaVersion("1.12.2", ServerSoftware.PAPER) } returns 16
         every { javaResolver.requiredJavaVersion("1.21.4", ServerSoftware.FABRIC) } returns 21
         every { javaResolver.maxJavaVersion("1.21.4", ServerSoftware.FABRIC) } returns null
 
@@ -237,8 +237,8 @@ class CompatibilityCheckerTest {
         val legacy = makeGroup("OldServer", ServerSoftware.PAPER, "1.8.8")
         val neoforge = makeGroup("ModServer", ServerSoftware.NEOFORGE, "1.21.4")
         every { groupManager.getAllGroups() } returns listOf(legacy, neoforge)
-        every { javaResolver.requiredJavaVersion("1.8.8", ServerSoftware.PAPER) } returns 8
-        every { javaResolver.maxJavaVersion("1.8.8", ServerSoftware.PAPER) } returns 11
+        every { javaResolver.requiredJavaVersion("1.8.8", ServerSoftware.PAPER) } returns 16
+        every { javaResolver.maxJavaVersion("1.8.8", ServerSoftware.PAPER) } returns 16
         every { javaResolver.requiredJavaVersion("1.21.4", ServerSoftware.NEOFORGE) } returns 21
         every { javaResolver.maxJavaVersion("1.21.4", ServerSoftware.NEOFORGE) } returns null
 

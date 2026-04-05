@@ -163,7 +163,7 @@ class JavaResolver(
         }
 
         // Check environment variables
-        for (version in listOf(8, 11, 16, 17, 21, 22, 23, 24, 25, 26)) {
+        for (version in listOf(16, 17, 21, 22, 23, 24, 25, 26)) {
             val envVar = "JAVA_${version}_HOME"
             val home = System.getenv(envVar)
             if (home != null) {

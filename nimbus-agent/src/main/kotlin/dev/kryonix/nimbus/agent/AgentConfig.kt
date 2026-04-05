@@ -28,10 +28,6 @@ data class AgentDefinition(
 
 @Serializable
 data class JavaDefinition(
-    @SerialName("java_8")
-    val java8: String = "",
-    @SerialName("java_11")
-    val java11: String = "",
     @SerialName("java_16")
     val java16: String = "",
     @SerialName("java_17")
@@ -40,7 +36,7 @@ data class JavaDefinition(
     val java21: String = ""
 ) {
     fun toMap(): Map<Int, String> {
-        return mapOf(8 to java8, 11 to java11, 16 to java16, 17 to java17, 21 to java21)
+        return mapOf(16 to java16, 17 to java17, 21 to java21)
             .filter { it.value.isNotBlank() }
     }
 }
@@ -65,8 +61,6 @@ object AgentConfigLoader {
             appendLine("# Optional: specify paths to Java installations.")
             appendLine("# Leave empty for auto-detection / auto-download from Adoptium.")
             appendLine("[java]")
-            appendLine("java_8 = \"${config.java.java8}\"")
-            appendLine("java_11 = \"${config.java.java11}\"")
             appendLine("java_16 = \"${config.java.java16}\"")
             appendLine("java_17 = \"${config.java.java17}\"")
             appendLine("java_21 = \"${config.java.java21}\"")

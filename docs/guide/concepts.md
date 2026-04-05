@@ -243,12 +243,11 @@ Different Minecraft versions require different Java versions. Nimbus handles thi
 
 | Minecraft Version | Required Java | Max Java |
 |---|---|---|
-| 1.7.x and below | Java 8 | Java 8 |
-| 1.8.x - 1.12.x | Java 8 | Java 11 |
-| 1.13.x - 1.16.x | Java 8 | Java 16 |
+| 1.16.x and below | Java 16 | Java 16 |
 | 1.17.x | Java 16 | No limit |
 | 1.18.x - 1.20.4 | Java 17 | No limit |
 | 1.20.5 - 1.21+ | Java 21 | No limit |
+| 26.x+ (new scheme) | Java 25 | No limit |
 | Velocity (all versions) | Java 21 | No limit |
 
 ### How it works
@@ -259,7 +258,7 @@ When Nimbus needs to start a server, it resolves the correct Java executable thr
 2. **Configured paths** — Paths set in the `[java]` section of [`nimbus.toml`](/config/nimbus-toml#java)
 3. **Auto-detection** — Nimbus scans for installed JDKs in common locations:
    - Nimbus's own `jdks/` cache directory
-   - Environment variables (`JAVA_8_HOME`, `JAVA_17_HOME`, `JAVA_21_HOME`, etc.)
+   - Environment variables (`JAVA_16_HOME`, `JAVA_17_HOME`, `JAVA_21_HOME`, etc.)
    - `JAVA_HOME`
    - System directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, `~/.jdks`, etc.)
 4. **Auto-download** — If no compatible JDK is found, Nimbus downloads one from [Eclipse Adoptium](https://adoptium.net/) (Temurin) automatically
@@ -270,16 +269,16 @@ When Nimbus needs to start a server, it resolves the correct Java executable thr
   </div>
   <pre class="terminal-body">
 <span class="t-dim">[12:00:01]</span> <span class="t-cyan">ℹ</span> Detected Java installations: Java 17, Java 21
-<span class="t-dim">[12:00:05]</span> <span class="t-yellow">⚠</span> No Java 8-11 found — downloading automatically...
-<span class="t-dim">[12:00:08]</span> <span class="t-cyan">ℹ</span> Downloaded Java 8 (104.2 MB), extracting...
-<span class="t-dim">[12:00:12]</span> <span class="t-green">✓</span> Java 8 installed to jdks/java-8/bin/java
+<span class="t-dim">[12:00:05]</span> <span class="t-yellow">⚠</span> No Java 16 found — downloading automatically...
+<span class="t-dim">[12:00:08]</span> <span class="t-cyan">ℹ</span> Downloaded Java 16 (187.3 MB), extracting...
+<span class="t-dim">[12:00:12]</span> <span class="t-green">✓</span> Java 16 installed to jdks/java-16/bin/java
 </pre>
 </div>
 
 Downloaded JDKs are cached in the `jdks/` directory inside your Nimbus installation. They persist across restarts and are reused automatically.
 
 ::: tip
-For most modern setups (1.20.5+), you only need Java 21. Nimbus will auto-detect it from your system PATH. The auto-download feature is most useful when running legacy servers (1.8.x - 1.16.x) alongside modern ones.
+For most modern setups (1.20.5+), you only need Java 21. Nimbus will auto-detect it from your system PATH. The auto-download feature is most useful when running legacy servers (1.8.x - 1.16.x) alongside modern ones. Java 16 is the minimum supported runtime for all Nimbus plugins.
 :::
 
 ## Ports

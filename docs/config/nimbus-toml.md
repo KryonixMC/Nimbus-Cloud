@@ -75,8 +75,6 @@ node_timeout = 15000
 placement_strategy = "least-services"
 
 [java]
-java_8 = ""
-java_11 = ""
 java_16 = ""
 java_17 = ""
 java_21 = ""
@@ -441,19 +439,17 @@ You can manage all cluster and load balancer settings from the console using the
 
 Java installation paths for different versions. Nimbus uses these to launch servers that require specific Java versions.
 
-**If a path is empty, Nimbus will auto-detect installed JDKs** by scanning environment variables (`JAVA_8_HOME`, `JAVA_17_HOME`, etc.), `JAVA_HOME`, and common directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, `~/.jdks`). **If no compatible JDK is found, Nimbus downloads one from [Adoptium](https://adoptium.net/) automatically** and caches it in the `jdks/` directory.
+**If a path is empty, Nimbus will auto-detect installed JDKs** by scanning environment variables (`JAVA_16_HOME`, `JAVA_17_HOME`, etc.), `JAVA_HOME`, and common directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, `~/.jdks`). **If no compatible JDK is found, Nimbus downloads one from [Adoptium](https://adoptium.net/) automatically** and caches it in the `jdks/` directory.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `java_8` | String | `""` | Path to Java 8 binary. For legacy servers (1.8.x - 1.16.x). |
-| `java_11` | String | `""` | Path to Java 11 binary. For servers 1.8.x - 1.12.x (upper limit). |
-| `java_16` | String | `""` | Path to Java 16 binary. For Minecraft 1.17.x. |
+| `java_16` | String | `""` | Path to Java 16 binary. For Minecraft 1.8.x - 1.17.x (minimum supported runtime). |
 | `java_17` | String | `""` | Path to Java 17 binary. For Minecraft 1.18.x - 1.20.4. |
 | `java_21` | String | `""` | Path to Java 21 binary. For Minecraft 1.20.5+ and Velocity. Auto-detected if available on PATH. |
 
 ```toml
 [java]
-java_8 = "/usr/lib/jvm/java-8-openjdk/bin/java"
+java_16 = "/usr/lib/jvm/java-16-openjdk/bin/java"
 java_17 = "/usr/lib/jvm/java-17-openjdk/bin/java"
 java_21 = "/usr/lib/jvm/java-21-openjdk/bin/java"
 ```

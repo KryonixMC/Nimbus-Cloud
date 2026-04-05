@@ -60,7 +60,7 @@ class JavaResolver(
             minor == 20 && patch >= 5 -> 21             // 1.20.5+ -> Java 21+
             minor in 18..20 -> 17                       // 1.18-1.20.4 -> Java 17+
             minor == 17 -> 16                           // 1.17 -> Java 16+
-            else -> 8                                   // 1.16 and below -> Java 8+
+            else -> 16                                  // 1.16 and below -> Java 16 (minimum supported)
         }
     }
 
@@ -79,9 +79,7 @@ class JavaResolver(
 
         return when {
             minor >= 17 -> null                         // 1.17+ has no upper limit
-            minor in 13..16 -> 16                       // 1.13-1.16 max Java 16
-            minor in 8..12 -> 11                        // 1.8-1.12 max Java 11
-            else -> 8                                   // pre-1.8 -> Java 8 only
+            else -> 16                                  // 1.8-1.16 max Java 16
         }
     }
 
@@ -299,7 +297,7 @@ class JavaResolver(
         }
 
         // Check environment variables
-        for (version in listOf(8, 11, 16, 17, 21, 22, 23, 24, 25, 26)) {
+        for (version in listOf(16, 17, 21, 22, 23, 24, 25, 26)) {
             val envVar = "JAVA_${version}_HOME"
             val home = System.getenv(envVar)
             if (home != null) {

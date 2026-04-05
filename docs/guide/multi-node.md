@@ -137,8 +137,6 @@ max_services = 10
 # Optional: specify paths to Java installations.
 # Leave empty for auto-detection / auto-download from Adoptium.
 [java]
-java_8 = ""
-java_11 = ""
 java_16 = ""
 java_17 = ""
 java_21 = ""

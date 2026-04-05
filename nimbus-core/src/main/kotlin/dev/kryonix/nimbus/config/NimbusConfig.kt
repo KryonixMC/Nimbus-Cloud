@@ -73,10 +73,6 @@ data class DatabaseConfig(
 
 @Serializable
 data class JavaConfig(
-    @SerialName("java_8")
-    val java8: String = "",
-    @SerialName("java_11")
-    val java11: String = "",
     @SerialName("java_16")
     val java16: String = "",
     @SerialName("java_17")
@@ -85,8 +81,6 @@ data class JavaConfig(
     val java21: String = ""
 ) {
     fun toMap(): Map<Int, String> = buildMap {
-        if (java8.isNotEmpty()) put(8, java8)
-        if (java11.isNotEmpty()) put(11, java11)
         if (java16.isNotEmpty()) put(16, java16)
         if (java17.isNotEmpty()) put(17, java17)
         if (java21.isNotEmpty()) put(21, java21)

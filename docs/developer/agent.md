@@ -69,7 +69,7 @@ The `software` parameter is included in the download request so the controller c
 
 ## Java version resolution
 
-`JavaResolver` finds the correct Java version by checking configured paths (`[java]` section), cached downloads in `jdks/`, environment variables (`JAVA_8_HOME` through `JAVA_21_HOME`), `JAVA_HOME`, and common directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, etc.). If no compatible version is found, it auto-downloads from the Adoptium API.
+`JavaResolver` finds the correct Java version by checking configured paths (`[java]` section), cached downloads in `jdks/`, environment variables (`JAVA_16_HOME` through `JAVA_21_HOME`), `JAVA_HOME`, and common directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, etc.). If no compatible version is found, it auto-downloads from the Adoptium API. Java 16 is the minimum supported runtime.
 
 ## Building and running
 
@@ -104,8 +104,6 @@ max_services = 10
 # Optional: specify paths to Java installations.
 # Leave empty for auto-detection / auto-download from Adoptium.
 [java]
-java_8 = ""
-java_11 = ""
 java_16 = ""
 java_17 = ""
 java_21 = ""
