@@ -374,7 +374,7 @@ class UpdateChecker(
                 return false
             }
 
-            // Derive versioned filename from download URL (e.g. nimbus-controller-0.2.0.jar)
+            // Derive versioned filename from download URL (e.g. nimbus-core-0.2.0.jar)
             val assetName = update.downloadUrl.substringAfterLast('/')
             val targetJar = currentJar.resolveSibling(assetName)
 
@@ -433,7 +433,7 @@ class UpdateChecker(
             Files.newDirectoryStream(parentDir) { path ->
                 val name = path.fileName.toString()
                 name != currentFileName && name.endsWith(".jar") && (
-                    name.startsWith("nimbus-controller-") ||
+                    name.startsWith("nimbus-core-") ||
                     (name.startsWith("nimbus-core-") && name.contains("-all")) ||
                     name == "nimbus-update.jar" ||
                     name == "nimbus-backup.jar"

@@ -48,7 +48,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 
 `.github/workflows/release.yml` — manually triggered (`workflow_dispatch`):
 - Input: version (optional, defaults to `gradle.properties`) + prerelease flag
-- Builds `shadowJar`, uploads `nimbus-controller-<version>.jar` + `nimbus-agent-<version>.jar`
+- Builds `shadowJar`, uploads `nimbus-core-<version>.jar` + `nimbus-agent-<version>.jar`
 - Creates a GitHub Release **draft** with auto-generated release notes
 
 ## Modules

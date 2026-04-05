@@ -205,7 +205,7 @@ download_nimbus() {
         exit 1
     fi
 
-    # Keep the original versioned filename (e.g. nimbus-controller-0.1.2.jar)
+    # Keep the original versioned filename (e.g. nimbus-core-0.1.2.jar)
     local jar_name
     jar_name=$(basename "$jar_url")
     info "Downloading Nimbus ${selected_version}..."
@@ -264,7 +264,7 @@ done
 # Find the latest nimbus JAR by semver comparison
 find_latest_jar() {
     local best="" best_major=0 best_minor=0 best_patch=0
-    for jar in nimbus-controller-*.jar nimbus-core-*-all.jar; do
+    for jar in nimbus-core-*.jar nimbus-core-*-all.jar; do
         [[ -f "$jar" ]] || continue
         local ver
         ver=$(echo "$jar" | grep -oP '\d+\.\d+\.\d+')

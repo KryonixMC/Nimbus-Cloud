@@ -144,7 +144,7 @@ function Install-Nimbus {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    # Keep the original versioned filename (e.g. nimbus-controller-0.1.2.jar)
+    # Keep the original versioned filename (e.g. nimbus-core-0.1.2.jar)
     $jarName = $jarAsset.name
     $jarPath = Join-Path $InstallDir $jarName
     Write-Info "Downloading Nimbus $($release.tag_name)..."
@@ -178,7 +178,7 @@ set "NIMBUS_JAR="
 set "BEST_MAJOR=0"
 set "BEST_MINOR=0"
 set "BEST_PATCH=0"
-for %%F in (nimbus-controller-*.jar nimbus-core-*-all.jar) do call :check_jar "%%F"
+for %%F in (nimbus-core-*.jar nimbus-core-*-all.jar) do call :check_jar "%%F"
 if not defined NIMBUS_JAR (
     if exist nimbus.jar (
         set "NIMBUS_JAR=nimbus.jar"
@@ -197,11 +197,11 @@ exit /b %ERRORLEVEL%
 
 :check_jar
 set "JAR_NAME=%~1"
-REM Extract version digits from filename (e.g. nimbus-controller-0.1.2.jar)
+REM Extract version digits from filename (e.g. nimbus-core-0.1.2.jar)
 for /f "tokens=1-3 delims=.-" %%A in ("!JAR_NAME:*nimbus-=!") do (
     set "V_MAJOR=%%A" & set "V_MINOR=%%B" & set "V_PATCH=%%C"
 )
-REM Remove non-numeric prefix from V_MAJOR (e.g. "controller" from "controller-0")
+REM Remove non-numeric prefix from V_MAJOR (e.g. "core" from "core-0")
 for /f "delims=0123456789" %%X in ("%V_MAJOR%") do set "V_MAJOR=!V_MAJOR:%%X=!"
 if not defined V_MAJOR goto :eof
 REM Compare: is this version higher than current best?
@@ -228,7 +228,7 @@ Set-Location $PSScriptRoot
 function Find-LatestJar {
     $best = $null
     $bestVer = [Version]"0.0.0"
-    foreach ($jar in (Get-ChildItem -Filter "nimbus-controller-*.jar") + (Get-ChildItem -Filter "nimbus-core-*-all.jar")) {
+    foreach ($jar in (Get-ChildItem -Filter "nimbus-core-*.jar") + (Get-ChildItem -Filter "nimbus-core-*-all.jar")) {
         if ($jar.Name -match '(\d+\.\d+\.\d+)') {
             $ver = [Version]$Matches[1]
             if ($ver -gt $bestVer) {
