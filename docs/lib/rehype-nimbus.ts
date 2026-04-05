@@ -127,9 +127,28 @@ function hasNimbusTitle(node: any): boolean {
 }
 
 export function rehypeNimbus() {
+  let logged = false;
   return (tree: any) => {
+    // Debug: log first invocation to verify plugin runs
+    if (!logged) {
+      console.log('[rehype-nimbus] Plugin running');
+      logged = true;
+    }
+
+    // Collect all elements first, then process (avoid walk-during-mutate issues)
+    const targets: any[] = [];
     walk(tree, (node: any) => {
-      // Match <pre> elements (what Shiki outputs)
+      if (node.type !== 'element') return;
+      if (node.tagName === 'pre' || node.tagName === 'figure' || node.tagName === 'code') {
+        const props = node.properties ?? {};
+        // Log first few elements to see what properties exist
+        if (!logged) {
+          console.log(`[rehype-nimbus] Found <${node.tagName}> props:`, Object.keys(props));
+        }
+      }
+    });
+
+    walk(tree, (node: any) => {
       if (node.type !== 'element') return;
 
       const isTarget =
@@ -137,6 +156,7 @@ export function rehypeNimbus() {
         (node.tagName === 'figure' && hasNimbusTitle(node));
 
       if (!isTarget) return;
+      console.log(`[rehype-nimbus] Found Nimbus block: <${node.tagName}>`);
 
       // Find span.line elements inside and colorize
       walk(node, (el: any) => {
