@@ -193,14 +193,17 @@ download_agent() {
         exit 1
     fi
 
+    # Keep the original versioned filename (e.g. nimbus-agent-0.1.2.jar)
+    local jar_name
+    jar_name=$(basename "$jar_url")
     sudo mkdir -p "$INSTALL_DIR"
     info "Downloading Nimbus Agent ${selected_version}..."
-    sudo curl -fsSL -o "$INSTALL_DIR/nimbus-agent.jar" "$jar_url"
+    sudo curl -fsSL -o "$INSTALL_DIR/$jar_name" "$jar_url"
 
     # Set ownership to invoking user
     local real_user="${SUDO_USER:-$(whoami)}"
     sudo chown -R "$real_user:$(id -gn "$real_user")" "$INSTALL_DIR"
-    success "Downloaded to $INSTALL_DIR/nimbus-agent.jar"
+    success "Downloaded to $INSTALL_DIR/$jar_name"
 }
 
 # ── Create default config ───────────────────────────────────────
@@ -261,6 +264,7 @@ create_start_script() {
     info "Creating start scripts..."
 
     # start.sh — starts agent in screen and attaches, or reattaches if already running
+    # Supports --run (restart loop) and --detach (systemd) modes
     sudo tee "$INSTALL_DIR/start.sh" >/dev/null <<'SCRIPT'
 #!/usr/bin/env bash
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -268,11 +272,56 @@ cd "$SCRIPT_DIR"
 
 SESSION="nimbus-agent"
 DETACH=false
+RUN_MODE=false
 for arg in "$@"; do
-    if [[ "$arg" == "--detach" ]]; then
-        DETACH=true
-    fi
+    case "$arg" in
+        --detach) DETACH=true ;;
+        --run) RUN_MODE=true ;;
+    esac
 done
+
+# Find the latest agent JAR by semver comparison
+find_latest_jar() {
+    local best="" best_major=0 best_minor=0 best_patch=0
+    for jar in nimbus-agent-*.jar; do
+        [[ -f "$jar" ]] || continue
+        # Skip nimbus-agent.jar (no version) in this loop
+        local ver
+        ver=$(echo "$jar" | grep -oP '\d+\.\d+\.\d+')
+        [[ -z "$ver" ]] && continue
+        IFS='.' read -r major minor patch <<< "$ver"
+        if (( major > best_major || (major == best_major && minor > best_minor) || (major == best_major && minor == best_minor && patch > best_patch) )); then
+            best="$jar"
+            best_major=$major; best_minor=$minor; best_patch=$patch
+        fi
+    done
+    # Fallback: unversioned nimbus-agent.jar (legacy installs)
+    if [[ -z "$best" && -f "nimbus-agent.jar" ]]; then
+        best="nimbus-agent.jar"
+    fi
+    echo "$best"
+}
+
+JAVA_OPTS="-Xms256M -Xmx512M"
+JAVA_OPTS="$JAVA_OPTS -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
+
+# --run mode: called by screen session, handles restart loop
+if [[ "$RUN_MODE" == true ]]; then
+    while true; do
+        AGENT_JAR=$(find_latest_jar)
+        if [[ -z "$AGENT_JAR" ]]; then
+            echo "Error: No nimbus-agent JAR found in $SCRIPT_DIR"
+            exit 1
+        fi
+        echo "Starting $AGENT_JAR..."
+        java $JAVA_OPTS -jar "$AGENT_JAR"
+        EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 10 ]]; then
+            exit $EXIT_CODE
+        fi
+        echo "Update detected, restarting with latest version..."
+    done
+fi
 
 # Already running? Attach if interactive, exit if detached.
 if screen -list | grep -q "\.$SESSION\b"; then
@@ -283,13 +332,10 @@ if screen -list | grep -q "\.$SESSION\b"; then
     exec screen -r "$SESSION"
 fi
 
-JAVA_OPTS="-Xms256M -Xmx512M"
-JAVA_OPTS="$JAVA_OPTS -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
-
 if [[ "$DETACH" == true ]]; then
-    screen -dmS "$SESSION" java $JAVA_OPTS -jar nimbus-agent.jar
+    screen -dmS "$SESSION" "$0" --run
 else
-    exec screen -S "$SESSION" java $JAVA_OPTS -jar nimbus-agent.jar
+    exec screen -S "$SESSION" "$0" --run
 fi
 SCRIPT
     sudo chmod +x "$INSTALL_DIR/start.sh"

@@ -36,6 +36,7 @@ import java.lang.management.ManagementFactory
 import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import kotlin.system.exitProcess
 
 private val logger by lazy { LoggerFactory.getLogger("Nimbus") }
 
@@ -142,9 +143,14 @@ fun nimbusMain() = runBlocking {
     // Check for Nimbus updates
     val updateChecker = UpdateChecker(baseDir)
     try {
+        // Clean up old JARs from previous updates (deferred to avoid Windows file-lock)
+        updateChecker.cleanupOldJars()
+
         val updated = updateChecker.checkAndApply()
         if (updated) {
-            logger.info("Nimbus JAR updated — restart to apply the new version.")
+            logger.info("Nimbus JAR updated — restarting automatically...")
+            updateChecker.close()
+            exitProcess(10) // Signal start script to restart with new JAR
         }
     } catch (e: Exception) {
         logger.debug("Update check failed: {}", e.message)

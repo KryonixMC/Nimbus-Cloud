@@ -130,7 +130,9 @@ function Install-NimbusAgent {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    $jarPath = Join-Path $InstallDir "nimbus-agent.jar"
+    # Keep the original versioned filename (e.g. nimbus-agent-0.1.2.jar)
+    $jarName = $jarAsset.name
+    $jarPath = Join-Path $InstallDir $jarName
     Write-Info "Downloading Nimbus Agent $($release.tag_name)..."
     Invoke-WebRequest -Uri $jarAsset.browser_download_url -OutFile $jarPath -UseBasicParsing
     Write-Success "Downloaded to $jarPath"
@@ -175,21 +177,97 @@ auth_token = "$authToken"
 function New-StartScript {
     Write-Info "Creating start scripts..."
 
+    # nimbus-agent.bat — finds latest versioned JAR by semver, restart loop on exit code 10
     $batContent = @"
 @echo off
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 set JAVA_OPTS=-Xms256M -Xmx512M
 set JAVA_OPTS=%JAVA_OPTS% -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200
 
-java %JAVA_OPTS% -jar nimbus-agent.jar %*
+:start
+set "AGENT_JAR="
+set "BEST_MAJOR=0"
+set "BEST_MINOR=0"
+set "BEST_PATCH=0"
+for %%F in (nimbus-agent-*.jar) do call :check_jar "%%F"
+if not defined AGENT_JAR (
+    if exist nimbus-agent.jar (
+        set "AGENT_JAR=nimbus-agent.jar"
+    ) else (
+        echo Error: No nimbus-agent JAR found in %~dp0
+        exit /b 1
+    )
+)
+echo Starting %AGENT_JAR%...
+java %JAVA_OPTS% -jar %AGENT_JAR% %*
+if %ERRORLEVEL% equ 10 (
+    echo Update detected, restarting with latest version...
+    goto start
+)
+exit /b %ERRORLEVEL%
+
+:check_jar
+set "JAR_NAME=%~1"
+for /f "tokens=1-3 delims=.-" %%A in ("!JAR_NAME:*agent-=!") do (
+    set "V_MAJOR=%%A" & set "V_MINOR=%%B" & set "V_PATCH=%%C"
+)
+for /f "delims=0123456789" %%X in ("%V_MAJOR%") do set "V_MAJOR=!V_MAJOR:%%X=!"
+if not defined V_MAJOR goto :eof
+if %V_MAJOR% gtr %BEST_MAJOR% goto :use_jar
+if %V_MAJOR% lss %BEST_MAJOR% goto :eof
+if %V_MINOR% gtr %BEST_MINOR% goto :use_jar
+if %V_MINOR% lss %BEST_MINOR% goto :eof
+if %V_PATCH% gtr %BEST_PATCH% goto :use_jar
+goto :eof
+
+:use_jar
+set "AGENT_JAR=%JAR_NAME%"
+set "BEST_MAJOR=%V_MAJOR%"
+set "BEST_MINOR=%V_MINOR%"
+set "BEST_PATCH=%V_PATCH%"
+goto :eof
 "@
     Set-Content -Path (Join-Path $InstallDir "nimbus-agent.bat") -Value $batContent -Encoding ASCII
 
+    # nimbus-agent.ps1 — finds latest versioned JAR by semver, restart loop on exit code 10
     $ps1Content = @'
 Set-Location $PSScriptRoot
-$javaOpts = @("-Xms256M", "-Xmx512M", "-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MaxGCPauseMillis=200", "-jar", "nimbus-agent.jar")
-& java @javaOpts @args
+
+function Find-LatestJar {
+    $best = $null
+    $bestVer = [Version]"0.0.0"
+    foreach ($jar in (Get-ChildItem -Filter "nimbus-agent-*.jar")) {
+        if ($jar.Name -match '(\d+\.\d+\.\d+)') {
+            $ver = [Version]$Matches[1]
+            if ($ver -gt $bestVer) {
+                $best = $jar.Name
+                $bestVer = $ver
+            }
+        }
+    }
+    # Fallback: unversioned nimbus-agent.jar (legacy installs)
+    if (-not $best -and (Test-Path "nimbus-agent.jar")) { $best = "nimbus-agent.jar" }
+    return $best
+}
+
+$javaOpts = @("-Xms256M", "-Xmx512M", "-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MaxGCPauseMillis=200")
+
+do {
+    $agentJar = Find-LatestJar
+    if (-not $agentJar) {
+        Write-Host "Error: No nimbus-agent JAR found in $PSScriptRoot"
+        exit 1
+    }
+    Write-Host "Starting $agentJar..."
+    & java @javaOpts -jar $agentJar @args
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 10) {
+        Write-Host "Update detected, restarting with latest version..."
+    }
+} while ($exitCode -eq 10)
+exit $exitCode
 '@
     Set-Content -Path (Join-Path $InstallDir "nimbus-agent.ps1") -Value $ps1Content -Encoding UTF8
 

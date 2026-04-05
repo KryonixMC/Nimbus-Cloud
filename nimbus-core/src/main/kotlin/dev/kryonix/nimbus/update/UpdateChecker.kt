@@ -15,7 +15,6 @@ import org.jline.terminal.TerminalBuilder
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
@@ -375,8 +374,9 @@ class UpdateChecker(
                 return false
             }
 
-            val updateJar = currentJar.resolveSibling("nimbus-update.jar")
-            val backupJar = currentJar.resolveSibling("nimbus-backup.jar")
+            // Derive versioned filename from download URL (e.g. nimbus-controller-0.2.0.jar)
+            val assetName = update.downloadUrl.substringAfterLast('/')
+            val targetJar = currentJar.resolveSibling(assetName)
 
             print(ConsoleFormatter.hint("  Downloading v${update.latestVersion}... "))
             val response = client.get(update.downloadUrl) {
@@ -402,23 +402,13 @@ class UpdateChecker(
             logger.info("Update JAR SHA-256: {}", sha256)
 
             withContext(Dispatchers.IO) {
-                Files.write(updateJar, bytes)
+                Files.write(targetJar, bytes)
             }
             println(ConsoleFormatter.success("done (SHA-256: ${sha256.take(16)}...)"))
 
-            withContext(Dispatchers.IO) {
-                if (Files.exists(currentJar)) {
-                    Files.copy(currentJar, backupJar, StandardCopyOption.REPLACE_EXISTING)
-                }
-            }
-
-            withContext(Dispatchers.IO) {
-                Files.move(updateJar, currentJar, StandardCopyOption.REPLACE_EXISTING)
-            }
-
             val channel = if (update.isPreRelease) " (pre-release)" else ""
-            println(ConsoleFormatter.successLine("Updated to v${update.latestVersion}$channel (backup: ${backupJar.fileName})"))
-            println(ConsoleFormatter.warn("  Restart Nimbus to apply the update."))
+            println(ConsoleFormatter.successLine("Updated to v${update.latestVersion}$channel → ${targetJar.fileName}"))
+            println(ConsoleFormatter.warn("  Nimbus will restart automatically..."))
             println()
 
             true
@@ -426,6 +416,40 @@ class UpdateChecker(
             logger.error("Auto-update failed: {}", e.message)
             println(ConsoleFormatter.error("  Update failed: ${e.message}"))
             false
+        }
+    }
+
+    /**
+     * Cleans up old versioned JARs from previous updates.
+     * Keeps only the currently running JAR. Safe to call on startup since the old JAR
+     * is no longer locked (Windows file-lock concern addressed by deferring cleanup).
+     */
+    fun cleanupOldJars() {
+        val currentJar = resolveCurrentJar() ?: return
+        val parentDir = currentJar.parent ?: return
+        val currentFileName = currentJar.fileName.toString()
+
+        try {
+            Files.newDirectoryStream(parentDir) { path ->
+                val name = path.fileName.toString()
+                name != currentFileName && name.endsWith(".jar") && (
+                    name.startsWith("nimbus-controller-") ||
+                    (name.startsWith("nimbus-core-") && name.contains("-all")) ||
+                    name == "nimbus-update.jar" ||
+                    name == "nimbus-backup.jar"
+                )
+            }.use { stream ->
+                for (oldJar in stream) {
+                    try {
+                        Files.deleteIfExists(oldJar)
+                        logger.info("Cleaned up old JAR: {}", oldJar.fileName)
+                    } catch (e: Exception) {
+                        logger.debug("Could not delete old JAR {}: {}", oldJar.fileName, e.message)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.debug("Old JAR cleanup failed: {}", e.message)
         }
     }
 
