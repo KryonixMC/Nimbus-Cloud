@@ -15,14 +15,14 @@ export default function Page() {
   return (
     <main className="pt-4 pb-16">
       {/* Hero Card */}
-      <div className="relative flex min-h-[600px] pb-32 border border-fd-border rounded-2xl overflow-visible mx-auto w-full max-w-[1400px]">
+      <div className="relative border border-fd-border rounded-2xl overflow-hidden mx-auto w-full max-w-[1400px]">
         <div className="absolute inset-0 -z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-fd-primary/10 via-transparent to-fd-primary/5" />
           <div className="absolute top-0 left-1/3 h-[400px] w-[600px] rounded-full bg-fd-primary/8 blur-[120px]" />
           <div className="absolute bottom-0 right-1/4 h-[300px] w-[400px] rounded-full bg-fd-primary/5 blur-[100px]" />
         </div>
 
-        <div className="flex flex-col z-[2] px-4 size-full md:p-12 max-md:items-center max-md:text-center">
+        <div className="flex flex-col z-[2] px-4 md:p-12 max-md:items-center max-md:text-center">
           <p className="mt-12 text-xs text-fd-primary font-medium rounded-full py-2 px-4 border border-fd-primary/30 w-fit">
             Minecraft Cloud System
           </p>
@@ -55,16 +55,15 @@ export default function Page() {
               GitHub
             </a>
           </div>
-
         </div>
-      </div>
 
-      {/* Install — overlaps hero bottom */}
-      <div className="mx-auto -mt-14 relative z-10 max-w-2xl px-6">
-        <p className="text-center text-sm font-medium text-fd-muted-foreground mb-3">
-          One command to install
-        </p>
-        <InstallTabs />
+        {/* Install — inside hero, centered */}
+        <div className="relative z-[2] mx-auto max-w-2xl px-6 md:px-12 pt-8 pb-12">
+          <p className="text-center text-sm font-medium text-fd-muted-foreground mb-3">
+            One command to install
+          </p>
+          <InstallTabs />
+        </div>
       </div>
 
       {/* Section heading */}
