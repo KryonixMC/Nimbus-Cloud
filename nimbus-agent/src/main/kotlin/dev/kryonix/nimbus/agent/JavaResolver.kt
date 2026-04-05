@@ -5,10 +5,13 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
+import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.zip.ZipInputStream
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.setPosixFilePermissions
@@ -73,64 +76,175 @@ class JavaResolver(
         return "java"
     }
 
-    // ── Auto-download from Adoptium ────────────────────────────
+    // ── Auto-download from multiple providers ────────────────────
 
+    private val json = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Downloads a JDK and caches it locally.
+     * Tries providers in order: Adoptium → Azul Zulu → Amazon Corretto.
+     */
     private suspend fun downloadJdk(majorVersion: Int): String? {
+        if (!jdkCacheDir.exists()) Files.createDirectories(jdkCacheDir)
+
+        val cachedJava = findCachedJdk(majorVersion)
+        if (cachedJava != null) return cachedJava
+
+        val os = detectOS()
+        val arch = detectArch()
+
+        data class JdkProvider(val name: String, val resolve: suspend () -> String?)
+        val providers = listOf(
+            JdkProvider("Adoptium") { adoptiumUrl(majorVersion, os, arch) },
+            JdkProvider("Azul Zulu") { zuluUrl(majorVersion, os, arch) },
+            JdkProvider("Corretto") { correttoUrl(majorVersion, os, arch) }
+        )
+
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val archiveFile = jdkCacheDir.resolve("jdk-$majorVersion.$ext")
+
+        for (provider in providers) {
+            val name = provider.name
+            try {
+                val url = provider.resolve() ?: continue
+                logger.info("Downloading Java {} from {} ({}/{})...", majorVersion, name, os, arch)
+
+                val downloaded = streamToFile(url, archiveFile)
+                if (!downloaded) {
+                    logger.debug("{} download failed for Java {}, trying next provider...", name, majorVersion)
+                    continue
+                }
+
+                val result = extractJdk(majorVersion, os, archiveFile)
+                if (result != null) {
+                    logger.info("Java {} installed from {} to {}", majorVersion, name, result)
+                    return result
+                }
+            } catch (e: Exception) {
+                logger.debug("{} failed for Java {}: {}, trying next provider...", name, majorVersion, e.message)
+                Files.deleteIfExists(archiveFile)
+            }
+        }
+
+        logger.error("Failed to download Java {} from all providers — install it manually", majorVersion)
+        return null
+    }
+
+    private suspend fun streamToFile(url: String, target: Path): Boolean {
+        return client.prepareGet(url).execute { response ->
+            if (response.status != HttpStatusCode.OK) return@execute false
+            val channel = response.bodyAsChannel()
+            var totalBytes = 0L
+            Files.newOutputStream(target).use { out ->
+                val buffer = ByteArray(8192)
+                while (!channel.isClosedForRead) {
+                    val read = channel.readAvailable(buffer)
+                    if (read > 0) {
+                        out.write(buffer, 0, read)
+                        totalBytes += read
+                    }
+                }
+            }
+            val sizeMb = String.format("%.1f", totalBytes / 1024.0 / 1024.0)
+            logger.info("Downloaded {} MB", sizeMb)
+            totalBytes > 0
+        }
+    }
+
+    private fun adoptiumUrl(majorVersion: Int, os: String, arch: String): String {
+        return "https://api.adoptium.net/v3/binary/latest/$majorVersion/ga/$os/$arch/jdk/hotspot/normal/eclipse"
+    }
+
+    private suspend fun zuluUrl(majorVersion: Int, os: String, arch: String): String? {
+        val zuluOs = when (os) { "mac" -> "macos"; else -> os }
+        val zuluArch = when (arch) { "x64" -> "x86"; "x32" -> "i686"; else -> arch }
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val apiUrl = "https://api.azul.com/metadata/v1/zulu/packages/" +
+            "?java_version=$majorVersion&os=$zuluOs&arch=$zuluArch" +
+            "&archive_type=$ext&java_package_type=jdk&latest=true&availability_types=CA"
+
+        val response = client.get(apiUrl)
+        if (response.status != HttpStatusCode.OK) return null
+
+        val packages = json.parseToJsonElement(response.bodyAsText()).jsonArray
+        if (packages.isEmpty()) return null
+
+        return packages[0].jsonObject["download_url"]?.jsonPrimitive?.contentOrNull
+    }
+
+    private fun correttoUrl(majorVersion: Int, os: String, arch: String): String? {
+        val correttoOs = when (os) { "mac" -> "macos"; else -> os }
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        return "https://corretto.aws/downloads/latest/amazon-corretto-$majorVersion-$arch-$correttoOs-jdk.$ext"
+    }
+
+    private fun extractJdk(majorVersion: Int, os: String, archiveFile: Path): String? {
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val extractDir = jdkCacheDir.resolve("java-$majorVersion")
+        if (extractDir.exists()) {
+            Files.walk(extractDir).sorted(Comparator.reverseOrder()).forEach(Files::delete)
+        }
+        Files.createDirectories(extractDir)
+
+        val extracted = if (ext == "tar.gz") {
+            val exitCode = ProcessBuilder("tar", "xzf", archiveFile.toAbsolutePath().toString(), "--strip-components=1", "-C", extractDir.toAbsolutePath().toString())
+                .redirectErrorStream(true).start().waitFor()
+            exitCode == 0
+        } else {
+            extractZip(archiveFile, extractDir)
+        }
+
+        Files.deleteIfExists(archiveFile)
+
+        if (!extracted) {
+            logger.debug("Extraction failed for Java {}", majorVersion)
+            return null
+        }
+
+        val javaBin = findJavaBin(extractDir)
+            ?: extractDir.toFile().listFiles()?.firstOrNull { it.isDirectory }?.let { findJavaBin(it.toPath()) }
+
+        if (javaBin != null) {
+            try { Path.of(javaBin).setPosixFilePermissions(PosixFilePermissions.fromString("rwxr-xr-x")) } catch (_: Exception) {}
+            return javaBin
+        }
+
+        logger.debug("Could not find java binary in {}", extractDir)
+        return null
+    }
+
+    private fun extractZip(zipFile: Path, targetDir: Path): Boolean {
         return try {
-            if (!jdkCacheDir.exists()) Files.createDirectories(jdkCacheDir)
-
-            val cachedJava = findCachedJdk(majorVersion)
-            if (cachedJava != null) return cachedJava
-
-            val os = detectOS()
-            val arch = detectArch()
-
-            val apiUrl = "https://api.adoptium.net/v3/binary/latest/$majorVersion/ga/$os/$arch/jdk/hotspot/normal/eclipse"
-            logger.info("Downloading Java {} from Adoptium ({}/{})...", majorVersion, os, arch)
-
-            val response = client.get(apiUrl)
-            if (response.status != HttpStatusCode.OK) {
-                logger.error("Failed to download Java {}: HTTP {} — install it manually", majorVersion, response.status)
-                return null
+            ZipInputStream(Files.newInputStream(zipFile)).use { zis ->
+                var entry = zis.nextEntry
+                val topDir = entry?.name?.substringBefore("/", "")
+                while (entry != null) {
+                    val name = entry.name
+                    val stripped = if (topDir != null && topDir.isNotEmpty() && name.startsWith("$topDir/")) {
+                        name.removePrefix("$topDir/")
+                    } else {
+                        name
+                    }
+                    if (stripped.isEmpty()) {
+                        entry = zis.nextEntry
+                        continue
+                    }
+                    val outPath = targetDir.resolve(stripped)
+                    if (entry.isDirectory) {
+                        Files.createDirectories(outPath)
+                    } else {
+                        Files.createDirectories(outPath.parent)
+                        Files.newOutputStream(outPath).use { out ->
+                            zis.copyTo(out)
+                        }
+                    }
+                    entry = zis.nextEntry
+                }
             }
-
-            val ext = if (os == "windows") "zip" else "tar.gz"
-            val archiveFile = jdkCacheDir.resolve("temurin-$majorVersion.$ext")
-            val bytes = response.readRawBytes()
-            Files.write(archiveFile, bytes)
-            val sizeMb = String.format("%.1f", bytes.size / 1024.0 / 1024.0)
-            logger.info("Downloaded Java {} ({} MB), extracting...", majorVersion, sizeMb)
-
-            val extractDir = jdkCacheDir.resolve("java-$majorVersion")
-            if (extractDir.exists()) {
-                Files.walk(extractDir).sorted(Comparator.reverseOrder()).forEach(Files::delete)
-            }
-            Files.createDirectories(extractDir)
-
-            if (ext == "tar.gz") {
-                ProcessBuilder("tar", "xzf", archiveFile.toAbsolutePath().toString(), "--strip-components=1", "-C", extractDir.toAbsolutePath().toString())
-                    .redirectErrorStream(true).start().waitFor()
-            } else {
-                ProcessBuilder("unzip", "-q", archiveFile.toAbsolutePath().toString(), "-d", extractDir.toAbsolutePath().toString())
-                    .redirectErrorStream(true).start().waitFor()
-            }
-
-            Files.deleteIfExists(archiveFile)
-
-            val javaBin = findJavaBin(extractDir)
-                ?: extractDir.toFile().listFiles()?.firstOrNull { it.isDirectory }?.let { findJavaBin(it.toPath()) }
-
-            if (javaBin != null) {
-                try { Path.of(javaBin).setPosixFilePermissions(PosixFilePermissions.fromString("rwxr-xr-x")) } catch (_: Exception) {}
-                logger.info("Java {} installed to {}", majorVersion, javaBin)
-                return javaBin
-            }
-
-            logger.error("Downloaded Java {} but could not find java binary in {}", majorVersion, extractDir)
-            null
+            true
         } catch (e: Exception) {
-            logger.error("Failed to download Java {}: {}", majorVersion, e.message)
-            null
+            logger.debug("ZIP extraction failed: {}", e.message)
+            false
         }
     }
 

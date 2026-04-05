@@ -6,10 +6,13 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
+import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.zip.ZipInputStream
 import kotlin.io.path.exists
 import kotlin.io.path.isExecutable
 import kotlin.io.path.isDirectory
@@ -127,11 +130,20 @@ class JavaResolver(
             return downloaded
         }
 
-        // Download failed — try lowest available >= min as last resort
-        val fallback = allJavas.keys.filter { it >= minJava }.sorted().firstOrNull()
+        // Download failed — try lowest available in range as last resort
+        val fallback = allJavas.keys
+            .filter { it >= minJava && (maxJava == null || it <= maxJava) }
+            .sorted().firstOrNull()
         if (fallback != null) {
-            logger.warn("Auto-download failed. Using Java {} — may not be compatible with MC {}!", fallback, mcVersion)
+            logger.warn("Auto-download failed. Using Java {} for MC {}", fallback, mcVersion)
             return allJavas[fallback]!!
+        }
+
+        // Nothing in range — try closest version above as absolute last resort
+        val closestAbove = allJavas.keys.filter { it >= minJava }.sorted().firstOrNull()
+        if (closestAbove != null) {
+            logger.warn("No Java in range {}-{} available. Using Java {} for MC {} — may cause issues!", minJava, maxJava, closestAbove, mcVersion)
+            return allJavas[closestAbove]!!
         }
 
         logger.warn("No compatible Java found for MC {}, using system 'java'", mcVersion)
@@ -157,92 +169,187 @@ class JavaResolver(
         return if (compatible.isNotEmpty()) allJavas[compatible.first()] else null
     }
 
-    // ── Auto-download from Adoptium ────────────────────────────
+    // ── Auto-download from multiple providers ────────────────────
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     /**
-     * Downloads a JDK from Adoptium (Eclipse Temurin) and caches it locally.
+     * Downloads a JDK and caches it locally.
+     * Tries providers in order: Adoptium → Azul Zulu → Amazon Corretto.
      * Returns the path to the java executable, or null on failure.
      */
     private suspend fun downloadJdk(majorVersion: Int): String? {
-        return try {
-            if (!jdkCacheDir.exists()) Files.createDirectories(jdkCacheDir)
+        if (!jdkCacheDir.exists()) Files.createDirectories(jdkCacheDir)
 
-            // Check if already cached
-            val cachedJava = findCachedJdk(majorVersion)
-            if (cachedJava != null) return cachedJava
+        val cachedJava = findCachedJdk(majorVersion)
+        if (cachedJava != null) return cachedJava
 
-            val os = detectOS()
-            val arch = detectArch()
+        val os = detectOS()
+        val arch = detectArch()
 
-            // Adoptium API: get latest release for this major version
-            val apiUrl = "https://api.adoptium.net/v3/binary/latest/$majorVersion/ga/$os/$arch/jdk/hotspot/normal/eclipse"
-            logger.info("Downloading Java {} from Adoptium ({}/{})...", majorVersion, os, arch)
+        data class JdkProvider(val name: String, val resolve: suspend () -> String?)
+        val providers = listOf(
+            JdkProvider("Adoptium") { adoptiumUrl(majorVersion, os, arch) },
+            JdkProvider("Azul Zulu") { zuluUrl(majorVersion, os, arch) },
+            JdkProvider("Corretto") { correttoUrl(majorVersion, os, arch) }
+        )
 
-            val response = client.get(apiUrl)
-            if (response.status != HttpStatusCode.OK) {
-                logger.error("Failed to download Java {}: HTTP {} — install it manually", majorVersion, response.status)
-                return null
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val archiveFile = jdkCacheDir.resolve("jdk-$majorVersion.$ext")
+
+        for (provider in providers) {
+            val name = provider.name
+            try {
+                val url = provider.resolve() ?: continue
+                logger.info("Downloading Java {} from {} ({}/{})...", majorVersion, name, os, arch)
+
+                val downloaded = streamToFile(url, archiveFile)
+                if (!downloaded) {
+                    logger.debug("{} download failed for Java {}, trying next provider...", name, majorVersion)
+                    continue
+                }
+
+                val result = extractJdk(majorVersion, os, archiveFile)
+                if (result != null) {
+                    logger.info("Java {} installed from {} to {}", majorVersion, name, result)
+                    return result
+                }
+            } catch (e: Exception) {
+                logger.debug("{} failed for Java {}: {}, trying next provider...", name, majorVersion, e.message)
+                Files.deleteIfExists(archiveFile)
             }
+        }
 
-            // Save the archive
-            val ext = if (os == "windows") "zip" else "tar.gz"
-            val archiveFile = jdkCacheDir.resolve("temurin-$majorVersion.$ext")
-            val bytes = response.readRawBytes()
-            Files.write(archiveFile, bytes)
-            val sizeMb = String.format("%.1f", bytes.size / 1024.0 / 1024.0)
-            logger.info("Downloaded Java {} ({} MB), extracting...", majorVersion, sizeMb)
+        logger.error("Failed to download Java {} from all providers — install it manually", majorVersion)
+        return null
+    }
 
-            // Extract
-            val extractDir = jdkCacheDir.resolve("java-$majorVersion")
-            if (extractDir.exists()) {
-                Files.walk(extractDir).sorted(Comparator.reverseOrder()).forEach(Files::delete)
-            }
-            Files.createDirectories(extractDir)
-
-            if (ext == "tar.gz") {
-                val process = ProcessBuilder("tar", "xzf", archiveFile.toAbsolutePath().toString(), "--strip-components=1", "-C", extractDir.toAbsolutePath().toString())
-                    .redirectErrorStream(true)
-                    .start()
-                process.waitFor()
-            } else {
-                val process = ProcessBuilder("unzip", "-q", archiveFile.toAbsolutePath().toString(), "-d", extractDir.toAbsolutePath().toString())
-                    .redirectErrorStream(true)
-                    .start()
-                process.waitFor()
-            }
-
-            // Clean up archive
-            Files.deleteIfExists(archiveFile)
-
-            // Find java binary
-            val javaBin = findJavaBin(extractDir)
-            if (javaBin != null) {
-                // Ensure executable permissions
-                try {
-                    Path.of(javaBin).setPosixFilePermissions(PosixFilePermissions.fromString("rwxr-xr-x"))
-                } catch (_: Exception) { }
-                logger.info("Java {} installed to {}", majorVersion, javaBin)
-                return javaBin
-            }
-
-            // tar might have a nested directory (e.g., jdk-17.0.2+8/)
-            val nested = extractDir.toFile().listFiles()?.firstOrNull { it.isDirectory }
-            if (nested != null) {
-                val nestedJava = findJavaBin(nested.toPath())
-                if (nestedJava != null) {
-                    try {
-                        Path.of(nestedJava).setPosixFilePermissions(PosixFilePermissions.fromString("rwxr-xr-x"))
-                    } catch (_: Exception) { }
-                    logger.info("Java {} installed to {}", majorVersion, nestedJava)
-                    return nestedJava
+    /**
+     * Streams a URL directly to a file without buffering in memory.
+     * Uses prepareGet/execute for true streaming (avoids OOM on large downloads).
+     */
+    private suspend fun streamToFile(url: String, target: Path): Boolean {
+        return client.prepareGet(url).execute { response ->
+            if (response.status != HttpStatusCode.OK) return@execute false
+            val channel = response.bodyAsChannel()
+            var totalBytes = 0L
+            Files.newOutputStream(target).use { out ->
+                val buffer = ByteArray(8192)
+                while (!channel.isClosedForRead) {
+                    val read = channel.readAvailable(buffer)
+                    if (read > 0) {
+                        out.write(buffer, 0, read)
+                        totalBytes += read
+                    }
                 }
             }
+            val sizeMb = String.format("%.1f", totalBytes / 1024.0 / 1024.0)
+            logger.info("Downloaded {} MB", sizeMb)
+            totalBytes > 0
+        }
+    }
 
-            logger.error("Downloaded Java {} but could not find java binary in {}", majorVersion, extractDir)
-            null
+    private fun adoptiumUrl(majorVersion: Int, os: String, arch: String): String {
+        return "https://api.adoptium.net/v3/binary/latest/$majorVersion/ga/$os/$arch/jdk/hotspot/normal/eclipse"
+    }
+
+    private suspend fun zuluUrl(majorVersion: Int, os: String, arch: String): String? {
+        val zuluOs = when (os) { "mac" -> "macos"; else -> os }
+        val zuluArch = when (arch) { "x64" -> "x86"; "x32" -> "i686"; else -> arch }
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val apiUrl = "https://api.azul.com/metadata/v1/zulu/packages/" +
+            "?java_version=$majorVersion&os=$zuluOs&arch=$zuluArch" +
+            "&archive_type=$ext&java_package_type=jdk&latest=true&availability_types=CA"
+
+        val response = client.get(apiUrl)
+        if (response.status != HttpStatusCode.OK) return null
+
+        val packages = json.parseToJsonElement(response.bodyAsText()).jsonArray
+        if (packages.isEmpty()) return null
+
+        return packages[0].jsonObject["download_url"]?.jsonPrimitive?.contentOrNull
+    }
+
+    private fun correttoUrl(majorVersion: Int, os: String, arch: String): String? {
+        // Corretto only provides LTS + recent versions: 8, 11, 17, 21, 23, 24, 25
+        val correttoOs = when (os) { "mac" -> "macos"; else -> os }
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        return "https://corretto.aws/downloads/latest/amazon-corretto-$majorVersion-$arch-$correttoOs-jdk.$ext"
+    }
+
+    private fun extractJdk(majorVersion: Int, os: String, archiveFile: Path): String? {
+        val ext = if (os == "windows") "zip" else "tar.gz"
+        val extractDir = jdkCacheDir.resolve("java-$majorVersion")
+        if (extractDir.exists()) {
+            Files.walk(extractDir).sorted(Comparator.reverseOrder()).forEach(Files::delete)
+        }
+        Files.createDirectories(extractDir)
+
+        val extracted = if (ext == "tar.gz") {
+            val exitCode = ProcessBuilder("tar", "xzf", archiveFile.toAbsolutePath().toString(), "--strip-components=1", "-C", extractDir.toAbsolutePath().toString())
+                .redirectErrorStream(true).start().waitFor()
+            exitCode == 0
+        } else {
+            extractZip(archiveFile, extractDir)
+        }
+
+        Files.deleteIfExists(archiveFile)
+
+        if (!extracted) {
+            logger.debug("Extraction failed for Java {}", majorVersion)
+            return null
+        }
+
+        val javaBin = findJavaBin(extractDir)
+            ?: extractDir.toFile().listFiles()?.firstOrNull { it.isDirectory }?.let { findJavaBin(it.toPath()) }
+
+        if (javaBin != null) {
+            try { Path.of(javaBin).setPosixFilePermissions(PosixFilePermissions.fromString("rwxr-xr-x")) } catch (_: Exception) {}
+            return javaBin
+        }
+
+        logger.debug("Could not find java binary in {}", extractDir)
+        return null
+    }
+
+    /**
+     * Extracts a .zip archive using Java's built-in ZipInputStream (no external tools needed).
+     * Strips the top-level directory (like tar --strip-components=1).
+     */
+    private fun extractZip(zipFile: Path, targetDir: Path): Boolean {
+        return try {
+            ZipInputStream(Files.newInputStream(zipFile)).use { zis ->
+                var entry = zis.nextEntry
+                // Detect common top-level directory to strip
+                val topDir = entry?.name?.substringBefore("/", "")
+                while (entry != null) {
+                    val name = entry.name
+                    // Strip top-level directory (e.g., "jdk-16.0.2+7/bin/java" -> "bin/java")
+                    val stripped = if (topDir != null && topDir.isNotEmpty() && name.startsWith("$topDir/")) {
+                        name.removePrefix("$topDir/")
+                    } else {
+                        name
+                    }
+                    if (stripped.isEmpty()) {
+                        entry = zis.nextEntry
+                        continue
+                    }
+                    val outPath = targetDir.resolve(stripped)
+                    if (entry.isDirectory) {
+                        Files.createDirectories(outPath)
+                    } else {
+                        Files.createDirectories(outPath.parent)
+                        Files.newOutputStream(outPath).use { out ->
+                            zis.copyTo(out)
+                        }
+                    }
+                    entry = zis.nextEntry
+                }
+            }
+            true
         } catch (e: Exception) {
-            logger.error("Failed to download Java {}: {}", majorVersion, e.message)
-            null
+            logger.debug("ZIP extraction failed: {}", e.message)
+            false
         }
     }
 
