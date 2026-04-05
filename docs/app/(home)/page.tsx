@@ -59,7 +59,7 @@ export default function Page() {
       </div>
 
       {/* Install */}
-      <section className="mx-auto mt-16 max-w-2xl px-6">
+      <section className="mx-auto mt-16 max-w-4xl px-6">
         <p className="text-center text-sm font-medium text-fd-muted-foreground mb-4">
           One command to install
         </p>

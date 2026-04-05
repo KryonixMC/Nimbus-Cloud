@@ -26,61 +26,54 @@ export function InstallTabs() {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-fd-border bg-fd-secondary/30 shadow-sm">
-      {/* Tab header */}
-      <div className="flex gap-px bg-fd-border/50">
-        {tabs.map((tab, i) => (
-          <button
-            key={tab.label}
-            onClick={() => setActive(i)}
-            className={`flex-1 px-4 py-2 text-xs font-medium transition-colors duration-200 ${
-              active === i
-                ? 'bg-fd-card text-fd-foreground'
-                : 'bg-fd-muted/50 text-fd-muted-foreground hover:text-fd-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <figure className="not-prose overflow-hidden rounded-xl border border-fd-border bg-fd-card shadow-sm text-sm">
+      {/* Title bar — matches Fumadocs CodeBlock header */}
+      <div className="flex items-center h-9.5 border-b border-fd-border px-4 text-fd-muted-foreground">
+        <div className="flex items-center gap-1">
+          {tabs.map((tab, i) => (
+            <button
+              key={tab.label}
+              onClick={() => setActive(i)}
+              className={`relative px-2 py-1.5 text-sm font-medium transition-colors duration-200 ${
+                active === i
+                  ? 'text-fd-primary'
+                  : 'text-fd-muted-foreground hover:text-fd-accent-foreground'
+              }`}
+            >
+              {active === i && (
+                <div className="absolute inset-x-2 bottom-0 h-px bg-fd-primary" />
+              )}
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Code area */}
-      <div className="flex items-center gap-2 bg-fd-card px-4 py-3.5">
-        <span className="select-none text-fd-muted-foreground font-mono text-sm">
-          $
-        </span>
-        <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-[13px] leading-relaxed text-fd-foreground">
-          {tabs[active].command}
-        </code>
         <button
           onClick={copy}
-          className="shrink-0 rounded-md p-1.5 text-fd-muted-foreground transition-all duration-200 hover:text-fd-foreground hover:bg-fd-accent"
+          className="ms-auto shrink-0 inline-flex items-center justify-center rounded-md size-7 transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
           aria-label="Copy command"
         >
           {copied ? (
-            <svg
-              className="size-4 text-fd-primary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           ) : (
-            <svg
-              className="size-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
           )}
         </button>
       </div>
-    </div>
+
+      {/* Code area — matches Fumadocs CodeBlock viewport */}
+      <div className="overflow-x-auto py-3.5 px-4">
+        <pre className="min-w-full w-max">
+          <code className="text-[13px] leading-relaxed text-fd-foreground font-mono">
+            {tabs[active].command}
+          </code>
+        </pre>
+      </div>
+    </figure>
   );
 }
