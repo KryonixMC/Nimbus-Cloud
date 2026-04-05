@@ -4,13 +4,6 @@ import dev.kryonix.nimbus.config.NimbusConfig
 import dev.kryonix.nimbus.config.ServerSoftware
 import dev.kryonix.nimbus.console.Command
 import dev.kryonix.nimbus.console.ConsoleFormatter
-import dev.kryonix.nimbus.console.ConsoleFormatter.BOLD
-import dev.kryonix.nimbus.console.ConsoleFormatter.CYAN
-import dev.kryonix.nimbus.console.ConsoleFormatter.DIM
-import dev.kryonix.nimbus.console.ConsoleFormatter.GREEN
-import dev.kryonix.nimbus.console.ConsoleFormatter.RED
-import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
-import dev.kryonix.nimbus.console.ConsoleFormatter.YELLOW
 import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.console.LiveSearchPicker
 import dev.kryonix.nimbus.group.GroupManager
@@ -85,7 +78,7 @@ class PluginsCommand(
         }
 
         if (dirsToCheck.isEmpty()) {
-            println("${DIM}No plugin directories found.$RESET")
+            println(ConsoleFormatter.emptyState("No plugin directories found."))
             return
         }
 
@@ -93,10 +86,10 @@ class PluginsCommand(
             val jars = listJars(dir)
             if (jars.isEmpty()) continue
 
-            println("${BOLD}$label${RESET}  ${DIM}(${jars.size} plugin${if (jars.size != 1) "s" else ""})${RESET}")
+            println("${ConsoleFormatter.colorize(label, ConsoleFormatter.BOLD)}  ${ConsoleFormatter.hint("(${jars.size} plugin${if (jars.size != 1) "s" else ""})")}")
             for (jar in jars) {
                 val sizeMb = String.format("%.1f", jar.fileSize() / 1024.0 / 1024.0)
-                println("  ${GREEN}●${RESET} ${jar.name}  ${DIM}${sizeMb} MB${RESET}")
+                println("  ${ConsoleFormatter.success("●")} ${jar.name}  ${ConsoleFormatter.hint("$sizeMb MB")}")
             }
             println()
         }
@@ -118,12 +111,12 @@ class PluginsCommand(
 
         val jar = pluginsDir.resolve(fileArg)
         if (!jar.exists()) {
-            println("${DIM}$fileArg not found in $targetArg.$RESET")
+            println(ConsoleFormatter.hint("$fileArg not found in $targetArg."))
             return
         }
 
         Files.deleteIfExists(jar)
-        println(ConsoleFormatter.successLine("Removed ${CYAN}$fileArg${RESET} from $CYAN$targetArg${RESET}"))
+        println(ConsoleFormatter.successLine("Removed ${ConsoleFormatter.info(fileArg)} from ${ConsoleFormatter.info(targetArg)}"))
     }
 
     // ── Interactive search (Hangar + Modrinth) ─────────────
@@ -139,10 +132,10 @@ class PluginsCommand(
                     options.add(InteractivePicker.Option(group.name, group.name, group.config.group.version))
                 }
             }
-            println("${BOLD}Install target:${RESET}")
+            println(ConsoleFormatter.colorize("Install target:", ConsoleFormatter.BOLD))
             val idx = InteractivePicker.pickOne(terminal, options)
             if (idx == InteractivePicker.BACK) {
-                println("${DIM}Cancelled.$RESET")
+                println(ConsoleFormatter.hint("Cancelled."))
                 return
             }
             options[idx].id
@@ -161,7 +154,7 @@ class PluginsCommand(
         // Live search with multi-select
         val selectedPlugins = LiveSearchPicker.liveSearchMulti(
             terminal = terminal,
-            title = "Search plugins ${DIM}($mcVersion)${RESET}",
+            title = "Search plugins ${ConsoleFormatter.hint("($mcVersion)")}",
             initialQuery = initialQuery,
             identify = { it.slug },
             search = { query -> searchClient.search(query, mcVersion) },
@@ -175,7 +168,7 @@ class PluginsCommand(
         )
 
         if (selectedPlugins.isNullOrEmpty()) {
-            println("${DIM}Cancelled.$RESET")
+            println(ConsoleFormatter.hint("Cancelled."))
             return
         }
 
@@ -185,13 +178,13 @@ class PluginsCommand(
 
         val resolved = mutableListOf<Resolved>()
         for (plugin in selectedPlugins) {
-            print("  ${DIM}Fetching ${plugin.name}...$RESET")
+            print(ConsoleFormatter.hint("  Fetching ${plugin.name}..."))
             val version = searchClient.fetchVersion(plugin, mcVersion)
             if (version != null) {
                 resolved.add(Resolved(plugin, version))
-                println("\r  ${GREEN}●${RESET} ${BOLD}${plugin.name}${RESET} ${DIM}v${version.versionName}${RESET}")
+                println("\r  ${ConsoleFormatter.success("●")} ${ConsoleFormatter.colorize(plugin.name, ConsoleFormatter.BOLD)} ${ConsoleFormatter.hint("v${version.versionName}")}")
             } else {
-                println("\r  ${RED}●${RESET} ${plugin.name} ${DIM}— no compatible version for $mcVersion${RESET}")
+                println("\r  ${ConsoleFormatter.error("●")} ${plugin.name} ${ConsoleFormatter.hint("— no compatible version for $mcVersion")}")
             }
         }
 
@@ -204,8 +197,8 @@ class PluginsCommand(
         val allDeps = resolved.flatMap { it.version.dependencies.filter { d -> d.required } }
         if (allDeps.isNotEmpty()) {
             println()
-            println("  ${YELLOW}Dependencies (auto-install):${RESET}")
-            for (dep in allDeps) println("    ${DIM}●${RESET} ${dep.name}")
+            println(ConsoleFormatter.warn("  Dependencies (auto-install):"))
+            for (dep in allDeps) println("    ${ConsoleFormatter.hint("●")} ${dep.name}")
         }
 
         // Confirm
@@ -216,10 +209,10 @@ class PluginsCommand(
             if (depCount > 0) append(" + $depCount dep${if (depCount != 1) "s" else ""}")
         }
         println()
-        print("  ${YELLOW}Install $summary to $CYAN$target$YELLOW? [Y/n]$RESET ")
+        print(ConsoleFormatter.warn("  Install $summary to ${ConsoleFormatter.info(target)}${ConsoleFormatter.warn("? [Y/n]")} "))
         val confirm = readlnOrNull()?.trim()?.lowercase()
         if (confirm == "n" || confirm == "no") {
-            println("${DIM}Cancelled.$RESET")
+            println(ConsoleFormatter.hint("Cancelled."))
             return
         }
 
@@ -230,8 +223,8 @@ class PluginsCommand(
         for ((result, version) in resolved) {
             val file = searchClient.download(version, pluginsDir)
             if (file != null) {
-                val size = if (version.fileSize > 0) " ${DIM}(${PluginSearchClient.formatSize(version.fileSize)} MB)${RESET}" else ""
-                println(ConsoleFormatter.successLine("${CYAN}${result.name}${RESET} v${version.versionName}$size"))
+                val size = if (version.fileSize > 0) " ${ConsoleFormatter.hint("(${PluginSearchClient.formatSize(version.fileSize)} MB)")}" else ""
+                println(ConsoleFormatter.successLine("${ConsoleFormatter.info(result.name)} v${version.versionName}$size"))
             } else {
                 println(ConsoleFormatter.errorLine("Failed to download ${result.name}"))
             }
@@ -239,15 +232,15 @@ class PluginsCommand(
             for (dep in version.dependencies.filter { it.required }) {
                 val depFile = searchClient.resolveAndDownloadDependency(dep, mcVersion, pluginsDir)
                 if (depFile != null) {
-                    println("  ${GREEN}+${RESET} ${DIM}${dep.name}${RESET}")
+                    println("  ${ConsoleFormatter.success("+")} ${ConsoleFormatter.hint(dep.name)}")
                 } else {
-                    println("  ${YELLOW}!${RESET} ${DIM}${dep.name} — install manually${RESET}")
+                    println("  ${ConsoleFormatter.warn("!")} ${ConsoleFormatter.hint("${dep.name} — install manually")}")
                 }
             }
         }
 
         println()
-        println("${DIM}Done. Restart affected services to load new plugins.$RESET")
+        println(ConsoleFormatter.hint("Done. Restart affected services to load new plugins."))
     }
 
     // ── Helpers ─────────────────────────────────────────────

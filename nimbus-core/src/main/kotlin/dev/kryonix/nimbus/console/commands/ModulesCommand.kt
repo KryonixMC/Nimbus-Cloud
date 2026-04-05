@@ -2,13 +2,6 @@ package dev.kryonix.nimbus.console.commands
 
 import dev.kryonix.nimbus.console.Command
 import dev.kryonix.nimbus.console.ConsoleFormatter
-import dev.kryonix.nimbus.console.ConsoleFormatter.BOLD
-import dev.kryonix.nimbus.console.ConsoleFormatter.CYAN
-import dev.kryonix.nimbus.console.ConsoleFormatter.DIM
-import dev.kryonix.nimbus.console.ConsoleFormatter.GREEN
-import dev.kryonix.nimbus.console.ConsoleFormatter.RED
-import dev.kryonix.nimbus.console.ConsoleFormatter.RESET
-import dev.kryonix.nimbus.console.ConsoleFormatter.YELLOW
 import dev.kryonix.nimbus.console.InteractivePicker
 import dev.kryonix.nimbus.group.GroupManager
 import dev.kryonix.nimbus.module.ModuleInfo
@@ -55,7 +48,7 @@ class ModulesCommand(
             }
             else -> {
                 println(ConsoleFormatter.error("Unknown subcommand: $sub"))
-                println("${DIM}Usage: $usage$RESET")
+                println(ConsoleFormatter.hint("Usage: $usage"))
             }
         }
     }
@@ -68,16 +61,16 @@ class ModulesCommand(
         // Build plugin info from module.properties metadata
         val pluginsByModuleId = available.associate { it.id to it.plugins }
 
-        println("${BOLD}Modules:$RESET")
+        println(ConsoleFormatter.header("Modules"))
         println()
 
         if (loaded.isNotEmpty()) {
             for (module in loaded) {
                 val pluginInfo = pluginsByModuleId[module.id]
                 val pluginHint = if (!pluginInfo.isNullOrEmpty()) {
-                    " ${DIM}(plugins: ${pluginInfo.joinToString(", ") { it.displayName }})$RESET"
+                    " ${ConsoleFormatter.hint("(plugins: ${pluginInfo.joinToString(", ") { it.displayName }})")}"
                 } else ""
-                println("  ${GREEN}●$RESET ${CYAN}${module.name}$RESET ${DIM}v${module.version}$RESET — ${module.description}$pluginHint")
+                println("  ${ConsoleFormatter.success("●")} ${ConsoleFormatter.info(module.name)} ${ConsoleFormatter.hint("v${module.version}")} — ${module.description}$pluginHint")
             }
         }
 
@@ -85,14 +78,14 @@ class ModulesCommand(
         if (notInstalled.isNotEmpty()) {
             if (loaded.isNotEmpty()) println()
             for (mod in notInstalled) {
-                println("  ${DIM}○ ${mod.name}$RESET ${DIM}— ${mod.description}$RESET")
+                println("  ${ConsoleFormatter.hint("○ ${mod.name}")} ${ConsoleFormatter.hint("— ${mod.description}")}")
             }
             println()
-            println("  ${DIM}Install with: ${CYAN}modules install$RESET")
+            println(ConsoleFormatter.hint("  Install with: ${ConsoleFormatter.info("modules install")}"))
         }
 
         if (loaded.isEmpty() && notInstalled.isEmpty()) {
-            println("  ${DIM}No modules found.$RESET")
+            println(ConsoleFormatter.emptyState("  No modules found."))
         }
     }
 
@@ -104,19 +97,19 @@ class ModulesCommand(
         val notInstalled = available.filter { it.id !in loadedIds }
 
         if (notInstalled.isEmpty()) {
-            println("${DIM}All available modules are already installed.$RESET")
+            println(ConsoleFormatter.hint("All available modules are already installed."))
             return
         }
 
         val options = notInstalled.map { InteractivePicker.Option(it.id, it.name, it.description) }
         val selected = mutableSetOf<String>()
         if (!InteractivePicker.pickMany(terminal, options, selected)) {
-            println("${DIM}Cancelled.$RESET")
+            println(ConsoleFormatter.hint("Cancelled."))
             return
         }
 
         if (selected.isEmpty()) {
-            println("${DIM}No modules selected.$RESET")
+            println(ConsoleFormatter.hint("No modules selected."))
             return
         }
 
@@ -125,14 +118,14 @@ class ModulesCommand(
             val result = moduleManager.install(id)
             if (result == ModuleManager.InstallResult.INSTALLED) {
                 val info = available.find { it.id == id }
-                println("  ${GREEN}●$RESET Installed ${CYAN}${info?.name ?: id}$RESET")
+                println("  ${ConsoleFormatter.success("●")} Installed ${ConsoleFormatter.info(info?.name ?: id)}")
                 installed++
                 if (info != null) offerPluginDeploy(info)
             }
         }
         if (installed > 0) {
             println()
-            println("  ${YELLOW}Restart Nimbus to activate ${if (installed == 1) "the module" else "$installed modules"}.$RESET")
+            println(ConsoleFormatter.warn("  Restart Nimbus to activate ${if (installed == 1) "the module" else "$installed modules"}."))
         }
     }
 
@@ -143,18 +136,18 @@ class ModulesCommand(
         when (result) {
             ModuleManager.InstallResult.INSTALLED -> {
                 val info = moduleManager.discoverAvailable().find { it.id == id }
-                println("${GREEN}●$RESET Installed ${CYAN}${info?.name ?: id}$RESET")
+                println("${ConsoleFormatter.success("●")} Installed ${ConsoleFormatter.info(info?.name ?: id)}")
                 if (info != null) offerPluginDeploy(info)
-                println("  ${YELLOW}Restart Nimbus to activate the module.$RESET")
+                println(ConsoleFormatter.warn("  Restart Nimbus to activate the module."))
             }
             ModuleManager.InstallResult.ALREADY_INSTALLED -> {
-                println("${DIM}Module '$id' is already installed.$RESET")
+                println(ConsoleFormatter.hint("Module '$id' is already installed."))
             }
             ModuleManager.InstallResult.NOT_FOUND -> {
                 println(ConsoleFormatter.error("Module '$id' not found."))
                 val available = moduleManager.discoverAvailable()
                 if (available.isNotEmpty()) {
-                    println("  ${DIM}Available: ${available.joinToString(", ") { it.id }}$RESET")
+                    println(ConsoleFormatter.hint("  Available: ${available.joinToString(", ") { it.id }}"))
                 }
             }
         }
@@ -165,9 +158,9 @@ class ModulesCommand(
             println(ConsoleFormatter.error("Module '$id' is not installed."))
             return
         }
-        println("${RED}●$RESET Uninstalled ${CYAN}$id$RESET")
+        println("${ConsoleFormatter.error("●")} Uninstalled ${ConsoleFormatter.info(id)}")
         if (moduleManager.isLoaded(id)) {
-            println("  ${YELLOW}Module is still active until restart.$RESET")
+            println(ConsoleFormatter.warn("  Module is still active until restart."))
         }
 
         // Read plugin info from available modules metadata
@@ -194,8 +187,8 @@ class ModulesCommand(
         if (missing.isEmpty()) return
 
         println()
-        val pluginNames = missing.joinToString(", ") { "${CYAN}${it.displayName}$RESET" }
-        println("  ${DIM}${info.name} needs server-side plugins: $pluginNames$RESET")
+        val pluginNames = missing.joinToString(", ") { ConsoleFormatter.info(it.displayName) }
+        println(ConsoleFormatter.hint("  ${info.name} needs server-side plugins: $pluginNames"))
 
         val options = listOf(
             InteractivePicker.Option("global", "Deploy to all backends", "install to templates/global/plugins/"),
@@ -208,7 +201,7 @@ class ModulesCommand(
                 val resource = javaClass.classLoader.getResourceAsStream(plugin.resourcePath)
                 if (resource != null) {
                     resource.use { Files.copy(it, globalPluginsDir.resolve(plugin.fileName), StandardCopyOption.REPLACE_EXISTING) }
-                    println("    ${GREEN}+$RESET ${plugin.fileName} → global/plugins/")
+                    println("    ${ConsoleFormatter.success("+")} ${plugin.fileName} → global/plugins/")
                 }
             }
         }
@@ -251,9 +244,9 @@ class ModulesCommand(
         if (locations.isEmpty()) return
 
         println()
-        println("  ${YELLOW}These server-side plugins will no longer function without the module:$RESET")
+        println(ConsoleFormatter.warn("  These server-side plugins will no longer function without the module:"))
         for ((plugin, loc) in locations) {
-            println("    ${DIM}●$RESET ${plugin.displayName} ${DIM}in $loc$RESET")
+            println("    ${ConsoleFormatter.hint("●")} ${plugin.displayName} ${ConsoleFormatter.hint("in $loc")}")
         }
 
         val options = listOf(
@@ -270,7 +263,7 @@ class ModulesCommand(
                 val file = dir.resolve(plugin.fileName)
                 if (file.exists()) {
                     Files.deleteIfExists(file)
-                    println("    ${RED}-$RESET ${plugin.fileName} removed from $loc")
+                    println("    ${ConsoleFormatter.error("-")} ${plugin.fileName} removed from $loc")
                 }
             }
         }

@@ -107,6 +107,53 @@ class UpdateChecker(
     )
 
     /**
+     * Check for available updates without downloading or prompting.
+     * Returns the update info if a newer version exists, null otherwise.
+     */
+    suspend fun checkForUpdate(): UpdateResult? {
+        val currentVersionStr = NimbusVersion.version
+        if (currentVersionStr == "dev") return null
+
+        val current = VersionInfo.parse(currentVersionStr) ?: return null
+        val releases = fetchReleases() ?: return null
+
+        val currentIsPreRelease = current.isPreRelease ||
+            releases.any { it.tagName == "v$current" && it.isPreRelease } ||
+            releases.any { it.tagName == "v${current.baseVersion}" && it.isPreRelease && it.version == current }
+
+        val latestStable = releases.filter { !it.isPreRelease }.maxByOrNull { it.version }
+
+        if (currentIsPreRelease) {
+            // Prefer stable upgrade, then pre-release
+            if (latestStable != null && latestStable.version > current) {
+                return UpdateResult(
+                    current, latestStable.version, classifyUpdate(current, latestStable.version),
+                    latestStable.downloadUrl, latestStable.releaseUrl, latestStable.changelog,
+                    isPreRelease = false, expectedSize = latestStable.expectedSize
+                )
+            }
+            val latestPreRelease = releases.filter { it.isPreRelease && it.version > current }.maxByOrNull { it.version }
+            if (latestPreRelease != null) {
+                return UpdateResult(
+                    current, latestPreRelease.version, classifyUpdate(current, latestPreRelease.version),
+                    latestPreRelease.downloadUrl, latestPreRelease.releaseUrl, latestPreRelease.changelog,
+                    isPreRelease = true, expectedSize = latestPreRelease.expectedSize
+                )
+            }
+        } else {
+            if (latestStable != null && latestStable.version > current) {
+                return UpdateResult(
+                    current, latestStable.version, classifyUpdate(current, latestStable.version),
+                    latestStable.downloadUrl, latestStable.releaseUrl, latestStable.changelog,
+                    isPreRelease = false, expectedSize = latestStable.expectedSize
+                )
+            }
+        }
+
+        return null
+    }
+
+    /**
      * Check for updates and handle them.
      * Returns true if the application should restart (JAR was updated).
      */

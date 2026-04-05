@@ -55,6 +55,7 @@ class CommandDispatcher {
         val parts = trimmed.split("\\s+".toRegex())
         val commandName = when (parts[0].lowercase()) {
             "?" -> "help"
+            "ver" -> "version"
             else -> parts[0].lowercase()
         }
         val args = parts.drop(1)

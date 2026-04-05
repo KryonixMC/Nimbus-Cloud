@@ -134,6 +134,7 @@ class NimbusConsole(
             val templatesPath = java.nio.file.Path.of(config.paths.templates)
             dispatcher.register(ModulesCommand(moduleManager, terminal, groupManager, templatesPath))
         }
+        dispatcher.register(VersionCommand())
         dispatcher.register(ClearCommand(terminal))
         dispatcher.register(ShutdownCommand(serviceManager, registry, scalingEngine))
 

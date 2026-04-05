@@ -77,9 +77,11 @@ object LiveSearchPicker {
             w.print("\u001B[?25l") // hide cursor
             w.flush()
 
+            val termWidth = terminal.width.coerceIn(40, 300)
+
             fun redraw() {
                 if (renderedLines > 0) clearLines(w, renderedLines)
-                renderedLines = drawMulti(w, title, query.toString(), results, cursor, selectedKeys, loading, spinnerIdx, identify, render)
+                renderedLines = drawMulti(w, title, query.toString(), results, cursor, selectedKeys, loading, spinnerIdx, identify, render, termWidth)
             }
 
             fun triggerDebouncedSearch() {
@@ -215,11 +217,17 @@ object LiveSearchPicker {
         loading: Boolean,
         spinnerIdx: Int,
         identify: (T) -> String,
-        render: (T) -> SearchLine
+        render: (T) -> SearchLine,
+        termWidth: Int = 120
     ): Int {
         var lines = 0
 
-        // Title + selection count
+        // Separator + Title + selection count
+        val sep = "${DIM}${"─".repeat(termWidth)}${RESET}"
+
+        w.write("$sep\n")
+        lines++
+
         val selCount = if (selectedKeys.isNotEmpty()) "  ${GREEN}${selectedKeys.size} selected${RESET}" else ""
         w.write("  ${BOLD}$title${RESET}$selCount\n")
         lines++
@@ -229,7 +237,7 @@ object LiveSearchPicker {
         w.write("  ${DIM}>${RESET} ${query}${DIM}_${RESET}$spinner\n")
         lines++
 
-        w.write("\n")
+        w.write("$sep\n")
         lines++
 
         if (results.isEmpty()) {
@@ -241,8 +249,21 @@ object LiveSearchPicker {
                 lines++
             }
         } else {
-            val visible = results.take(MAX_RESULTS)
-            for ((i, item) in visible.withIndex()) {
+            // Sliding window: keep cursor visible within the page
+            val windowStart = when {
+                cursor < MAX_RESULTS -> 0
+                cursor >= results.size - MAX_RESULTS -> (results.size - MAX_RESULTS).coerceAtLeast(0)
+                else -> cursor - MAX_RESULTS / 2
+            }
+            val windowEnd = (windowStart + MAX_RESULTS).coerceAtMost(results.size)
+
+            if (windowStart > 0) {
+                w.write("  ${DIM}  ↑ ${windowStart} more${RESET}\n")
+                lines++
+            }
+
+            for (i in windowStart until windowEnd) {
+                val item = results[i]
                 val line = render(item)
                 val key = identify(item)
                 val isCursor = i == cursor
@@ -264,8 +285,8 @@ object LiveSearchPicker {
                 lines++
             }
 
-            if (results.size > MAX_RESULTS) {
-                w.write("  ${DIM}  ... and ${results.size - MAX_RESULTS} more${RESET}\n")
+            if (windowEnd < results.size) {
+                w.write("  ${DIM}  ↓ ${results.size - windowEnd} more${RESET}\n")
                 lines++
             }
         }
