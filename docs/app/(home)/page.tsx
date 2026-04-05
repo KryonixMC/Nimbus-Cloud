@@ -55,16 +55,12 @@ export default function Page() {
               GitHub
             </a>
           </div>
+
+          <div className="mt-auto mb-4 w-full max-w-xl max-md:px-2">
+            <InstallTabs />
+          </div>
         </div>
       </div>
-
-      {/* Install */}
-      <section className="mx-auto mt-16 max-w-4xl px-6">
-        <p className="text-center text-sm font-medium text-fd-muted-foreground mb-4">
-          One command to install
-        </p>
-        <InstallTabs />
-      </section>
 
       {/* Section heading */}
       <div className="mx-auto mt-20 mb-8 max-w-5xl px-6 text-center">
