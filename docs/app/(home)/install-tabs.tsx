@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DynamicCodeBlock } from 'fumadocs-ui/components/dynamic-codeblock';
+import { TerminalIcon } from 'lucide-react';
 
 const tabs = [
   {
@@ -47,7 +48,11 @@ export function InstallTabs() {
       <DynamicCodeBlock
         lang={tabs[active].lang}
         code={tabs[active].command}
-        codeblock={{ title: tabs[active].label === 'Windows' ? 'PowerShell' : 'Terminal', allowCopy: true }}
+        codeblock={{
+          title: tabs[active].label === 'Windows' ? 'PowerShell' : 'Terminal',
+          icon: <TerminalIcon className="size-3.5" />,
+          allowCopy: true,
+        }}
       />
     </div>
   );
