@@ -2,6 +2,25 @@ package dev.kryonix.nimbus.database
 
 import org.jetbrains.exposed.sql.Table
 
+// ── Audit Log ──────────────────────────────────────────────
+
+object AuditLog : Table("audit_log") {
+    val id = integer("id").autoIncrement()
+    val timestamp = varchar("timestamp", 30)
+    val actor = varchar("actor", 128)
+    val action = varchar("action", 64)
+    val target = varchar("target", 256).default("")
+    val details = varchar("details", 1024).default("")
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        index(false, timestamp)
+        index(false, actor)
+        index(false, action)
+    }
+}
+
 // ── Metrics Tables ──────────────────────────────────────────
 
 object ServiceEvents : Table("service_events") {

@@ -44,8 +44,10 @@ class SmartScalingModule : NimbusModule {
         val groupManager = context.service<GroupManager>()!!
         val registry = context.service<ServiceRegistry>()!!
 
-        // Create tables
-        db.createTables(ScalingSnapshots, ScalingDecisions)
+        // Register scaling table migrations
+        context.registerMigrations(listOf(
+            dev.kryonix.nimbus.module.scaling.migrations.ScalingV1_Baseline
+        ))
 
         // Initialize config
         val configDir = context.moduleConfigDir("scaling")

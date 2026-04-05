@@ -17,28 +17,32 @@ fun main(args: Array<String>) = runBlocking {
     val cliArgs = parseCliArgs(args)
 
     // Load or create config
-    val config: AgentConfig = if (configPath.exists()) {
-        AgentConfigLoader.load(configPath)
-    } else if (cliArgs.controller != null && cliArgs.token != null) {
-        // CLI args provided — skip wizard
-        AgentConfig(
-            agent = AgentDefinition(
-                controller = cliArgs.controller,
-                token = cliArgs.token,
-                nodeName = cliArgs.nodeName ?: java.net.InetAddress.getLocalHost().hostName,
-                maxMemory = cliArgs.maxMemory ?: autoDetectMemory(),
-                maxServices = cliArgs.maxServices ?: autoDetectMaxServices()
+    val config: AgentConfig = run {
+        val loaded = if (configPath.exists()) {
+            AgentConfigLoader.load(configPath)
+        } else if (cliArgs.controller != null && cliArgs.token != null) {
+            // CLI args provided — skip wizard
+            AgentConfig(
+                agent = AgentDefinition(
+                    controller = cliArgs.controller,
+                    token = cliArgs.token,
+                    nodeName = cliArgs.nodeName ?: java.net.InetAddress.getLocalHost().hostName,
+                    maxMemory = cliArgs.maxMemory ?: autoDetectMemory(),
+                    maxServices = cliArgs.maxServices ?: autoDetectMaxServices()
+                )
             )
-        )
-    } else {
-        // Run setup wizard
-        val wizardConfig = SetupWizard(baseDir).run()
-        if (wizardConfig == null) {
-            logger.info("Setup cancelled.")
-            return@runBlocking
+        } else {
+            // Run setup wizard
+            val wizardConfig = SetupWizard(baseDir).run()
+            if (wizardConfig == null) {
+                logger.info("Setup cancelled.")
+                return@runBlocking
+            }
+            AgentConfigLoader.save(configPath, wizardConfig)
+            wizardConfig
         }
-        AgentConfigLoader.save(configPath, wizardConfig)
-        wizardConfig
+        // Apply environment variable overrides (secrets, controller URL, etc.)
+        AgentConfigLoader.applyEnvironmentOverrides(loaded)
     }
 
     logger.info("Node: {} | Controller: {} | Max Memory: {} | Max Services: {}",

@@ -1120,6 +1120,20 @@ Press **Space** on multiple search results before pressing **Enter** — all sel
 
 ## Network & System
 
+### `audit`
+
+Show the audit log of administrative actions (service starts/stops, config changes, scaling decisions, etc.).
+
+**Syntax:** `audit [limit] [--action <type>] [--actor <name>]`
+
+**Examples:**
+- `audit` — Show last 20 entries
+- `audit 50` — Show last 50 entries
+- `audit --action SERVICE_STARTING` — Filter by action type
+- `audit --actor console` — Filter by who triggered the action
+
+Each entry shows: timestamp, actor (console/api/system), action type, target, and details.
+
 ### `status`
 
 Full cluster overview showing groups, instances, player counts, and capacity.

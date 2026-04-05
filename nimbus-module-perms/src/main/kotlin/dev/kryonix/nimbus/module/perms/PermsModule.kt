@@ -32,14 +32,10 @@ class PermsModule : NimbusModule {
         val db = context.service<DatabaseManager>()!!
         val eventBus = context.service<EventBus>()!!
 
-        // Create permission tables if they don't exist
-        db.createTables(
-            PermissionGroups, GroupPermissions, GroupParents,
-            Players, PlayerGroups,
-            GroupMeta, PlayerMeta,
-            GroupPermissionContexts, PlayerGroupContexts,
-            PermissionTracks, PermissionAuditLog
-        )
+        // Register permission table migrations
+        context.registerMigrations(listOf(
+            dev.kryonix.nimbus.module.perms.migrations.PermsV1_Baseline
+        ))
 
         permissionManager = PermissionManager(db)
         permissionManager.init()

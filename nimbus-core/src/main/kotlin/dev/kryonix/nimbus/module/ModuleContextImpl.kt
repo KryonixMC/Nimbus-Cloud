@@ -45,6 +45,10 @@ class ModuleContextImpl(
     private val _pluginDeployments = mutableListOf<PluginDeployment>()
     val pluginDeployments: List<PluginDeployment> get() = _pluginDeployments
 
+    /** Migrations registered by modules. */
+    private val _migrations = mutableListOf<Migration>()
+    val migrations: List<Migration> get() = _migrations
+
     /** Service registry for getService() lookups. */
     private val services = mutableMapOf<Class<*>, Any>()
 
@@ -85,6 +89,10 @@ class ModuleContextImpl(
 
     override fun registerPluginDeployment(deployment: PluginDeployment) {
         _pluginDeployments.add(deployment)
+    }
+
+    override fun registerMigrations(migrations: List<Migration>) {
+        _migrations.addAll(migrations)
     }
 
     override fun registerEventFormatter(eventType: String, formatter: (data: Map<String, String>) -> String) {

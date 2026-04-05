@@ -5,6 +5,9 @@ import java.time.Instant
 sealed class NimbusEvent {
     val timestamp: Instant = Instant.now()
 
+    /** Who triggered this event. Set by console/API before emitting. */
+    open var actor: String = "system"
+
     // Service lifecycle
     data class ServiceStarting(val serviceName: String, val groupName: String, val port: Int, val nodeId: String = "local") : NimbusEvent()
     data class ServiceReady(val serviceName: String, val groupName: String) : NimbusEvent()

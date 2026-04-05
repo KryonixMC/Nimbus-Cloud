@@ -117,6 +117,9 @@ fun nimbusMain() = runBlocking {
         return@runBlocking
     }
 
+    // Apply environment variable overrides (secrets, database, etc.)
+    config = ConfigLoader.applyEnvironmentOverrides(config)
+
     // Auto-generate API token if missing (existing installs without [api] section)
     if (config.api.enabled && config.api.token.isBlank() && configPath.exists()) {
         val token = generateApiToken()
@@ -211,6 +214,14 @@ fun nimbusMain() = runBlocking {
     val metricsJobs = metricsCollector.start()
     metricsCollector.startRetentionCleanup(scope)
 
+    // Start audit collector (if enabled)
+    val auditCollector = if (config.audit.enabled) {
+        val collector = dev.kryonix.nimbus.database.AuditCollector(databaseManager, eventBus, scope, config.audit.retentionDays)
+        collector.start()
+        collector.startRetentionCleanup(scope)
+        collector
+    } else null
+
     val proxySyncManager = dev.kryonix.nimbus.proxy.ProxySyncManager(proxyDir)
     proxySyncManager.init()
 
@@ -246,6 +257,14 @@ fun nimbusMain() = runBlocking {
     val moduleManager = ModuleManager(controllerModulesDir, moduleContext, eventBus)
     moduleManager.loadAll()
     moduleManager.enableAll()
+
+    // Run database migrations (core + module) after all modules have registered theirs
+    databaseManager.runMigrations(moduleContext.migrations)
+
+    // Register audit command (uses DatabaseManager directly)
+    if (config.audit.enabled) {
+        dispatcher.register(dev.kryonix.nimbus.console.commands.AuditCommand(databaseManager))
+    }
 
     // ── Cluster mode ───────────────────────────────────
     val nodeManager: NodeManager? = if (config.cluster.enabled) {
@@ -329,7 +348,8 @@ fun nimbusMain() = runBlocking {
         stressTestManager = stressTestManager,
         moduleContext = moduleContext,
         moduleManager = moduleManager,
-        dispatcher = dispatcher
+        dispatcher = dispatcher,
+        databaseManager = databaseManager
     )
 
     // Register shutdown hook for external signals (SIGTERM, SIGINT, terminal close)
@@ -349,6 +369,7 @@ fun nimbusMain() = runBlocking {
                     } catch (_: Exception) {}
                 }
             }
+            auditCollector?.shutdown()
             metricsCollector.shutdown()
             metricsJobs.forEach { it.cancel() }
             scalingEngine.shutdown()
@@ -443,6 +464,7 @@ fun nimbusMain() = runBlocking {
                 } catch (_: Exception) {}
             }
         }
+        auditCollector?.shutdown()
         metricsJobs.forEach { it.cancel() }
         updaterJob.cancel()
         scalingEngine.shutdown()

@@ -5,8 +5,8 @@ import dev.kryonix.nimbus.config.ClusterConfig
 import dev.kryonix.nimbus.event.EventBus
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
-import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
@@ -18,6 +18,7 @@ import java.nio.file.Path
 /**
  * Standalone Ktor server for the cluster WebSocket endpoint + template downloads.
  * Runs on [ClusterConfig.agentPort], separate from the REST API.
+ * Uses the Netty engine for native TLS support via [sslConnector].
  */
 class ClusterServer(
     private val config: ClusterConfig,
@@ -28,7 +29,7 @@ class ClusterServer(
 ) {
     private val logger = LoggerFactory.getLogger(ClusterServer::class.java)
 
-    private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
+    private var server: EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration>? = null
 
     val isRunning: Boolean get() = server != null
 
@@ -38,37 +39,93 @@ class ClusterServer(
             return
         }
 
+        if (config.tlsEnabled) {
+            startWithTls()
+        } else {
+            startPlaintext()
+            val isLoopback = config.bind == "127.0.0.1" || config.bind == "localhost"
+            if (!isLoopback) {
+                logger.warn("Cluster server is bound to '{}' without TLS — agent tokens and secrets are transmitted in plaintext!", config.bind)
+                logger.warn("Enable TLS in [cluster] config for production multi-node setups.")
+            }
+        }
+    }
+
+    private fun startWithTls() {
+        // Resolve keystore path: configured path, or default to config/cluster.jks
+        val keystorePath = if (config.keystorePath.isNotBlank()) {
+            Path.of(config.keystorePath)
+        } else {
+            Path.of("config", "cluster.jks")
+        }
+
+        val password = resolveKeystorePassword()
+        val (keyStore, effectivePassword) = try {
+            TlsHelper.ensureKeyStore(keystorePath, password, config.bind)
+        } catch (e: Exception) {
+            logger.error("Failed to load/generate keystore at '{}': {}", keystorePath, e.message)
+            return
+        }
+
+        val alias = keyStore.aliases().nextElement()
+
         try {
-            server = embeddedServer(CIO, port = config.agentPort, host = config.bind) {
-                install(WebSockets) {
-                    pingPeriod = kotlin.time.Duration.parse("15s")
-                    timeout = kotlin.time.Duration.parse("30s")
-                    maxFrameSize = 65536
+            server = embeddedServer(Netty, configure = {
+                sslConnector(
+                    keyStore = keyStore,
+                    keyAlias = alias,
+                    keyStorePassword = { effectivePassword.toCharArray() },
+                    privateKeyPassword = { effectivePassword.toCharArray() }
+                ) {
+                    host = config.bind
+                    port = config.agentPort
                 }
-
-                install(ContentNegotiation) {
-                    json(Json { encodeDefaults = true })
-                }
-
-                routing {
-                    with(handler) { clusterRoutes() }
-                    // Template download/hash endpoints for agents (auth via ?token= query param)
-                    templateRoutes(templatesDir, config.token)
-                }
+            }) {
+                installPlugins()
             }
 
             server?.start(wait = false)
-            logger.info("Cluster WebSocket server started on {}:{}", config.bind, config.agentPort)
+            logger.info("Cluster WebSocket server started on wss://{}:{} (TLS)", config.bind, config.agentPort)
+        } catch (e: Exception) {
+            logger.error("Failed to start cluster server with TLS on {}:{}: {}", config.bind, config.agentPort, e.message)
+            server = null
+        }
+    }
 
-            // Warn if cluster is exposed on a non-loopback interface without TLS
-            if (config.bind != "127.0.0.1" && config.bind != "localhost") {
-                logger.warn("Cluster server is bound to '{}' without TLS — agent tokens and secrets are transmitted in plaintext!", config.bind)
-                logger.warn("For production multi-node setups, use a reverse proxy with TLS or restrict access via firewall rules.")
+    private fun startPlaintext() {
+        try {
+            server = embeddedServer(Netty, port = config.agentPort, host = config.bind) {
+                installPlugins()
             }
+
+            server?.start(wait = false)
+            logger.info("Cluster WebSocket server started on ws://{}:{}", config.bind, config.agentPort)
         } catch (e: Exception) {
             logger.error("Failed to start cluster server on {}:{}: {}", config.bind, config.agentPort, e.message)
             server = null
         }
+    }
+
+    private fun Application.installPlugins() {
+        install(WebSockets) {
+            pingPeriod = kotlin.time.Duration.parse("15s")
+            timeout = kotlin.time.Duration.parse("30s")
+            maxFrameSize = 65536
+        }
+
+        install(ContentNegotiation) {
+            json(Json { encodeDefaults = true })
+        }
+
+        routing {
+            with(handler) { clusterRoutes() }
+            templateRoutes(templatesDir, config.token)
+        }
+    }
+
+    private fun resolveKeystorePassword(): String {
+        return System.getenv("NIMBUS_CLUSTER_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+            ?: config.keystorePassword
     }
 
     fun stop() {

@@ -1,6 +1,9 @@
 package dev.kryonix.nimbus.database
 
 import dev.kryonix.nimbus.config.DatabaseConfig
+import dev.kryonix.nimbus.database.migrations.V1_Baseline
+import dev.kryonix.nimbus.database.migrations.V2_AuditLog
+import dev.kryonix.nimbus.module.Migration
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -18,6 +21,11 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     lateinit var database: Database
         private set
 
+    private val migrationManager by lazy { MigrationManager(database) }
+
+    /** Core migrations bundled with nimbus-core. */
+    private val coreMigrations: List<Migration> = listOf(V1_Baseline, V2_AuditLog)
+
     fun init() {
         database = when (config.type.lowercase()) {
             "sqlite" -> connectSqlite()
@@ -29,13 +37,29 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
             }
         }
 
-        transaction(database) {
-            SchemaUtils.createMissingTablesAndColumns(
-                ServiceEvents, ScalingEvents, PlayerSessions
-            )
-        }
+        // Initialize migration tracking table
+        migrationManager.init()
 
         logger.info("Database initialized ({})", config.type.lowercase())
+    }
+
+    /**
+     * Runs all pending migrations (core + module).
+     * Called from Nimbus.kt after modules have registered their migrations.
+     *
+     * @param moduleMigrations migrations registered by modules via ModuleContext.registerMigrations()
+     */
+    fun runMigrations(moduleMigrations: List<Migration> = emptyList()) {
+        val allMigrations = coreMigrations + moduleMigrations
+
+        // Collect baseline versions for bootstrap (detect pre-0.2.0 databases)
+        val baselineVersions = allMigrations.map { it.version }
+        migrationManager.bootstrap(baselineVersions)
+
+        val applied = migrationManager.runPending(allMigrations)
+        if (applied > 0) {
+            logger.info("Applied {} migration(s)", applied)
+        }
     }
 
     private fun connectSqlite(): Database {
@@ -65,9 +89,14 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     }
 
     private fun connectPostgresql(): Database {
-        val port = if (config.port == 3306) 5432 else config.port
+        if (config.port == 3306) {
+            throw IllegalArgumentException(
+                "PostgreSQL is configured with MySQL default port 3306. " +
+                    "Set the correct port (default: 5432) in [database] config."
+            )
+        }
         return Database.connect(
-            url = "jdbc:postgresql://${config.host}:$port/${config.name}?sslmode=require",
+            url = "jdbc:postgresql://${config.host}:${config.port}/${config.name}?sslmode=require",
             driver = "org.postgresql.Driver",
             user = config.username,
             password = config.password
@@ -77,7 +106,10 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     suspend fun <T> query(block: Transaction.() -> T): T =
         newSuspendedTransaction(Dispatchers.IO, database) { block() }
 
-    /** Creates tables if they don't exist. Used by modules to register their own tables. */
+    @Deprecated(
+        message = "Use Migration interface and registerMigrations() instead. Will be removed in 0.3.0.",
+        replaceWith = ReplaceWith("context.registerMigrations(listOf(...))")
+    )
     fun createTables(vararg tables: org.jetbrains.exposed.sql.Table) {
         transaction(database) {
             SchemaUtils.createMissingTablesAndColumns(*tables)
