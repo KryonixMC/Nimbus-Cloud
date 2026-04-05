@@ -4,7 +4,6 @@ description: Configure Velocity proxy in Nimbus — adaptive forwarding, auto-pa
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 Nimbus uses [Velocity](https://papermc.io/software/velocity) as its proxy layer. The proxy sits in front of all backend servers, handling player connections, server switching, and cross-server features like tab lists and chat formatting.
 
@@ -166,10 +165,12 @@ Updates are downloaded and staged automatically, but only take effect on the nex
 
 You can listen for these events via the [WebSocket API](/docs/reference/websocket) to trigger alerts, Discord notifications, or automated restart scripts.
 
-<Terminal title="nimbus">{`<span class="t-dim">[18:00:01]</span> <span class="t-cyan">ℹ</span> New Velocity version available: <span class="t-yellow">3.4.0</span> → <span class="t-green">3.5.0</span>
-<span class="t-dim">[18:00:04]</span> <span class="t-cyan">ℹ</span> Downloaded Velocity 3.5.0 (12.4 MB)
-<span class="t-dim">[18:00:04]</span> <span class="t-cyan">ℹ</span> Updated Velocity JAR for static service 'Proxy-1' <span class="t-dim">(restart to apply)</span>
-<span class="t-dim">[18:00:04]</span> <span class="t-green">✓</span> Velocity updated: 3.4.0 → 3.5.0 <span class="t-dim">(restart proxy to apply)</span>`}</Terminal>
+```
+[18:00:01] ℹ New Velocity version available: 3.4.0 → 3.5.0
+[18:00:04] ℹ Downloaded Velocity 3.5.0 (12.4 MB)
+[18:00:04] ℹ Updated Velocity JAR for static service 'Proxy-1' (restart to apply)
+[18:00:04] ✓ Velocity updated: 3.4.0 → 3.5.0 (restart proxy to apply)
+```
 
 <Callout type="info">
 If the download fails (network issue, API outage), Nimbus silently keeps the old version and retries at the next 6-hour interval. No action needed from you.
@@ -284,16 +285,18 @@ Players trying to connect to a BedWars server will be sent back to the lobby wit
 
 Toggle maintenance via the console or in-game:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> maintenance on
-<span class="t-green">✓</span> Global maintenance <span class="t-bold">enabled</span>.
-<span class="t-dim">  Players without bypass will be disconnected by the proxy.</span>
+```
+nimbus » maintenance on
+✓ Global maintenance enabled.
+  Players without bypass will be disconnected by the proxy.
 
-<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> maintenance BedWars on
-<span class="t-green">✓</span> Group <span class="t-bold">BedWars</span> maintenance <span class="t-bold">enabled</span>.
-<span class="t-dim">  Players will not be able to join BedWars servers.</span>
+nimbus » maintenance BedWars on
+✓ Group BedWars maintenance enabled.
+  Players will not be able to join BedWars servers.
 
-<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> maintenance add jonas
-<span class="t-green">✓</span> Added <span class="t-bold">jonas</span> to maintenance whitelist.`}</Terminal>
+nimbus » maintenance add jonas
+✓ Added jonas to maintenance whitelist.
+```
 
 Or in-game with `/cloud maintenance on`, `/cloud maintenance BedWars on`, etc.
 
@@ -392,14 +395,18 @@ Both ports must be open on your server. Bedrock uses **UDP**, not TCP — make s
 
 The `status` command shows Bedrock support status:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> status
-<span class="t-dim">...</span>
-<span class="t-dim">Bedrock:</span>  <span class="t-green">enabled</span> (Geyser + Floodgate, base port 19132)`}</Terminal>
+```
+nimbus » status
+...
+Bedrock:  enabled (Geyser + Floodgate, base port 19132)
+```
 
 The `list` command shows both TCP and UDP ports for proxy services:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> list
-<span class="t-bold">Proxy-1</span>    Proxy    <span class="t-green">● READY</span>    25565/19132    0    12345    1h 30m`}</Terminal>
+```
+nimbus » list
+Proxy-1    Proxy    ● READY    25565/19132    0    12345    1h 30m
+```
 
 ### MOTD, Server Icon & Player Count
 

@@ -3,32 +3,35 @@ title: Introduction
 description: Overview of Nimbus, a lightweight console-only Minecraft cloud system that manages dynamic server instances from a single JAR.
 ---
 
-import { Terminal } from '@/components/terminal';
 
 
 Nimbus is a lightweight, console-only Minecraft cloud system that manages dynamic server instances from a single JAR. It handles everything from downloading server software to auto-scaling game servers based on player count — no web UI, no bloat.
 
-<Terminal title="nimbus">{`<span class="t-blue">   _  __ __ _   __ ___  _ __  ___</span>
-<span class="t-bright-blue">  / |/ // // \,' // o.)/// /,' _/</span>
-<span class="t-cyan"> / || // // \,' // o \/ U /_\ \`. </span>
-<span class="t-bright-cyan">/_/|_//_//_/ /_//___,'\_,'/___,'</span>
-<span class="t-dim">            C L O U D</span>`}</Terminal>
+```
+   _  __ __ _   __ ___  _ __  ___
+  / |/ // // \,' // o.)/// /,' _/
+ / || // // \,' // o \/ U /_\ \`. 
+/_/|_//_//_/ /_//___,'\_,'/___,'
+            C L O U D
+```
 
-<Terminal title="nimbus — in action">{`<span class="t-dim">[12:00:01]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">Proxy-1</span> <span class="t-dim">(group=Proxy, port=25565)</span>
-<span class="t-dim">[12:00:04]</span> <span class="t-green">● READY</span>     <span class="t-bold">Proxy-1</span> <span class="t-dim">(group=Proxy)</span>
-<span class="t-dim">[12:00:04]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">Lobby-1</span> <span class="t-dim">(group=Lobby, port=30000)</span>
-<span class="t-dim">[12:00:08]</span> <span class="t-green">● READY</span>     <span class="t-bold">Lobby-1</span> <span class="t-dim">(group=Lobby)</span>
-<span class="t-dim">[12:00:08]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">BedWars-1</span> <span class="t-dim">(group=BedWars, port=30001)</span>
-<span class="t-dim">[12:00:12]</span> <span class="t-green">● READY</span>     <span class="t-bold">BedWars-1</span> <span class="t-dim">(group=BedWars)</span>
-<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> list
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Services</span> ──────────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">Proxy-1</span>         Proxy       <span class="t-green">● READY</span>          25565   12       12451   2h 15m
-<span class="t-bold">Lobby-1</span>         Lobby       <span class="t-green">● READY</span>          30000   4        12488   2h 14m
-<span class="t-bold">BedWars-1</span>       BedWars     <span class="t-green">● READY</span>          30001   8        12523   1h 32m
-<span class="t-bold">BedWars-2</span>       BedWars     <span class="t-yellow">● STARTING</span>       30002   0        12567   0m 05s
-<span class="t-dim">4 service(s)</span>`}</Terminal>
+```
+[12:00:01] ▲ STARTING  Proxy-1 (group=Proxy, port=25565)
+[12:00:04] ● READY     Proxy-1 (group=Proxy)
+[12:00:04] ▲ STARTING  Lobby-1 (group=Lobby, port=30000)
+[12:00:08] ● READY     Lobby-1 (group=Lobby)
+[12:00:08] ▲ STARTING  BedWars-1 (group=BedWars, port=30001)
+[12:00:12] ● READY     BedWars-1 (group=BedWars)
+nimbus » list
+── Services ──────────────────────────────────────
+NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME
+──────────────────────────────────────────────────────────────────────────────
+Proxy-1         Proxy       ● READY          25565   12       12451   2h 15m
+Lobby-1         Lobby       ● READY          30000   4        12488   2h 14m
+BedWars-1       BedWars     ● READY          30001   8        12523   1h 32m
+BedWars-2       BedWars     ● STARTING       30002   0        12567   0m 05s
+4 service(s)
+```
 
 ## Why Nimbus?
 
@@ -67,19 +70,21 @@ Nimbus takes a different approach:
 
 ## Architecture
 
-<Terminal title="nimbus — architecture">{`<span class="t-cyan t-bold">┌─────────────────────────────────────┐</span>
-<span class="t-cyan t-bold">│</span>       <span class="t-bold">Nimbus Controller</span>              <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">┌─────────┐</span> <span class="t-bright-cyan">┌──────┐</span> <span class="t-bright-cyan">┌──────────┐</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">│</span> Console  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span>  API  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> Scaling  <span class="t-bright-cyan">│</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">│</span> <span class="t-dim">(JLine)</span>  <span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span><span class="t-dim">(Ktor)</span><span class="t-bright-cyan">│</span> <span class="t-bright-cyan">│</span> <span class="t-dim">Engine</span>   <span class="t-bright-cyan">│</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-bright-cyan">└─────────┘</span> <span class="t-bright-cyan">└──────┘</span> <span class="t-bright-cyan">└──────────┘</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">├─────────────────────────────────────┤</span>
-<span class="t-cyan t-bold">│</span>          <span class="t-bold">Server Groups</span>              <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-green">┌─────────┐</span> <span class="t-green">┌───────┐</span> <span class="t-green">┌────────┐</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-green">│</span> Proxy-1 <span class="t-green">│</span> <span class="t-green">│</span>Lobby-1<span class="t-green">│</span> <span class="t-green">│</span>BedWars <span class="t-green">│</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-green">│</span><span class="t-dim">(Velocity)</span><span class="t-green">│</span> <span class="t-green">│</span><span class="t-dim">(Paper)</span> <span class="t-green">│</span> <span class="t-green">│</span> <span class="t-dim">1..N</span>   <span class="t-green">│</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">│</span>  <span class="t-green">└─────────┘</span> <span class="t-green">└───────┘</span> <span class="t-green">└────────┘</span> <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">└─────────────────────────────────────┘</span>`}</Terminal>
+```
+┌─────────────────────────────────────┐
+│       Nimbus Controller              │
+│  ┌─────────┐ ┌──────┐ ┌──────────┐ │
+│  │ Console  │ │  API  │ │ Scaling  │ │
+│  │ (JLine)  │ │(Ktor)│ │ Engine   │ │
+│  └─────────┘ └──────┘ └──────────┘ │
+├─────────────────────────────────────┤
+│          Server Groups              │
+│  ┌─────────┐ ┌───────┐ ┌────────┐ │
+│  │ Proxy-1 │ │Lobby-1│ │BedWars │ │
+│  │(Velocity)│ │(Paper) │ │ 1..N   │ │
+│  └─────────┘ └───────┘ └────────┘ │
+└─────────────────────────────────────┘
+```
 
 The **Nimbus Controller** is the main process. It runs three core systems:
 

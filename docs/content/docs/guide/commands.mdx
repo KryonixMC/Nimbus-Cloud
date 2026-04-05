@@ -4,7 +4,6 @@ description: Full reference for all Nimbus interactive console commands — serv
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 Nimbus provides an interactive console with tab completion, command history, and ANSI-colored output. Type `help` or `?` to see all available commands.
 
@@ -16,16 +15,18 @@ Show all running services with status, health, port, player count, and uptime.
 
 **Syntax:** `list [group]`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> list
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Services</span> ──────────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME            GROUP       STATE           HP  PORT    PLAYERS  PID     UPTIME</span>
-<span class="t-dim">────────────────────────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">Proxy-1</span>         Proxy       <span class="t-green">● READY</span>          <span class="t-green">✓</span>   25565/19132   36       48190   2h 15m
-<span class="t-bold">Lobby-1</span>         Lobby       <span class="t-green">● READY</span>          <span class="t-green">✓</span>   30001   12       48201   2h 15m
-<span class="t-bold">Lobby-2</span>         Lobby       <span class="t-green">● READY</span>          <span class="t-red">✗</span>   30002   8        48215   1h 42m
-<span class="t-bold">BedWars-1</span>       BedWars     <span class="t-green">● READY</span>          <span class="t-green">✓</span>   30003   16       48230   0h 55m
-<span class="t-bold">BedWars-2</span>       BedWars     <span class="t-yellow">● STARTING</span>       <span class="t-dim">-</span>   30004   0        48245   0m 01s
-<span class="t-dim">5 service(s)</span>`}</Terminal>
+```
+nimbus » list
+── Services ──────────────────────────────────────
+NAME            GROUP       STATE           HP  PORT    PLAYERS  PID     UPTIME
+────────────────────────────────────────────────────────────────────────────────────
+Proxy-1         Proxy       ● READY          ✓   25565/19132   36       48190   2h 15m
+Lobby-1         Lobby       ● READY          ✓   30001   12       48201   2h 15m
+Lobby-2         Lobby       ● READY          ✗   30002   8        48215   1h 42m
+BedWars-1       BedWars     ● READY          ✓   30003   16       48230   0h 55m
+BedWars-2       BedWars     ● STARTING       -   30004   0        48245   0m 01s
+5 service(s)
+```
 
 The **HP** column shows a quick health indicator: **✓** healthy, **✗** unhealthy, or **-** for services not yet READY.
 
@@ -43,9 +44,11 @@ Start a new instance of a server group.
 
 **Syntax:** `start <group>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> start BedWars
-<span class="t-cyan">ℹ</span> Starting new instance for group 'BedWars'...
-<span class="t-green">✓ Service start initiated for group 'BedWars'.</span>`}</Terminal>
+```
+nimbus » start BedWars
+ℹ Starting new instance for group 'BedWars'...
+✓ Service start initiated for group 'BedWars'.
+```
 
 <Callout type="warn">
 Fails if the group has reached its `max_instances` limit or the server JAR is unavailable.
@@ -61,9 +64,11 @@ Gracefully stop a running service. Sends the Minecraft `stop` command to the pro
 
 **Syntax:** `stop <service>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> stop BedWars-2
-<span class="t-cyan">ℹ</span> Stopping service 'BedWars-2'...
-<span class="t-green">✓ Service 'BedWars-2' stop initiated.</span>`}</Terminal>
+```
+nimbus » stop BedWars-2
+ℹ Stopping service 'BedWars-2'...
+✓ Service 'BedWars-2' stop initiated.
+```
 
 **Tab completion:** Running service names.
 
@@ -75,9 +80,11 @@ Stop a service and start a new instance in its place.
 
 **Syntax:** `restart <service>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> restart Lobby-1
-<span class="t-cyan">ℹ</span> Restarting service 'Lobby-1'...
-<span class="t-green">✓ Service 'Lobby-1' restart initiated.</span>`}</Terminal>
+```
+nimbus » restart Lobby-1
+ℹ Restarting service 'Lobby-1'...
+✓ Service 'Lobby-1' restart initiated.
+```
 
 **Tab completion:** Running service names.
 
@@ -89,11 +96,13 @@ Force-kill a service process, clean up crashed services, or kill a process by PI
 
 **Syntax:** `purge <service|crashed|pid:<pid>>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> purge crashed
-<span class="t-yellow">⚠</span> Purging 2 crashed service(s)...
-<span class="t-green">  Purged 'BedWars-3'</span>
-<span class="t-green">  Purged 'BedWars-5'</span>
-<span class="t-green">✓ Purged 2/2 crashed service(s).</span>`}</Terminal>
+```
+nimbus » purge crashed
+⚠ Purging 2 crashed service(s)...
+  Purged 'BedWars-3'
+  Purged 'BedWars-5'
+✓ Purged 2/2 crashed service(s).
+```
 
 | Argument | Description |
 |---|---|
@@ -115,15 +124,17 @@ Attach to a service's live console output. You can type commands directly into t
 
 **Syntax:** `screen <service>`
 
-<Terminal title="nimbus — screen Lobby-1">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> screen Lobby-1
-<span class="t-cyan">ℹ</span> Attached to Lobby-1 <span class="t-dim">(ESC or Ctrl+Q to detach)</span>
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-dim">[14:23:01 INFO]:</span> Done (2.341s)! For help, type "help"
-<span class="t-dim">[14:23:05 INFO]:</span> Player Steve joined the game
-<span class="t-yellow">&gt;</span> say Hello from Nimbus!
-<span class="t-dim">[14:23:12 INFO]:</span> [Server] Hello from Nimbus!
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-cyan">ℹ</span> Detached from Lobby-1`}</Terminal>
+```
+nimbus » screen Lobby-1
+ℹ Attached to Lobby-1 (ESC or Ctrl+Q to detach)
+────────────────────────────────────────────────────────
+[14:23:01 INFO]: Done (2.341s)! For help, type "help"
+[14:23:05 INFO]: Player Steve joined the game
+> say Hello from Nimbus!
+[14:23:12 INFO]: [Server] Hello from Nimbus!
+────────────────────────────────────────────────────────
+ℹ Detached from Lobby-1
+```
 
 Press **ESC** or **Ctrl+Q** to detach and return to the Nimbus console.
 
@@ -141,8 +152,10 @@ Execute a command on a service's stdin without attaching to its console.
 
 **Syntax:** `exec <service> <command...>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> exec Lobby-1 say Restarting in 5 minutes!
-<span class="t-green">✓ Sent to Lobby-1:</span> <span class="t-dim">say Restarting in 5 minutes!</span>`}</Terminal>
+```
+nimbus » exec Lobby-1 say Restarting in 5 minutes!
+✓ Sent to Lobby-1: say Restarting in 5 minutes!
+```
 
 **Tab completion:** Running service names (first argument).
 
@@ -154,15 +167,17 @@ Show recent log output from a service's `logs/latest.log` file.
 
 **Syntax:** `logs <service> [lines]`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> logs BedWars-1 20
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Logs: BedWars-1</span> ────────────────────────────────</span>
-<span class="t-dim">Last 20 line(s) from services/BedWars-1/logs/latest.log</span>
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-dim">[14:23:01 INFO]: Player Alex joined the game</span>
-<span class="t-dim">[14:23:05 INFO]: Player Steve joined the game</span>
-<span class="t-dim">...</span>
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-dim">20 of 1482 line(s)</span>`}</Terminal>
+```
+nimbus » logs BedWars-1 20
+── Logs: BedWars-1 ────────────────────────────────
+Last 20 line(s) from services/BedWars-1/logs/latest.log
+────────────────────────────────────────────────────────
+[14:23:01 INFO]: Player Alex joined the game
+[14:23:05 INFO]: Player Steve joined the game
+...
+────────────────────────────────────────────────────────
+20 of 1482 line(s)
+```
 
 Defaults to **50 lines** if not specified. If the log file doesn't exist, Nimbus suggests using `screen` for live output.
 
@@ -176,14 +191,16 @@ List all connected players across services. Queries each READY service via Serve
 
 **Syntax:** `players [service]`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> players
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Players</span> ───────────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">PLAYER      SERVICE       SERVER</span>
-<span class="t-dim">──────────────────────────────────────────────────</span>
+```
+nimbus » players
+── Players ───────────────────────────────────────
+PLAYER      SERVICE       SERVER
+──────────────────────────────────────────────────
 Alex        BedWars-1     BedWars
 Notch       Lobby-1       Lobby
 Steve       BedWars-1     BedWars
-<span class="t-dim">3 player(s) online</span>`}</Terminal>
+3 player(s) online
+```
 
 Pass a service name to filter: `players Lobby-1`.
 
@@ -197,15 +214,17 @@ Show health metrics for running services: TPS, memory usage, health status, rest
 
 **Syntax:** `health [service|group]`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> health
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Service Health</span> ─────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME            STATE           TPS    MEMORY          HEALTH     RESTARTS  UPTIME</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">Lobby-1</span>         <span class="t-green">● READY</span>          <span class="t-green">19.9</span>   <span class="t-green">412/1024MB</span>      <span class="t-green">healthy</span>    <span class="t-dim">0</span>         2h 15m
-<span class="t-bold">Lobby-2</span>         <span class="t-green">● READY</span>          <span class="t-yellow">16.2</span>   <span class="t-yellow">890/1024MB</span>      <span class="t-red">unhealthy</span>  <span class="t-yellow">2</span>         1h 42m
-<span class="t-bold">BedWars-1</span>       <span class="t-green">● READY</span>          <span class="t-green">20.0</span>   <span class="t-green">256/1024MB</span>      <span class="t-green">healthy</span>    <span class="t-dim">0</span>         0h 55m
-<span class="t-dim">3 service(s)</span>
-<span class="t-yellow">!</span> 1 service unhealthy`}</Terminal>
+```
+nimbus » health
+── Service Health ─────────────────────────────────
+NAME            STATE           TPS    MEMORY          HEALTH     RESTARTS  UPTIME
+──────────────────────────────────────────────────────────────────────────────────────
+Lobby-1         ● READY          19.9   412/1024MB      healthy    0         2h 15m
+Lobby-2         ● READY          16.2   890/1024MB      unhealthy  2         1h 42m
+BedWars-1       ● READY          20.0   256/1024MB      healthy    0         0h 55m
+3 service(s)
+! 1 service unhealthy
+```
 
 Pass a service name for a detailed view with memory progress bar and last SDK health report timestamp:
 
@@ -227,14 +246,16 @@ List all configured server groups with software, version, and instance counts.
 
 **Syntax:** `groups`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> groups
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Groups</span> ────────────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME        TYPE      SOFTWARE    VERSION    MEMORY  INSTANCES  MIN/MAX</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────────────</span>
+```
+nimbus » groups
+── Groups ────────────────────────────────────────
+NAME        TYPE      SOFTWARE    VERSION    MEMORY  INSTANCES  MIN/MAX
+──────────────────────────────────────────────────────────────────────────
 Proxy       STATIC    VELOCITY    3.4.0      512M    1          1/1
 Lobby       DYNAMIC   PAPER       1.21.4     1G      2          2/4
 BedWars     DYNAMIC   PAPER       1.21.4     2G      2          1/8
-<span class="t-dim">3 group(s)</span>`}</Terminal>
+3 group(s)
+```
 
 ---
 
@@ -244,30 +265,32 @@ Show detailed configuration and runtime state for a group.
 
 **Syntax:** `info <group>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> info BedWars
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Group: BedWars</span> ─────────────────────────────────</span>
-  <span class="t-dim">Type</span>                  <span class="t-cyan">DYNAMIC</span>
-  <span class="t-dim">Software</span>              <span class="t-cyan">PAPER</span>
-  <span class="t-dim">Version</span>               1.21.4
-  <span class="t-dim">Template</span>              <span class="t-dim">default</span>
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Resources</span></span>
-  <span class="t-dim">Memory</span>                2G
-  <span class="t-dim">Max Players</span>           16
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Scaling</span></span>
-  <span class="t-dim">Min Instances</span>         1
-  <span class="t-dim">Max Instances</span>         8
-  <span class="t-dim">Players/Instance</span>      16
-  <span class="t-dim">Scale Threshold</span>       80%
-  <span class="t-dim">Idle Timeout</span>          300000ms
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Lifecycle</span></span>
-  <span class="t-dim">Stop on Empty</span>         <span class="t-green">yes</span>
-  <span class="t-dim">Restart on Crash</span>      <span class="t-green">yes</span>
-  <span class="t-dim">Max Restarts</span>          5
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">JVM</span></span>
-  <span class="t-dim">Optimize</span>              <span class="t-green">Aikar's Flags + Config Tuning</span>
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Runtime</span></span>
-  <span class="t-dim">Running Instances</span>     <span class="t-green">2</span>
-  <span class="t-dim">Total Players</span>         <span class="t-bold">24</span>`}</Terminal>
+```
+nimbus » info BedWars
+── Group: BedWars ─────────────────────────────────
+  Type                  DYNAMIC
+  Software              PAPER
+  Version               1.21.4
+  Template              default
+▸ Resources
+  Memory                2G
+  Max Players           16
+▸ Scaling
+  Min Instances         1
+  Max Instances         8
+  Players/Instance      16
+  Scale Threshold       80%
+  Idle Timeout          300000ms
+▸ Lifecycle
+  Stop on Empty         yes
+  Restart on Crash      yes
+  Max Restarts          5
+▸ JVM
+  Optimize              Aikar's Flags + Config Tuning
+▸ Runtime
+  Running Instances     2
+  Total Players         24
+```
 
 **Tab completion:** Group names.
 
@@ -293,80 +316,84 @@ Launch an interactive wizard to create a new server group. Clears the screen and
 
 The most common case -- a Paper backend with Via plugin support.
 
-<Terminal title="nimbus — create wizard">{`<span class="t-bold">Create New Group</span>
-Group name: <span class="t-bold">SkyWars</span>
-<span class="t-dim">Available server software:</span>
-  <span class="t-cyan">paper</span>       — Paper (optimized vanilla, plugins)
-  <span class="t-cyan">pufferfish</span>  — Pufferfish (Paper fork, performance)
-  <span class="t-cyan">purpur</span>      — Purpur (Paper fork, extra features)
-  <span class="t-cyan">folia</span>       — Folia (regionized multithreading, 1.19.4+)
-  <span class="t-cyan">forge</span>       — Forge (mods, auto-installs)
-  <span class="t-cyan">neoforge</span>    — NeoForge (modern Forge fork)
-  <span class="t-cyan">fabric</span>      — Fabric (lightweight mods)
-  <span class="t-cyan">modpack</span>     — Import a Modrinth modpack
-  <span class="t-cyan">custom</span>      — Custom JAR (bring your own)
-Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">paper</span>
-<span class="t-dim">Fetching available versions...</span> <span class="t-green">✓</span>
-<span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...</span>
-Minecraft version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
-<span class="t-dim">Static services keep their data (world, configs) across restarts.</span>
-<span class="t-dim">Dynamic services start fresh from the template every time.</span>
-Static service <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-Min instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-Max instances <span class="t-dim">[4]</span><span class="t-dim">:</span> <span class="t-bold">8</span>
-Memory per instance <span class="t-dim">[1G]</span><span class="t-dim">:</span> <span class="t-bold">2G</span>
-<span class="t-bold">Protocol support:</span>
-<span class="t-dim">ViaVersion allows newer clients, ViaBackwards allows older clients.</span>
-Install <span class="t-cyan">ViaVersion</span>? <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-Install <span class="t-cyan">ViaBackwards</span>? <span class="t-dim">(older clients can join)</span> <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-Install <span class="t-cyan">ViaRewind</span>? <span class="t-dim">(1.7/1.8 clients)</span> <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-<span class="t-green">✓</span> Via plugins: ViaBackwards
-<span class="t-bold">Downloading files...</span>
-<span class="t-dim">↓</span> Paper 1.21.4 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> ViaBackwards <span class="t-green">✓</span>
-<span class="t-green">✓</span> config/groups/skywars.toml
-<span class="t-green">✓</span> Group configs reloaded
-<span class="t-green t-bold">Group 'SkyWars' created!</span>
-Start an instance now? <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-<span class="t-green">✓</span> Service start initiated.`}</Terminal>
+```
+Create New Group
+Group name: SkyWars
+Available server software:
+  paper       — Paper (optimized vanilla, plugins)
+  pufferfish  — Pufferfish (Paper fork, performance)
+  purpur      — Purpur (Paper fork, extra features)
+  folia       — Folia (regionized multithreading, 1.19.4+)
+  forge       — Forge (mods, auto-installs)
+  neoforge    — NeoForge (modern Forge fork)
+  fabric      — Fabric (lightweight mods)
+  modpack     — Import a Modrinth modpack
+  custom      — Custom JAR (bring your own)
+Server software [paper]: paper
+Fetching available versions... ✓
+Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...
+Minecraft version [1.21.4]: 1.21.4
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [y/N]: n
+Min instances [1]: 1
+Max instances [4]: 8
+Memory per instance [1G]: 2G
+Protocol support:
+ViaVersion allows newer clients, ViaBackwards allows older clients.
+Install ViaVersion? [y/N]: n
+Install ViaBackwards? (older clients can join) [Y/n]: y
+Install ViaRewind? (1.7/1.8 clients) [y/N]: n
+✓ Via plugins: ViaBackwards
+Downloading files...
+↓ Paper 1.21.4 ✓
+↓ ViaBackwards ✓
+✓ config/groups/skywars.toml
+✓ Group configs reloaded
+Group 'SkyWars' created!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
 
 #### Example: Fabric modded server
 
 For Fabric, Forge, and NeoForge, the wizard adds a **modloader version** prompt after the Minecraft version. It also auto-downloads the appropriate proxy forwarding mod -- FabricProxy-Lite for Fabric, or a Forge/NeoForge forwarding mod for Forge-based servers. Via plugin prompts are skipped since modded servers don't use them.
 
-<Terminal title="nimbus — create wizard (modded)">{`<span class="t-bold">Create New Group</span>
-Group name: <span class="t-bold">Survival</span>
-<span class="t-dim">Available server software:</span>
-  <span class="t-cyan">paper</span>       — Paper (optimized vanilla, plugins)
-  <span class="t-cyan">pufferfish</span>  — Pufferfish (Paper fork, performance)
-  <span class="t-cyan">purpur</span>      — Purpur (Paper fork, extra features)
-  <span class="t-cyan">folia</span>       — Folia (regionized multithreading, 1.19.4+)
-  <span class="t-cyan">forge</span>       — Forge (mods, auto-installs)
-  <span class="t-cyan">neoforge</span>    — NeoForge (modern Forge fork)
-  <span class="t-cyan">fabric</span>      — Fabric (lightweight mods)
-  <span class="t-cyan">modpack</span>     — Import a Modrinth modpack
-  <span class="t-cyan">custom</span>      — Custom JAR (bring your own)
-Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">fabric</span>
-<span class="t-dim">Fetching available versions...</span> <span class="t-green">✓</span>
-<span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  ...</span>
-Minecraft version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
-<span class="t-dim">Fetching modloader versions...</span> <span class="t-green">✓</span>
-<span class="t-dim">Available: 0.16.9  0.16.8  0.16.7  0.16.6  0.16.5  ...</span>
-Modloader version <span class="t-dim">[0.16.9]</span><span class="t-dim">:</span> <span class="t-bold">0.16.9</span>
-<span class="t-dim">Static services keep their data (world, configs) across restarts.</span>
-<span class="t-dim">Dynamic services start fresh from the template every time.</span>
-Static service <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-Min instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-Max instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-Memory per instance <span class="t-dim">[1G]</span><span class="t-dim">:</span> <span class="t-bold">4G</span>
-<span class="t-bold">Downloading files...</span>
-<span class="t-dim">↓</span> Fabric 0.16.9 for MC 1.21.4 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> FabricProxy-Lite <span class="t-green">✓</span>
-<span class="t-green">✓</span> config/groups/survival.toml
-<span class="t-green">✓</span> Group configs reloaded
-<span class="t-green t-bold">Group 'Survival' created!</span>
-Start an instance now? <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-<span class="t-green">✓</span> Service start initiated.`}</Terminal>
+```
+Create New Group
+Group name: Survival
+Available server software:
+  paper       — Paper (optimized vanilla, plugins)
+  pufferfish  — Pufferfish (Paper fork, performance)
+  purpur      — Purpur (Paper fork, extra features)
+  folia       — Folia (regionized multithreading, 1.19.4+)
+  forge       — Forge (mods, auto-installs)
+  neoforge    — NeoForge (modern Forge fork)
+  fabric      — Fabric (lightweight mods)
+  modpack     — Import a Modrinth modpack
+  custom      — Custom JAR (bring your own)
+Server software [paper]: fabric
+Fetching available versions... ✓
+Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  ...
+Minecraft version [1.21.4]: 1.21.4
+Fetching modloader versions... ✓
+Available: 0.16.9  0.16.8  0.16.7  0.16.6  0.16.5  ...
+Modloader version [0.16.9]: 0.16.9
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [y/N]: y
+Min instances [1]: 1
+Max instances [1]: 1
+Memory per instance [1G]: 4G
+Downloading files...
+↓ Fabric 0.16.9 for MC 1.21.4 ✓
+↓ FabricProxy-Lite ✓
+✓ config/groups/survival.toml
+✓ Group configs reloaded
+Group 'Survival' created!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
 
 <Callout type="info">
 Press **Ctrl+C** at any point to cancel the wizard. Selecting `modpack` as the software type redirects to the [`import`](#import) wizard instead.
@@ -385,30 +412,32 @@ Accepts:
 - Modrinth slugs: `import adrenaserver`
 - Local `.mrpack` files: `import /path/to/modpack.mrpack`
 
-<Terminal title="nimbus — import modpack">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import adrenaserver
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">Adrenaserver</span> <span class="t-dim">v1.2.0</span>
-<span class="t-dim">MC 1.21.4 · FABRIC 0.16.9</span>
-<span class="t-dim">42 server mods (18 client-only skipped)</span>
-Group name <span class="t-dim">[Adrenaserver]</span><span class="t-dim">:</span> <span class="t-bold">Adrenaserver</span>
-<span class="t-dim">Static services keep their data (world, configs) across restarts.</span>
-<span class="t-dim">Dynamic services start fresh from the template every time.</span>
-Static service <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-Memory per instance <span class="t-dim">[2G]</span><span class="t-dim">:</span> <span class="t-bold">4G</span>
-Min instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-Max instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-<span class="t-bold">Installing...</span>
-<span class="t-dim">↓</span> FABRIC 0.16.9 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Mods 42/42 <span class="t-dim">lithium-fabric-0.14.3-mc1.21.4.jar</span>
-<span class="t-green">✓</span> 42 mods downloaded
-<span class="t-dim">↓</span> Configs & overrides <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Proxy mods <span class="t-green">✓</span>
-<span class="t-green">✓</span> config/groups/adrenaserver.toml
-<span class="t-green">✓</span> Group configs reloaded
-<span class="t-green t-bold">Modpack 'Adrenaserver' imported as group 'Adrenaserver'!</span>
-Start an instance now? <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-<span class="t-green">✓</span> Service start initiated.`}</Terminal>
+```
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.2.0
+MC 1.21.4 · FABRIC 0.16.9
+42 server mods (18 client-only skipped)
+Group name [Adrenaserver]: Adrenaserver
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [Y/n]: y
+Memory per instance [2G]: 4G
+Min instances [1]: 1
+Max instances [1]: 1
+Installing...
+↓ FABRIC 0.16.9 ✓
+↓ Mods 42/42 lithium-fabric-0.14.3-mc1.21.4.jar
+✓ 42 mods downloaded
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+✓ config/groups/adrenaserver.toml
+✓ Group configs reloaded
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
 
 The wizard automatically handles proxy forwarding -- FabricProxy-Lite for Fabric modpacks, or the appropriate Forge/NeoForge forwarding mod. Client-only mods are detected from the modpack index and skipped during installation.
 
@@ -422,48 +451,56 @@ Update a group's server software or Minecraft version. Supports both direct and 
 
 #### Update Minecraft version
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby version 1.21.5
-<span class="t-cyan">ℹ</span> Updating Lobby: 1.21.4 -> 1.21.5
-<span class="t-dim">Downloading paper 1.21.5...</span> <span class="t-green">ok</span>
-<span class="t-green">ok</span> Configs reloaded
-<span class="t-green t-bold">Updated 'Lobby' to version 1.21.5.</span>`}</Terminal>
+```
+nimbus » update Lobby version 1.21.5
+ℹ Updating Lobby: 1.21.4 -> 1.21.5
+Downloading paper 1.21.5... ok
+ok Configs reloaded
+Updated 'Lobby' to version 1.21.5.
+```
 
 #### Switch server software
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby software purpur
-<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
-<span class="t-dim">Downloading purpur 1.21.4...</span> <span class="t-green">ok</span>
-<span class="t-green">ok</span> Configs reloaded
-<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.4.</span>`}</Terminal>
+```
+nimbus » update Lobby software purpur
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+Downloading purpur 1.21.4... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.4.
+```
 
 #### Switch software and version at once
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby software purpur 1.21.5
-<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.5
-<span class="t-dim">Downloading purpur 1.21.5...</span> <span class="t-green">ok</span>
-<span class="t-green">ok</span> Configs reloaded
-<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.5.</span>`}</Terminal>
+```
+nimbus » update Lobby software purpur 1.21.5
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.5
+Downloading purpur 1.21.5... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.5.
+```
 
 #### Interactive mode
 
 Running `update <group>` without subcommands opens an interactive wizard:
 
-<Terminal title="nimbus — update wizard">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> update Lobby
-<span class="t-bold">Update Group: Lobby</span>
+```
+nimbus » update Lobby
+Update Group: Lobby
 
-<span class="t-dim">Current: PAPER 1.21.4</span>
+Current: PAPER 1.21.4
 
-What to update? <span class="t-dim">[version]</span><span class="t-dim">:</span> <span class="t-bold">software</span>
-<span class="t-dim">Compatible software for PAPER:</span>
-  <span class="t-cyan">purpur</span>
-<span class="t-dim">Fetching available versions...</span> <span class="t-green">ok</span>
-<span class="t-dim">Available: 1.21.4  1.21.3  1.21.1  1.20.6  ...</span>
-Minecraft version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
+What to update? [version]: software
+Compatible software for PAPER:
+  purpur
+Fetching available versions... ok
+Available: 1.21.4  1.21.3  1.21.1  1.20.6  ...
+Minecraft version [1.21.4]: 1.21.4
 
-<span class="t-cyan">ℹ</span> Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
-<span class="t-dim">Downloading purpur 1.21.4...</span> <span class="t-green">ok</span>
-<span class="t-green">ok</span> Configs reloaded
-<span class="t-green t-bold">Updated 'Lobby' to PURPUR 1.21.4.</span>`}</Terminal>
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+Downloading purpur 1.21.4... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.4.
+```
 
 #### Compatibility rules
 
@@ -493,15 +530,19 @@ Convert a group or individual service to static mode. Static services preserve t
 
 **Syntax:** `static group <name>` | `static service <name>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> static group BedWars
-<span class="t-green">✓ Group 'BedWars' is now STATIC.</span>
-<span class="t-dim">New services will preserve their working directory across restarts.</span>
-<span class="t-yellow">⚠ 2 running service(s) are still dynamic. Use 'static service &lt;name&gt;' to convert them individually.</span>`}</Terminal>
+```
+nimbus » static group BedWars
+✓ Group 'BedWars' is now STATIC.
+New services will preserve their working directory across restarts.
+⚠ 2 running service(s) are still dynamic. Use 'static service <name>' to convert them individually.
+```
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> static service BedWars-1
-<span class="t-cyan">ℹ</span> Converting 'BedWars-1' to static <span class="t-dim">(copying working directory)</span>...
-<span class="t-green">✓ Service 'BedWars-1' is now static.</span>
-<span class="t-dim">Working directory will be preserved when the service stops.</span>`}</Terminal>
+```
+nimbus » static service BedWars-1
+ℹ Converting 'BedWars-1' to static (copying working directory)...
+✓ Service 'BedWars-1' is now static.
+Working directory will be preserved when the service stops.
+```
 
 **Tab completion:** `group`/`service` subcommands, then group or service names.
 
@@ -513,9 +554,11 @@ Set a group back to dynamic mode. Dynamic services start fresh from the template
 
 **Syntax:** `dynamic <group>`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> dynamic BedWars
-<span class="t-green">✓ Group 'BedWars' is now DYNAMIC.</span>
-<span class="t-dim">New services will use temporary directories that are cleaned up on stop.</span>`}</Terminal>
+```
+nimbus » dynamic BedWars
+✓ Group 'BedWars' is now DYNAMIC.
+New services will use temporary directories that are cleaned up on stop.
+```
 
 **Tab completion:** Group names.
 
@@ -533,31 +576,35 @@ The `perms` command manages Nimbus's built-in permission system. All subcommands
 
 List all permission groups with their default status, priority, and parent groups.
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms group list
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Permission Groups</span> ─────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME        DEFAULT    PRIORITY  PREFIX       PERMISSIONS  PARENTS</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────────</span>
-Admin       no         100       <span class="t-red">[Admin]</span>      12           Moderator
-Moderator   no         50        <span class="t-yellow">[Mod]</span>        5            Default
-Default     <span class="t-green">yes</span>        0         <span class="t-dim">-</span>            3            <span class="t-dim">-</span>
-<span class="t-dim">3 group(s)</span>`}</Terminal>
+```
+nimbus » perms group list
+── Permission Groups ─────────────────────────────
+NAME        DEFAULT    PRIORITY  PREFIX       PERMISSIONS  PARENTS
+──────────────────────────────────────────────────────────────────────
+Admin       no         100       [Admin]      12           Moderator
+Moderator   no         50        [Mod]        5            Default
+Default     yes        0         -            3            -
+3 group(s)
+```
 
 #### `perms group info <name>`
 
 Show full details of a permission group including all permissions.
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> perms group info Admin
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Permission Group: Admin</span> ──────────────────────</span>
-  <span class="t-dim">Default:</span>   no
-  <span class="t-dim">Priority:</span>  100
-  <span class="t-dim">Prefix:</span>    <span class="t-red">[Admin]</span>
-  <span class="t-dim">Suffix:</span>    <span class="t-dim">-</span>
-  <span class="t-dim">Parents:</span>   Moderator
-<span class="t-cyan">▸ <span class="t-bold" style="color:#c0caf5">Permissions (4)</span></span>
-  <span class="t-green">nimbus.admin</span>
-  <span class="t-green">nimbus.manage.*</span>
-  <span class="t-green">nimbus.start</span>
-  <span class="t-red">-nimbus.debug</span>`}</Terminal>
+```
+nimbus » perms group info Admin
+── Permission Group: Admin ──────────────────────
+  Default:   no
+  Priority:  100
+  Prefix:    [Admin]
+  Suffix:    -
+  Parents:   Moderator
+▸ Permissions (4)
+  nimbus.admin
+  nimbus.manage.*
+  nimbus.start
+  -nimbus.debug
+```
 
 #### Other group subcommands
 
@@ -658,16 +705,18 @@ Full cluster overview showing groups, instances, player counts, and capacity.
 
 **Syntax:** `status`
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> status
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Network: MyNetwork</span> ────────────────────────────</span>
-<span class="t-dim">Services:</span> <span class="t-green">5 ready</span> <span class="t-dim">/ 5 total</span>    <span class="t-dim">Players:</span> <span class="t-bold">36</span>
-<span class="t-bold t-bright-cyan">GROUP       TYPE      INSTANCES  MIN/MAX  PLAYERS  STATUS</span>
-<span class="t-dim">────────────────────────────────────────────────────────────────</span>
-Proxy       STATIC    1          1/2      36       <span class="t-green">healthy</span>
-Lobby       DYNAMIC   2          2/4      12       <span class="t-green">healthy</span>
-BedWars     DYNAMIC   2          1/8      24       <span class="t-green">healthy</span>
-<span class="t-dim">Capacity:</span> <span class="t-green">████████░░░░░░░░░░░░░░░░░░░░░░</span> 5/20 services
-<span class="t-dim">Bedrock:</span>  <span class="t-green">enabled</span> (Geyser + Floodgate, base port 19132)`}</Terminal>
+```
+nimbus » status
+── Network: MyNetwork ────────────────────────────
+Services: 5 ready / 5 total    Players: 36
+GROUP       TYPE      INSTANCES  MIN/MAX  PLAYERS  STATUS
+────────────────────────────────────────────────────────────────
+Proxy       STATIC    1          1/2      36       healthy
+Lobby       DYNAMIC   2          2/4      12       healthy
+BedWars     DYNAMIC   2          1/8      24       healthy
+Capacity: ████████░░░░░░░░░░░░░░░░░░░░░░ 5/20 services
+Bedrock:  enabled (Geyser + Floodgate, base port 19132)
+```
 
 The Bedrock line only appears when `[bedrock] enabled = true` is set in `nimbus.toml`.
 

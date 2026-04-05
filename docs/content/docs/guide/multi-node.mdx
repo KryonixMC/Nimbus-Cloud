@@ -4,7 +4,6 @@ description: Distribute Nimbus services across multiple machines with cluster mo
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 Nimbus can distribute services across multiple machines using **cluster mode**. A central controller coordinates remote **agent nodes** that run services locally — scaling, placement, and monitoring all happen automatically. An optional **TCP load balancer** sits in front of your Velocity proxies so players connect to a single address.
 
@@ -14,23 +13,25 @@ If your network runs on **one machine**, you don't — single-node mode handles 
 
 ## Architecture
 
-<Terminal title="nimbus — multi-node cluster">{`<span class="t-dim">                        Players</span>
-<span class="t-dim">                           │</span>
-<span class="t-cyan t-bold">                 ┌─────────▼──────────┐</span>
-<span class="t-cyan t-bold">                 │</span>   <span class="t-bold">Load Balancer</span>    <span class="t-cyan t-bold">│</span>  <span class="t-dim">:25565 (optional)</span>
-<span class="t-cyan t-bold">                 └─────────┬──────────┘</span>
-<span class="t-dim">                           │</span>
-<span class="t-cyan t-bold">              ┌────────────▼────────────┐</span>
-<span class="t-cyan t-bold">              │</span>    <span class="t-bold">Nimbus Controller</span>      <span class="t-cyan t-bold">│</span>  <span class="t-dim">nimbus-core</span>
-<span class="t-cyan t-bold">              │</span> <span class="t-dim">Groups · Scaling · API</span>    <span class="t-cyan t-bold">│</span>
-<span class="t-cyan t-bold">              └───┬──────────────┬─────┘</span>
-<span class="t-dim">                  │  WebSocket   │</span>
-<span class="t-green t-bold">         ┌────────▼───┐    ┌────▼────────┐</span>
-<span class="t-green t-bold">         │</span> <span class="t-bold">Agent 1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span>   <span class="t-bold">Agent 2</span>   <span class="t-green t-bold">│</span>  <span class="t-dim">nimbus-agent</span>
-<span class="t-green t-bold">         │</span> <span class="t-dim">Proxy-1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-1</span>   <span class="t-green t-bold">│</span>
-<span class="t-green t-bold">         │</span> <span class="t-dim">Lobby-1</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-2</span>   <span class="t-green t-bold">│</span>
-<span class="t-green t-bold">         │</span> <span class="t-dim">Lobby-2</span>    <span class="t-green t-bold">│</span>    <span class="t-green t-bold">│</span> <span class="t-dim">BedWars-3</span>   <span class="t-green t-bold">│</span>
-<span class="t-green t-bold">         └────────────┘</span>    <span class="t-green t-bold">└─────────────┘</span>`}</Terminal>
+```
+                        Players
+                           │
+                 ┌─────────▼──────────┐
+                 │   Load Balancer    │  :25565 (optional)
+                 └─────────┬──────────┘
+                           │
+              ┌────────────▼────────────┐
+              │    Nimbus Controller      │  nimbus-core
+              │ Groups · Scaling · API    │
+              └───┬──────────────┬─────┘
+                  │  WebSocket   │
+         ┌────────▼───┐    ┌────▼────────┐
+         │ Agent 1    │    │   Agent 2   │  nimbus-agent
+         │ Proxy-1    │    │ BedWars-1   │
+         │ Lobby-1    │    │ BedWars-2   │
+         │ Lobby-2    │    │ BedWars-3   │
+         └────────────┘    └─────────────┘
+```
 
 **How it works:**
 
@@ -88,11 +89,15 @@ Install the agent on each worker machine with a single command:
 
 **Linux / macOS:**
 
-<Terminal title="terminal — worker node">{`<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash`}</Terminal>
+```bash
+$ curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
+```
 
 **Windows (PowerShell):**
 
-<Terminal title="powershell — worker node">{`<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex`}</Terminal>
+```
+> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
+```
 
 The installer handles Java 21, downloads the latest agent release, prompts for controller connection details, and optionally creates a system service (systemd / Windows Service) so the agent runs in the background automatically.
 
@@ -136,13 +141,15 @@ Agent nodes automatically detect installed JDKs and download missing versions fr
 
 On the controller:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> nodes
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Cluster Nodes</span> ──────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NODE        HOST          STATUS    CPU    MEMORY         SERVICES</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">worker-1</span>    10.0.0.2      <span class="t-green">online</span>    12%    3241/16384MB   2/10
-<span class="t-bold">worker-2</span>    10.0.0.3      <span class="t-green">online</span>    8%     1024/8192MB    1/5
-<span class="t-dim">2/2 online</span>`}</Terminal>
+```
+nimbus » nodes
+── Cluster Nodes ──────────────────────────────────
+NODE        HOST          STATUS    CPU    MEMORY         SERVICES
+──────────────────────────────────────────────────────────────────
+worker-1    10.0.0.2      online    12%    3241/16384MB   2/10
+worker-2    10.0.0.3      online    8%     1024/8192MB    1/5
+2/2 online
+```
 
 ## Placement Strategies
 
@@ -204,15 +211,17 @@ Nimbus automatically patches `haproxy-protocol = true` in Velocity's config when
 
 ### Monitoring
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> lb
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Load Balancer</span> ───────────────────────────────</span>
+```
+nimbus » lb
+── Load Balancer ───────────────────────────────
   Total Connections:   1,247
   Active Connections:  89
 
-<span class="t-bold t-bright-cyan">BACKEND       HOST          PORT    PLAYERS   STATE</span>
-<span class="t-dim">──────────────────────────────────────────────────────</span>
-<span class="t-bold">Proxy-1</span>       10.0.0.2      30000   45        <span class="t-green">● READY</span>
-<span class="t-bold">Proxy-2</span>       10.0.0.3      30000   44        <span class="t-green">● READY</span>`}</Terminal>
+BACKEND       HOST          PORT    PLAYERS   STATE
+──────────────────────────────────────────────────────
+Proxy-1       10.0.0.2      30000   45        ● READY
+Proxy-2       10.0.0.3      30000   44        ● READY
+```
 
 ## CLI Commands
 

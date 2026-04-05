@@ -4,7 +4,6 @@ description: Step-by-step walkthrough to set up your first Nimbus network with a
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 Your Nimbus 2000 has arrived — time for takeoff. This guide walks you through setting up your first Nimbus network from scratch. By the end, you'll have a running Velocity proxy, lobby server, and game server that players can connect to.
 
@@ -14,15 +13,21 @@ Install Nimbus with a single command — it handles Java, downloads, and start s
 
 **Linux / macOS:**
 
-<Terminal title="terminal">{`<span class="t-dim">$</span> curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash`}</Terminal>
+```bash
+$ curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
+```
 
 **Windows (PowerShell):**
 
-<Terminal title="powershell">{`<span class="t-dim">&gt;</span> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex`}</Terminal>
+```bash
+> irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
+```
 
 Then start Nimbus:
 
-<Terminal title="terminal">{`<span class="t-dim">$</span> nimbus`}</Terminal>
+```bash
+$ nimbus
+```
 
 <Callout title="Already built from source?" type="info">
 You can also run `java -jar nimbus-core-<version>-all.jar` directly. See [Installation](/docs/guide/installation) for details.
@@ -30,20 +35,24 @@ You can also run `java -jar nimbus-core-<version>-all.jar` directly. See [Instal
 
 On first launch, the setup wizard starts automatically. You'll see the Nimbus banner followed by a version fetch:
 
-<Terminal title="nimbus — first run">{`<span class="t-blue">   _  __ __ _   __ ___  _ __  ___</span>
-<span class="t-bright-blue">  / |/ // // \,' // o.)/// /,' _/</span>
-<span class="t-cyan"> / || // // \,' // o \/ U /_\ \`. </span>
-<span class="t-bright-cyan">/_/|_//_//_/ /_//___,'\_,'/___,'</span>
-<span class="t-dim">            C L O U D</span>
-  <span class="t-dim">Let's get your cloud ready.</span>
-  <span class="t-dim">Fetching available versions...</span> <span class="t-green">✓</span>`}</Terminal>
+```
+   _  __ __ _   __ ___  _ __  ___
+  / |/ // // \,' // o.)/// /,' _/
+ / || // // \,' // o \/ U /_\ \`. 
+/_/|_//_//_/ /_//___,'\_,'/___,'
+            C L O U D
+  Let's get your cloud ready.
+  Fetching available versions... ✓
+```
 
 ## 2. Choose a Network Name
 
 The wizard asks for your network name. This is used in proxy MOTD and branding:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-cyan">[1]</span> <span class="t-bold">Network</span>
-  Network name <span class="t-dim">[MyNetwork]</span><span class="t-dim">:</span> <span class="t-bold">MyNetwork</span>`}</Terminal>
+```
+[1] Network
+  Network name [MyNetwork]: MyNetwork
+```
 
 <Callout type="info">
 You can change this later in `config/nimbus.toml` under `[network]`.
@@ -53,16 +62,20 @@ You can change this later in `config/nimbus.toml` under `[network]`.
 
 Nimbus automatically selects the latest Velocity version. Velocity is backwards-compatible, so you always get the newest release:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-cyan">[2]</span> <span class="t-bold">Proxy</span>
-  <span class="t-green">✓</span> Velocity 3.4.0-SNAPSHOT <span class="t-dim">(always latest — backwards compatible)</span>`}</Terminal>
+```
+[2] Proxy
+  ✓ Velocity 3.4.0-SNAPSHOT (always latest — backwards compatible)
+```
 
 ## 4. Bedrock & Permissions
 
 The wizard asks about optional features:
 
-<Terminal title="nimbus — setup wizard">{`Enable Bedrock Edition? (Geyser + Floodgate) <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-  Install built-in permissions plugin? <span class="t-dim">(prefix, suffix, groups, tracks)</span> <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-  <span class="t-green">✓</span> NimbusPerms will be deployed to all backend servers`}</Terminal>
+```
+Enable Bedrock Edition? (Geyser + Floodgate) [y/N]: n
+  Install built-in permissions plugin? (prefix, suffix, groups, tracks) [Y/n]: y
+  ✓ NimbusPerms will be deployed to all backend servers
+```
 
 <Callout type="info">
 **Bedrock Edition** enables [Geyser + Floodgate](/docs/guide/bedrock) so mobile and console players can join. **NimbusPerms** provides a built-in [permission system](/docs/guide/permissions) with groups, prefixes, and tracks. Both can be enabled later.
@@ -72,12 +85,14 @@ The wizard asks about optional features:
 
 Pick a template that matches your network layout:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-cyan">[3]</span> <span class="t-bold">Server Groups</span>
-  <span class="t-bold">Choose a template:</span>
-    <span class="t-cyan">1</span>  Standard Lobby  <span class="t-dim">(Proxy + Lobby)</span>
-    <span class="t-cyan">2</span>  Lobby + Games   <span class="t-dim">(Proxy + Lobby + Minigame server)</span>
-    <span class="t-cyan">3</span>  Custom          <span class="t-dim">(configure everything yourself)</span>
-  Template <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">2</span>`}</Terminal>
+```
+[3] Server Groups
+  Choose a template:
+    1  Standard Lobby  (Proxy + Lobby)
+    2  Lobby + Games   (Proxy + Lobby + Minigame server)
+    3  Custom          (configure everything yourself)
+  Template [1]: 2
+```
 
 For this walkthrough, we'll choose **2** (Lobby + Games). This creates a proxy, lobby, and a game server group — the most common network setup.
 
@@ -85,25 +100,29 @@ For this walkthrough, we'll choose **2** (Lobby + Games). This creates a proxy, 
 
 The wizard walks you through lobby configuration — server software, version, and memory:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-dim">Setting up: Proxy + Lobby + Game server</span>
-  <span class="t-bold">Lobby:</span>
-  Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">paper</span>
-  <span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...</span>
-  Version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
-  Lobby memory <span class="t-dim">[1G]</span><span class="t-dim">:</span> <span class="t-bold">1G</span>`}</Terminal>
+```
+Setting up: Proxy + Lobby + Game server
+  Lobby:
+  Server software [paper]: paper
+  Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...
+  Version [1.21.4]: 1.21.4
+  Lobby memory [1G]: 1G
+```
 
 Next, the wizard offers **Via plugin** installation for protocol compatibility:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-bold">Protocol support:</span>
-  <span class="t-dim">ViaVersion allows players with newer clients to join older servers.</span>
-  <span class="t-dim">ViaBackwards allows players with older clients to join newer servers.</span>
-  <span class="t-dim">ViaRewind extends backwards support to 1.7/1.8 clients.</span>
-  Install <span class="t-cyan">ViaVersion</span>? <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-  Install <span class="t-cyan">ViaBackwards</span>? <span class="t-dim">(older clients can join)</span> <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-  <span class="t-dim">→ ViaVersion auto-included (required by ViaBackwards)</span>
-  Install <span class="t-cyan">ViaRewind</span>? <span class="t-dim">(extends support to 1.7/1.8)</span> <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-  <span class="t-green">✓</span> Via plugins: ViaVersion, ViaBackwards
-  <span class="t-green">✓</span> Lobby <span class="t-dim">(PAPER 1.21.4, 1G)</span>`}</Terminal>
+```
+Protocol support:
+  ViaVersion allows players with newer clients to join older servers.
+  ViaBackwards allows players with older clients to join newer servers.
+  ViaRewind extends backwards support to 1.7/1.8 clients.
+  Install ViaVersion? [y/N]: n
+  Install ViaBackwards? (older clients can join) [Y/n]: y
+  → ViaVersion auto-included (required by ViaBackwards)
+  Install ViaRewind? (extends support to 1.7/1.8) [y/N]: n
+  ✓ Via plugins: ViaVersion, ViaBackwards
+  ✓ Lobby (PAPER 1.21.4, 1G)
+```
 
 <Callout title="Via plugins" type="info">
 Via plugins are installed on **backend servers only**, never on the proxy. This is the recommended setup for Velocity networks.
@@ -113,17 +132,19 @@ Via plugins are installed on **backend servers only**, never on the proxy. This 
 
 Since we chose template 2, the wizard now asks for game server details:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-bold">Game server:</span>
-  Group name: <span class="t-bold">BedWars</span>
-  Server software <span class="t-dim">[paper]</span><span class="t-dim">:</span> <span class="t-bold">paper</span>
-  <span class="t-dim">Stable: 1.21.4  1.21.3  1.21.1  ...</span>
-  Version <span class="t-dim">[1.21.4]</span><span class="t-dim">:</span> <span class="t-bold">1.21.4</span>
-  Memory per instance <span class="t-dim">[2G]</span><span class="t-dim">:</span> <span class="t-bold">2G</span>
-  Max instances <span class="t-dim">[10]</span><span class="t-dim">:</span> <span class="t-bold">10</span>
-  Install <span class="t-cyan">ViaVersion</span>? <span class="t-dim">[y/N]</span><span class="t-dim">:</span> <span class="t-bold">n</span>
-  Install <span class="t-cyan">ViaBackwards</span>? <span class="t-dim">(older clients can join)</span> <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-  <span class="t-green">✓</span> Via plugins: ViaBackwards
-  <span class="t-green">✓</span> BedWars <span class="t-dim">(PAPER 1.21.4, 2G, max 10)</span>`}</Terminal>
+```
+Game server:
+  Group name: BedWars
+  Server software [paper]: paper
+  Stable: 1.21.4  1.21.3  1.21.1  ...
+  Version [1.21.4]: 1.21.4
+  Memory per instance [2G]: 2G
+  Max instances [10]: 10
+  Install ViaVersion? [y/N]: n
+  Install ViaBackwards? (older clients can join) [Y/n]: y
+  ✓ Via plugins: ViaBackwards
+  ✓ BedWars (PAPER 1.21.4, 2G, max 10)
+```
 
 <Callout title="Same version = shared download" type="info">
 When your game server uses the same software and version as the lobby, Nimbus copies the JAR instead of downloading it again.
@@ -133,14 +154,16 @@ When your game server uses the same software and version as the lobby, Nimbus co
 
 Nimbus downloads all required server JARs automatically:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-cyan">[4]</span> <span class="t-bold">Downloading</span>
-  <span class="t-dim">↓</span> Velocity 3.4.0-SNAPSHOT <span class="t-green">✓</span>
-  <span class="t-dim">↓</span> Paper 1.21.4 <span class="t-dim">(Lobby)</span> <span class="t-green">✓</span>
-  <span class="t-dim">↓</span> ViaVersion <span class="t-dim">(Lobby)</span> <span class="t-green">✓</span>
-  <span class="t-dim">↓</span> ViaBackwards <span class="t-dim">(Lobby)</span> <span class="t-green">✓</span>
-  <span class="t-green">+</span> BedWars <span class="t-dim">(copied from Lobby)</span>
-  <span class="t-dim">↓</span> ViaVersion <span class="t-dim">(BedWars)</span> <span class="t-green">✓</span>
-  <span class="t-dim">↓</span> ViaBackwards <span class="t-dim">(BedWars)</span> <span class="t-green">✓</span>`}</Terminal>
+```
+[4] Downloading
+  ↓ Velocity 3.4.0-SNAPSHOT ✓
+  ↓ Paper 1.21.4 (Lobby) ✓
+  ↓ ViaVersion (Lobby) ✓
+  ↓ ViaBackwards (Lobby) ✓
+  + BedWars (copied from Lobby)
+  ↓ ViaVersion (BedWars) ✓
+  ↓ ViaBackwards (BedWars) ✓
+```
 
 <Callout title="Download failures" type="warn">
 If a download fails, Nimbus shows a `✗` marker. You can manually place the JAR in the appropriate `templates/<group>/` directory and restart.
@@ -150,25 +173,29 @@ If a download fails, Nimbus shows a `✗` marker. You can manually place the JAR
 
 The wizard writes all configuration files:
 
-<Terminal title="nimbus — setup wizard">{`<span class="t-cyan">[5]</span> <span class="t-bold">Saving configuration</span>
-  <span class="t-green">+</span> config/nimbus.toml
-  <span class="t-green">+</span> config/groups/proxy.toml
-  <span class="t-green">+</span> config/groups/lobby.toml
-  <span class="t-green">+</span> config/groups/bedwars.toml
-<span class="t-dim">────────────────────────────────────────</span>
-  <span class="t-green t-bold">Setup complete!</span> <span class="t-dim">3 group(s) configured.</span>
-<span class="t-dim">────────────────────────────────────────</span>
-  Start Nimbus now? <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>`}</Terminal>
+```
+[5] Saving configuration
+  + config/nimbus.toml
+  + config/groups/proxy.toml
+  + config/groups/lobby.toml
+  + config/groups/bedwars.toml
+────────────────────────────────────────
+  Setup complete! 3 group(s) configured.
+────────────────────────────────────────
+  Start Nimbus now? [Y/n]: y
+```
 
 ## 10. First Boot
 
 Nimbus starts your services automatically — proxy first, then backends:
 
-<Terminal title="nimbus">{`<span class="t-dim">[12:00:01]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">Proxy-1</span> <span class="t-dim">(group=Proxy, port=25565)</span>
-<span class="t-dim">[12:00:04]</span> <span class="t-green">● READY</span>     <span class="t-bold">Proxy-1</span> <span class="t-dim">(group=Proxy)</span>
-<span class="t-dim">[12:00:04]</span> <span class="t-yellow">▲ STARTING</span>  <span class="t-bold">Lobby-1</span> <span class="t-dim">(group=Lobby, port=30000)</span>
-<span class="t-dim">[12:00:08]</span> <span class="t-green">● READY</span>     <span class="t-bold">Lobby-1</span> <span class="t-dim">(group=Lobby)</span>
-<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span>`}</Terminal>
+```
+[12:00:01] ▲ STARTING  Proxy-1 (group=Proxy, port=25565)
+[12:00:04] ● READY     Proxy-1 (group=Proxy)
+[12:00:04] ▲ STARTING  Lobby-1 (group=Lobby, port=30000)
+[12:00:08] ● READY     Lobby-1 (group=Lobby)
+nimbus »
+```
 
 BedWars instances don't start yet — they scale up automatically when players need them, or you can start one manually with `start BedWars`.
 
@@ -187,58 +214,66 @@ If port 25565 is already in use (e.g., by another Minecraft server), Nimbus will
 
 With Nimbus running, you have a full interactive console. Try these commands:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> list
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Services</span> ──────────────────────────────────────</span>
-<span class="t-bold t-bright-cyan">NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME</span>
-<span class="t-dim">──────────────────────────────────────────────────────────────────────────────</span>
-<span class="t-bold">Proxy-1</span>         Proxy       <span class="t-green">● READY</span>          25565   0        12451   3m 22s
-<span class="t-bold">Lobby-1</span>         Lobby       <span class="t-green">● READY</span>          30000   0        12488   3m 18s
-<span class="t-dim">2 service(s)</span>`}</Terminal>
+```
+nimbus » list
+── Services ──────────────────────────────────────
+NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME
+──────────────────────────────────────────────────────────────────────────────
+Proxy-1         Proxy       ● READY          25565   0        12451   3m 22s
+Lobby-1         Lobby       ● READY          30000   0        12488   3m 18s
+2 service(s)
+```
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> status
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Network: MyNetwork</span> ────────────────────────────</span>
-<span class="t-dim">Services:</span> <span class="t-green">2 ready</span> <span class="t-dim">/ 2 total</span>    <span class="t-dim">Players:</span> <span class="t-bold">0</span>
-<span class="t-bold t-bright-cyan">GROUP       TYPE      INSTANCES  MIN/MAX  PLAYERS  STATUS</span>
-<span class="t-dim">────────────────────────────────────────────────────────────────</span>
-Proxy       STATIC    1          1/1      0        <span class="t-green">healthy</span>
-Lobby       DYNAMIC   1          1/4      0        <span class="t-green">healthy</span>
-<span class="t-dim">Capacity:</span> <span class="t-green">██████░░░░░░░░░░░░░░░░░░░░░░░░</span> 2/20 services`}</Terminal>
+```
+nimbus » status
+── Network: MyNetwork ────────────────────────────
+Services: 2 ready / 2 total    Players: 0
+GROUP       TYPE      INSTANCES  MIN/MAX  PLAYERS  STATUS
+────────────────────────────────────────────────────────────────
+Proxy       STATIC    1          1/1      0        healthy
+Lobby       DYNAMIC   1          1/4      0        healthy
+Capacity: ██████░░░░░░░░░░░░░░░░░░░░░░░░ 2/20 services
+```
 
-<Terminal title="nimbus — screen Lobby-1">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> screen Lobby-1
-<span class="t-cyan">ℹ</span> Attached to Lobby-1 <span class="t-dim">(ESC or Ctrl+Q to detach)</span>
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-dim">[14:23:01 INFO]:</span> Done (2.341s)! For help, type "help"
-<span class="t-dim">[14:23:05 INFO]:</span> Player Steve joined the game
-<span class="t-yellow">&gt;</span> say Hello from Nimbus!
-<span class="t-dim">[14:23:12 INFO]:</span> [Server] Hello from Nimbus!
-<span class="t-dim">────────────────────────────────────────────────────────</span>
-<span class="t-cyan">ℹ</span> Detached from Lobby-1`}</Terminal>
+```
+nimbus » screen Lobby-1
+ℹ Attached to Lobby-1 (ESC or Ctrl+Q to detach)
+────────────────────────────────────────────────────────
+[14:23:01 INFO]: Done (2.341s)! For help, type "help"
+[14:23:05 INFO]: Player Steve joined the game
+> say Hello from Nimbus!
+[14:23:12 INFO]: [Server] Hello from Nimbus!
+────────────────────────────────────────────────────────
+ℹ Detached from Lobby-1
+```
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> help
-<span class="t-cyan">── <span class="t-bold" style="color:#c0caf5">Commands</span> ──────────────────────────────────────</span>
-  <span class="t-cyan">list</span>          <span class="t-dim">List all running services</span>
-  <span class="t-cyan">start</span>         <span class="t-dim">Start a new service instance</span>
-  <span class="t-cyan">stop</span>          <span class="t-dim">Stop a running service</span>
-  <span class="t-cyan">restart</span>       <span class="t-dim">Restart a running service</span>
-  <span class="t-cyan">screen</span>        <span class="t-dim">Attach to a service console</span>
-  <span class="t-cyan">exec</span>          <span class="t-dim">Execute a command on a service</span>
-  <span class="t-cyan">logs</span>          <span class="t-dim">Show recent log output</span>
-  <span class="t-cyan">players</span>       <span class="t-dim">List connected players</span>
-  <span class="t-cyan">send</span>          <span class="t-dim">Transfer a player to a service</span>
-  <span class="t-cyan">groups</span>        <span class="t-dim">List all server groups</span>
-  <span class="t-cyan">info</span>          <span class="t-dim">Show group configuration</span>
-  <span class="t-cyan">create</span>        <span class="t-dim">Create a new server group</span>
-  <span class="t-cyan">import</span>        <span class="t-dim">Import a Modrinth modpack</span>
-  <span class="t-cyan">static</span>        <span class="t-dim">Set a group or service to static</span>
-  <span class="t-cyan">dynamic</span>       <span class="t-dim">Set a group to dynamic mode</span>
-  <span class="t-cyan">perms</span>         <span class="t-dim">Manage permissions</span>
-  <span class="t-cyan">reload</span>        <span class="t-dim">Reload group configurations</span>
-  <span class="t-cyan">api</span>           <span class="t-dim">Manage the REST API</span>
-  <span class="t-cyan">status</span>        <span class="t-dim">Show network status overview</span>
-  <span class="t-cyan">shutdown</span>      <span class="t-dim">Graceful shutdown and exit</span>
-  <span class="t-cyan">clear</span>         <span class="t-dim">Clear the console</span>
-  <span class="t-cyan">help</span>          <span class="t-dim">Show available commands</span>
-<span class="t-dim">Type 'help &lt;command&gt;' for detailed usage.</span>`}</Terminal>
+```
+nimbus » help
+── Commands ──────────────────────────────────────
+  list          List all running services
+  start         Start a new service instance
+  stop          Stop a running service
+  restart       Restart a running service
+  screen        Attach to a service console
+  exec          Execute a command on a service
+  logs          Show recent log output
+  players       List connected players
+  send          Transfer a player to a service
+  groups        List all server groups
+  info          Show group configuration
+  create        Create a new server group
+  import        Import a Modrinth modpack
+  static        Set a group or service to static
+  dynamic       Set a group to dynamic mode
+  perms         Manage permissions
+  reload        Reload group configurations
+  api           Manage the REST API
+  status        Show network status overview
+  shutdown      Graceful shutdown and exit
+  clear         Clear the console
+  help          Show available commands
+Type 'help <command>' for detailed usage.
+```
 
 <Callout title="Tab completion" type="info">
 All commands support tab completion. Press `Tab` to autocomplete command names and service names.
@@ -248,7 +283,9 @@ All commands support tab completion. Press `Tab` to autocomplete command names a
 
 Want to add another game server? Use the interactive `create` command:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> create`}</Terminal>
+```
+nimbus » create
+```
 
 This launches a guided setup for a new server group, similar to the setup wizard. It will:
 

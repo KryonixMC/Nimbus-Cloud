@@ -4,7 +4,6 @@ description: Fundamental building blocks of Nimbus — groups, services, templat
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 This page explains the fundamental building blocks of Nimbus. Understanding these concepts will help you configure and operate your network effectively.
 
@@ -269,10 +268,12 @@ When Nimbus needs to start a server, it resolves the correct Java executable thr
    - System directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, `~/.jdks`, etc.)
 4. **Auto-download** — If no compatible JDK is found, Nimbus downloads one from [Eclipse Adoptium](https://adoptium.net/) (Temurin) automatically
 
-<Terminal title="nimbus">{`<span class="t-dim">[12:00:01]</span> <span class="t-cyan">ℹ</span> Detected Java installations: Java 17, Java 21
-<span class="t-dim">[12:00:05]</span> <span class="t-yellow">⚠</span> No Java 16 found — downloading automatically...
-<span class="t-dim">[12:00:08]</span> <span class="t-cyan">ℹ</span> Downloaded Java 16 (187.3 MB), extracting...
-<span class="t-dim">[12:00:12]</span> <span class="t-green">✓</span> Java 16 installed to jdks/java-16/bin/java`}</Terminal>
+```
+[12:00:01] ℹ Detected Java installations: Java 17, Java 21
+[12:00:05] ⚠ No Java 16 found — downloading automatically...
+[12:00:08] ℹ Downloaded Java 16 (187.3 MB), extracting...
+[12:00:12] ✓ Java 16 installed to jdks/java-16/bin/java
+```
 
 Downloaded JDKs are cached in the `jdks/` directory inside your Nimbus installation. They persist across restarts and are reused automatically.
 

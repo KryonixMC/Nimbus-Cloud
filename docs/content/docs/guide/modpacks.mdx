@@ -4,7 +4,6 @@ description: Import Modrinth modpacks into Nimbus as fully managed, auto-scaling
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Terminal } from '@/components/terminal';
 
 Nimbus can import any **Modrinth modpack** and turn it into a fully managed, auto-scaling server group — with a single command.
 
@@ -31,27 +30,29 @@ No manual downloading, no extracting ZIPs, no hunting for the right modloader ve
 
 Just run the `import` command with a Modrinth slug or URL:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import adrenaserver
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">Adrenaserver</span> <span class="t-dim">v1.5.2</span>
-<span class="t-dim">MC 1.21.4 · Fabric 0.16.9</span>
-<span class="t-dim">47 server mods (12 client-only skipped)</span>
-Group name: <span class="t-bold">Adrenaserver</span>
-Service type <span class="t-dim">[DYNAMIC]</span><span class="t-dim">:</span> <span class="t-bold">DYNAMIC</span>
-Memory <span class="t-dim">[2G]</span><span class="t-dim">:</span> <span class="t-bold">2G</span>
-Min instances <span class="t-dim">[1]</span><span class="t-dim">:</span> <span class="t-bold">1</span>
-Max instances <span class="t-dim">[4]</span><span class="t-dim">:</span> <span class="t-bold">4</span>
-<span class="t-bold">Installing...</span>
-<span class="t-dim">↓</span> Fabric 0.16.9 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Mods 47/47 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Configs &amp; overrides <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Proxy mods <span class="t-green">✓</span>
-<span class="t-green">✓</span> groups/adrenaserver.toml
-<span class="t-green">✓</span> Group configs reloaded
-<span class="t-green t-bold">Modpack 'Adrenaserver' imported as group 'Adrenaserver'!</span>
-Start an instance now? <span class="t-dim">[Y/n]</span><span class="t-dim">:</span> <span class="t-bold">y</span>
-<span class="t-green">✓</span> Service start initiated.`}</Terminal>
+```
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.5.2
+MC 1.21.4 · Fabric 0.16.9
+47 server mods (12 client-only skipped)
+Group name: Adrenaserver
+Service type [DYNAMIC]: DYNAMIC
+Memory [2G]: 2G
+Min instances [1]: 1
+Max instances [4]: 4
+Installing...
+↓ Fabric 0.16.9 ✓
+↓ Mods 47/47 ✓
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+✓ groups/adrenaserver.toml
+✓ Group configs reloaded
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
 
 That's it. Your modded server is live and accepting players through the proxy.
 
@@ -121,12 +122,14 @@ This works for both imported modpacks AND manually created modded groups. Any Fo
 
 To update to a new modpack version, simply re-run the `import` command:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import adrenaserver
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">Adrenaserver</span> <span class="t-dim">v1.6.0</span>
-<span class="t-dim">MC 1.21.5 · Fabric 0.17.0</span>
-<span class="t-dim">49 server mods (+2 new, 3 updated)</span>`}</Terminal>
+```
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.6.0
+MC 1.21.5 · Fabric 0.17.0
+49 server mods (+2 new, 3 updated)
+```
 
 Alternatively, you can manually update individual mods by replacing JAR files in the `templates/<name>/mods/` directory.
 
@@ -140,39 +143,45 @@ Re-importing will overwrite the existing template. For **STATIC** services, worl
 
 A lightweight server optimization pack — perfect for high-player-count lobbies:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import adrenaserver
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">Adrenaserver</span> <span class="t-dim">v1.5.2</span>
-<span class="t-dim">MC 1.21.4 · Fabric 0.16.9</span>
-<span class="t-dim">47 server mods (12 client-only skipped)</span>
-<span class="t-green t-bold">Modpack 'Adrenaserver' imported as group 'Adrenaserver'!</span>`}</Terminal>
+```
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.5.2
+MC 1.21.4 · Fabric 0.16.9
+47 server mods (12 client-only skipped)
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+```
 
 ### Forge Modpack
 
 Import a heavyweight Forge kitchen-sink pack straight from a Modrinth URL:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import https://modrinth.com/modpack/all-the-mods-10
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">All the Mods 10</span> <span class="t-dim">v2.40</span>
-<span class="t-dim">MC 1.21.1 · NeoForge 21.1.77</span>
-<span class="t-dim">341 server mods (89 client-only skipped)</span>
-<span class="t-bold">Installing...</span>
-<span class="t-dim">↓</span> NeoForge 21.1.77 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Mods 341/341 <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Configs &amp; overrides <span class="t-green">✓</span>
-<span class="t-dim">↓</span> Proxy mods <span class="t-green">✓</span>
-<span class="t-green t-bold">Modpack 'All the Mods 10' imported as group 'AllTheMods10'!</span>`}</Terminal>
+```
+nimbus » import https://modrinth.com/modpack/all-the-mods-10
+Import Modpack
+Resolving modpack... ✓
+All the Mods 10 v2.40
+MC 1.21.1 · NeoForge 21.1.77
+341 server mods (89 client-only skipped)
+Installing...
+↓ NeoForge 21.1.77 ✓
+↓ Mods 341/341 ✓
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+Modpack 'All the Mods 10' imported as group 'AllTheMods10'!
+```
 
 ### Local Modpack File
 
 Import a custom pack you built yourself or downloaded manually:
 
-<Terminal title="nimbus">{`<span class="t-prompt">nimbus</span> <span class="t-cyan">»</span> import ./my-custom-pack.mrpack
-<span class="t-bold">Import Modpack</span>
-<span class="t-dim">Resolving modpack...</span> <span class="t-green">✓</span>
-<span class="t-bold">My Custom Pack</span> <span class="t-dim">v1.0.0</span>
-<span class="t-dim">MC 1.20.4 · Quilt 0.26.4 (via Fabric)</span>
-<span class="t-dim">23 server mods</span>
-<span class="t-green t-bold">Modpack 'My Custom Pack' imported as group 'MyCustomPack'!</span>`}</Terminal>
+```
+nimbus » import ./my-custom-pack.mrpack
+Import Modpack
+Resolving modpack... ✓
+My Custom Pack v1.0.0
+MC 1.20.4 · Quilt 0.26.4 (via Fabric)
+23 server mods
+Modpack 'My Custom Pack' imported as group 'MyCustomPack'!
+```
