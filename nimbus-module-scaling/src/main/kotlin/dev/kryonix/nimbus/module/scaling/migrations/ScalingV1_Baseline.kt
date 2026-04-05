@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.Transaction
 object ScalingV1_Baseline : Migration {
     override val version = 2000
     override val description = "Smart scaling tables: snapshots, decisions"
+    override val baseline = true
 
     override fun Transaction.migrate() {
         SchemaUtils.createMissingTablesAndColumns(ScalingSnapshots, ScalingDecisions)

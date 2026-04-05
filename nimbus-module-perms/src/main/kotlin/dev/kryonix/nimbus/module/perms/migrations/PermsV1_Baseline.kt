@@ -9,6 +9,7 @@ import org.jetbrains.exposed.sql.Transaction
 object PermsV1_Baseline : Migration {
     override val version = 1000
     override val description = "Permission tables: groups, permissions, parents, players, meta, contexts, tracks, audit log"
+    override val baseline = true
 
     override fun Transaction.migrate() {
         SchemaUtils.createMissingTablesAndColumns(

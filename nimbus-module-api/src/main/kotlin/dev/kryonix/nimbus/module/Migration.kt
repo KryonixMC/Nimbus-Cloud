@@ -18,6 +18,13 @@ interface Migration {
     val description: String
 
     /**
+     * Whether this migration represents a pre-existing schema (before the migration system was introduced).
+     * Baseline migrations are marked as "already applied" on existing databases without being executed.
+     * New migrations (baseline = false) are always executed, even on upgrade from pre-0.2.0.
+     */
+    val baseline: Boolean get() = false
+
+    /**
      * Execute the migration within an Exposed transaction.
      * Use [org.jetbrains.exposed.sql.SchemaUtils] or raw SQL via `exec()`.
      */

@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.Transaction
 object V1_Baseline : Migration {
     override val version = 1
     override val description = "Core tables: service_events, scaling_events, player_sessions"
+    override val baseline = true
 
     override fun Transaction.migrate() {
         SchemaUtils.createMissingTablesAndColumns(ServiceEvents, ScalingEvents, PlayerSessions)

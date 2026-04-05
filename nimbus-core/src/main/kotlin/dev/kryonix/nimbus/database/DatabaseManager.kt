@@ -52,8 +52,8 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     fun runMigrations(moduleMigrations: List<Migration> = emptyList()) {
         val allMigrations = coreMigrations + moduleMigrations
 
-        // Collect baseline versions for bootstrap (detect pre-0.2.0 databases)
-        val baselineVersions = allMigrations.map { it.version }
+        // Only mark actual baselines (pre-existing tables) as applied on upgrade
+        val baselineVersions = allMigrations.filter { it.baseline }.map { it.version }
         migrationManager.bootstrap(baselineVersions)
 
         val applied = migrationManager.runPending(allMigrations)
