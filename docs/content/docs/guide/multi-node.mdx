@@ -4,6 +4,7 @@ description: Distribute Nimbus services across multiple machines with cluster mo
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Nimbus can distribute services across multiple machines using **cluster mode**. A central controller coordinates remote **agent nodes** that run services locally — scaling, placement, and monitoring all happen automatically. An optional **TCP load balancer** sits in front of your Velocity proxies so players connect to a single address.
 
@@ -87,17 +88,18 @@ Cluster TLS is **enabled by default** (`tls_enabled = true`). If no keystore is 
 
 Install the agent on each worker machine with a single command:
 
-**Linux / macOS:**
-
-```bash title="Terminal"
-curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
-```
-
-**Windows (PowerShell):**
-
-```powershell title="PowerShell"
-irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
-```
+<Tabs items={['Linux / macOS', 'Windows']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
 
 The installer handles Java 21, downloads the latest agent release, prompts for controller connection details, and optionally creates a system service (systemd / Windows Service) so the agent runs in the background automatically.
 

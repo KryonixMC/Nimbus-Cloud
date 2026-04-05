@@ -8,6 +8,17 @@ import {
   Puzzle,
 } from 'lucide-react';
 
+function TabIcon({ children, color }: { children: ReactNode; color: string }) {
+  return (
+    <div
+      className="flex items-center justify-center rounded-md p-1"
+      style={{ color }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <DocsLayout
@@ -21,25 +32,41 @@ export default function Layout({ children }: { children: ReactNode }) {
             title: 'Guide',
             description: 'Getting started & setup',
             url: '/docs/guide/introduction',
-            icon: <BookOpen />,
+            icon: (
+              <TabIcon color="hsl(142 71% 45%)">
+                <BookOpen className="size-4" />
+              </TabIcon>
+            ),
           },
           {
             title: 'Configuration',
             description: 'TOML config reference',
             url: '/docs/config/nimbus-toml',
-            icon: <Settings />,
+            icon: (
+              <TabIcon color="hsl(199 89% 48%)">
+                <Settings className="size-4" />
+              </TabIcon>
+            ),
           },
           {
             title: 'API Reference',
             description: 'REST API & WebSocket',
             url: '/docs/reference/api',
-            icon: <Code />,
+            icon: (
+              <TabIcon color="hsl(280 65% 60%)">
+                <Code className="size-4" />
+              </TabIcon>
+            ),
           },
           {
             title: 'Developer',
             description: 'Architecture & plugins',
             url: '/docs/developer/architecture',
-            icon: <Puzzle />,
+            icon: (
+              <TabIcon color="hsl(25 95% 53%)">
+                <Puzzle className="size-4" />
+              </TabIcon>
+            ),
           },
         ],
       }}

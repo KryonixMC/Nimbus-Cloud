@@ -9,6 +9,7 @@ import {
   TerminalIcon,
   ZapIcon,
 } from 'lucide-react';
+import { InstallTabs } from './install-tabs';
 
 export default function Page() {
   return (
@@ -56,6 +57,14 @@ export default function Page() {
           </div>
         </div>
       </div>
+
+      {/* Install */}
+      <section className="mx-auto mt-16 max-w-2xl px-6">
+        <p className="text-center text-sm font-medium text-fd-muted-foreground mb-4">
+          One command to install
+        </p>
+        <InstallTabs />
+      </section>
 
       {/* Section heading */}
       <div className="mx-auto mt-20 mb-8 max-w-5xl px-6 text-center">

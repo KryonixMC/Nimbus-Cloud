@@ -4,6 +4,7 @@ description: Step-by-step walkthrough to set up your first Nimbus network with a
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Your Nimbus 2000 has arrived — time for takeoff. This guide walks you through setting up your first Nimbus network from scratch. By the end, you'll have a running Velocity proxy, lobby server, and game server that players can connect to.
 
@@ -11,17 +12,18 @@ Your Nimbus 2000 has arrived — time for takeoff. This guide walks you through 
 
 Install Nimbus with a single command — it handles Java, downloads, and start scripts automatically:
 
-**Linux / macOS:**
-
-```bash title="Terminal"
-curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
-```
-
-**Windows (PowerShell):**
-
-```powershell title="PowerShell"
-irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
-```
+<Tabs items={['Linux / macOS', 'Windows']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
 
 Then start Nimbus:
 

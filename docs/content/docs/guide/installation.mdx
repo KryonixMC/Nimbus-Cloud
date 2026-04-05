@@ -4,22 +4,24 @@ description: How to install Nimbus using the one-command installer, build from s
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ## One-Command Install (Recommended)
 
 The fastest way to get Nimbus running. The installer handles everything — Java 21, the latest release, start scripts, and an optional system service.
 
-**Linux / macOS:**
-
-```bash title="Terminal"
-curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
-```
-
-**Windows (PowerShell):**
-
-```powershell title="PowerShell"
-irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
-```
+<Tabs items={['Linux / macOS', 'Windows']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
 
 The installer will:
 
