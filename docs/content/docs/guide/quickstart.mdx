@@ -35,7 +35,7 @@ You can also run `java -jar nimbus-core-<version>-all.jar` directly. See [Instal
 
 On first launch, the setup wizard starts automatically. You'll see the Nimbus banner followed by a version fetch:
 
-``` title="Nimbus"
+```text title="Nimbus"
    _  __ __ _   __ ___  _ __  ___
   / |/ // // \,' // o.)/// /,' _/
  / || // // \,' // o \/ U /_\ \`. 
@@ -49,7 +49,7 @@ On first launch, the setup wizard starts automatically. You'll see the Nimbus ba
 
 The wizard asks for your network name. This is used in proxy MOTD and branding:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 [1] Network
   Network name [MyNetwork]: MyNetwork
 ```
@@ -62,7 +62,7 @@ You can change this later in `config/nimbus.toml` under `[network]`.
 
 Nimbus automatically selects the latest Velocity version. Velocity is backwards-compatible, so you always get the newest release:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 [2] Proxy
   ✓ Velocity 3.4.0-SNAPSHOT (always latest — backwards compatible)
 ```
@@ -71,7 +71,7 @@ Nimbus automatically selects the latest Velocity version. Velocity is backwards-
 
 The wizard asks about optional features:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 Enable Bedrock Edition? (Geyser + Floodgate) [y/N]: n
   Install built-in permissions plugin? (prefix, suffix, groups, tracks) [Y/n]: y
   ✓ NimbusPerms will be deployed to all backend servers
@@ -85,7 +85,7 @@ Enable Bedrock Edition? (Geyser + Floodgate) [y/N]: n
 
 Pick a template that matches your network layout:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 [3] Server Groups
   Choose a template:
     1  Standard Lobby  (Proxy + Lobby)
@@ -100,7 +100,7 @@ For this walkthrough, we'll choose **2** (Lobby + Games). This creates a proxy, 
 
 The wizard walks you through lobby configuration — server software, version, and memory:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 Setting up: Proxy + Lobby + Game server
   Lobby:
   Server software [paper]: paper
@@ -111,7 +111,7 @@ Setting up: Proxy + Lobby + Game server
 
 Next, the wizard offers **Via plugin** installation for protocol compatibility:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 Protocol support:
   ViaVersion allows players with newer clients to join older servers.
   ViaBackwards allows players with older clients to join newer servers.
@@ -132,7 +132,7 @@ Via plugins are installed on **backend servers only**, never on the proxy. This 
 
 Since we chose template 2, the wizard now asks for game server details:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 Game server:
   Group name: BedWars
   Server software [paper]: paper
@@ -154,7 +154,7 @@ When your game server uses the same software and version as the lobby, Nimbus co
 
 Nimbus downloads all required server JARs automatically:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 [4] Downloading
   ↓ Velocity 3.4.0-SNAPSHOT ✓
   ↓ Paper 1.21.4 (Lobby) ✓
@@ -173,7 +173,7 @@ If a download fails, Nimbus shows a `✗` marker. You can manually place the JAR
 
 The wizard writes all configuration files:
 
-``` title="Nimbus — Setup Wizard"
+```text title="Nimbus — Setup Wizard"
 [5] Saving configuration
   + config/nimbus.toml
   + config/groups/proxy.toml
@@ -189,7 +189,7 @@ The wizard writes all configuration files:
 
 Nimbus starts your services automatically — proxy first, then backends:
 
-``` title="Nimbus"
+```text title="Nimbus"
 [12:00:01] ▲ STARTING  Proxy-1 (group=Proxy, port=25565)
 [12:00:04] ● READY     Proxy-1 (group=Proxy)
 [12:00:04] ▲ STARTING  Lobby-1 (group=Lobby, port=30000)
@@ -214,7 +214,7 @@ If port 25565 is already in use (e.g., by another Minecraft server), Nimbus will
 
 With Nimbus running, you have a full interactive console. Try these commands:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » list
 ── Services ──────────────────────────────────────
 NAME            GROUP       STATE           PORT    PLAYERS  PID     UPTIME
@@ -224,7 +224,7 @@ Lobby-1         Lobby       ● READY          30000   0        12488   3m 18s
 2 service(s)
 ```
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » status
 ── Network: MyNetwork ────────────────────────────
 Services: 2 ready / 2 total    Players: 0
@@ -235,7 +235,7 @@ Lobby       DYNAMIC   1          1/4      0        healthy
 Capacity: ██████░░░░░░░░░░░░░░░░░░░░░░░░ 2/20 services
 ```
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » screen Lobby-1
 ℹ Attached to Lobby-1 (ESC or Ctrl+Q to detach)
 ────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ nimbus » screen Lobby-1
 ℹ Detached from Lobby-1
 ```
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » help
 ── Commands ──────────────────────────────────────
   list          List all running services
@@ -283,7 +283,7 @@ All commands support tab completion. Press `Tab` to autocomplete command names a
 
 Want to add another game server? Use the interactive `create` command:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » create
 ```
 

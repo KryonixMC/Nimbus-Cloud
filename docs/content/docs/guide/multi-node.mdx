@@ -13,7 +13,7 @@ If your network runs on **one machine**, you don't — single-node mode handles 
 
 ## Architecture
 
-``` title="Architecture"
+```text title="Architecture"
                         Players
                            │
                  ┌─────────▼──────────┐
@@ -60,7 +60,7 @@ Static services **always** run on the controller. There is no mechanism to sync 
 
 ### 1. Enable cluster mode on the controller
 
-``` title="Nimbus"
+```text title="Nimbus"
 cluster enable
 ```
 
@@ -141,7 +141,7 @@ Agent nodes automatically detect installed JDKs and download missing versions fr
 
 On the controller:
 
-``` title="Nimbus — Cluster Nodes"
+```text title="Nimbus — Cluster Nodes"
 nimbus » nodes
 ── Cluster Nodes ──────────────────────────────────
 NODE        HOST          STATUS    CPU    MEMORY         SERVICES
@@ -172,7 +172,7 @@ Nodes that are **offline**, **at max services**, or **out of memory** are automa
 
 When running multiple Velocity proxy instances across nodes, enable the load balancer so all players connect to one address (`play.yourserver.com:25565`):
 
-``` title="Nimbus"
+```text title="Nimbus"
 lb enable
 ```
 
@@ -211,7 +211,7 @@ Nimbus automatically patches `haproxy-protocol = true` in Velocity's config when
 
 ### Monitoring
 
-``` title="Nimbus — Load Balancer"
+```text title="Nimbus — Load Balancer"
 nimbus » lb
 ── Load Balancer ───────────────────────────────
   Total Connections:   1,247
@@ -227,7 +227,7 @@ Proxy-2       10.0.0.3      30000   44        ● READY
 
 Manage cluster mode and load balancer from the console without editing config files:
 
-``` title="Nimbus"
+```text title="Nimbus"
 # Cluster (multi-node)
 cluster status                  # Show cluster status
 cluster enable                  # Enable cluster mode (generates token)

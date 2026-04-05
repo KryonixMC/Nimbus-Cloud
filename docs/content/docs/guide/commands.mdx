@@ -15,7 +15,7 @@ Show all running services with status, health, port, player count, and uptime.
 
 **Syntax:** `list [group]`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » list
 ── Services ──────────────────────────────────────
 NAME            GROUP       STATE           HP  PORT    PLAYERS  PID     UPTIME
@@ -44,7 +44,7 @@ Start a new instance of a server group.
 
 **Syntax:** `start <group>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » start BedWars
 ℹ Starting new instance for group 'BedWars'...
 ✓ Service start initiated for group 'BedWars'.
@@ -64,7 +64,7 @@ Gracefully stop a running service. Sends the Minecraft `stop` command to the pro
 
 **Syntax:** `stop <service>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » stop BedWars-2
 ℹ Stopping service 'BedWars-2'...
 ✓ Service 'BedWars-2' stop initiated.
@@ -80,7 +80,7 @@ Stop a service and start a new instance in its place.
 
 **Syntax:** `restart <service>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » restart Lobby-1
 ℹ Restarting service 'Lobby-1'...
 ✓ Service 'Lobby-1' restart initiated.
@@ -96,7 +96,7 @@ Force-kill a service process, clean up crashed services, or kill a process by PI
 
 **Syntax:** `purge <service|crashed|pid:<pid>>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » purge crashed
 ⚠ Purging 2 crashed service(s)...
   Purged 'BedWars-3'
@@ -124,7 +124,7 @@ Attach to a service's live console output. You can type commands directly into t
 
 **Syntax:** `screen <service>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » screen Lobby-1
 ℹ Attached to Lobby-1 (ESC or Ctrl+Q to detach)
 ────────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ Execute a command on a service's stdin without attaching to its console.
 
 **Syntax:** `exec <service> <command...>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » exec Lobby-1 say Restarting in 5 minutes!
 ✓ Sent to Lobby-1: say Restarting in 5 minutes!
 ```
@@ -167,7 +167,7 @@ Show recent log output from a service's `logs/latest.log` file.
 
 **Syntax:** `logs <service> [lines]`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » logs BedWars-1 20
 ── Logs: BedWars-1 ────────────────────────────────
 Last 20 line(s) from services/BedWars-1/logs/latest.log
@@ -191,7 +191,7 @@ List all connected players across services. Queries each READY service via Serve
 
 **Syntax:** `players [service]`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » players
 ── Players ───────────────────────────────────────
 PLAYER      SERVICE       SERVER
@@ -214,7 +214,7 @@ Show health metrics for running services: TPS, memory usage, health status, rest
 
 **Syntax:** `health [service|group]`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » health
 ── Service Health ─────────────────────────────────
 NAME            STATE           TPS    MEMORY          HEALTH     RESTARTS  UPTIME
@@ -228,7 +228,7 @@ BedWars-1       ● READY          20.0   256/1024MB      healthy    0         0
 
 Pass a service name for a detailed view with memory progress bar and last SDK health report timestamp:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » health Lobby-1
 ```
 
@@ -246,7 +246,7 @@ List all configured server groups with software, version, and instance counts.
 
 **Syntax:** `groups`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » groups
 ── Groups ────────────────────────────────────────
 NAME        TYPE      SOFTWARE    VERSION    MEMORY  INSTANCES  MIN/MAX
@@ -265,7 +265,7 @@ Show detailed configuration and runtime state for a group.
 
 **Syntax:** `info <group>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » info BedWars
 ── Group: BedWars ─────────────────────────────────
   Type                  DYNAMIC
@@ -316,7 +316,7 @@ Launch an interactive wizard to create a new server group. Clears the screen and
 
 The most common case -- a Paper backend with Via plugin support.
 
-``` title="Nimbus — Create Wizard"
+```text title="Nimbus — Create Wizard"
 Create New Group
 Group name: SkyWars
 Available server software:
@@ -359,7 +359,7 @@ Start an instance now? [Y/n]: y
 
 For Fabric, Forge, and NeoForge, the wizard adds a **modloader version** prompt after the Minecraft version. It also auto-downloads the appropriate proxy forwarding mod -- FabricProxy-Lite for Fabric, or a Forge/NeoForge forwarding mod for Forge-based servers. Via plugin prompts are skipped since modded servers don't use them.
 
-``` title="Nimbus — Create Wizard"
+```text title="Nimbus — Create Wizard"
 Create New Group
 Group name: Survival
 Available server software:
@@ -412,7 +412,7 @@ Accepts:
 - Modrinth slugs: `import adrenaserver`
 - Local `.mrpack` files: `import /path/to/modpack.mrpack`
 
-``` title="Nimbus — Import Wizard"
+```text title="Nimbus — Import Wizard"
 nimbus » import adrenaserver
 Import Modpack
 Resolving modpack... ✓
@@ -451,7 +451,7 @@ Update a group's server software or Minecraft version. Supports both direct and 
 
 #### Update Minecraft version
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » update Lobby version 1.21.5
 ℹ Updating Lobby: 1.21.4 -> 1.21.5
 Downloading paper 1.21.5... ok
@@ -461,7 +461,7 @@ Updated 'Lobby' to version 1.21.5.
 
 #### Switch server software
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » update Lobby software purpur
 ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
 Downloading purpur 1.21.4... ok
@@ -471,7 +471,7 @@ Updated 'Lobby' to PURPUR 1.21.4.
 
 #### Switch software and version at once
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » update Lobby software purpur 1.21.5
 ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.5
 Downloading purpur 1.21.5... ok
@@ -483,7 +483,7 @@ Updated 'Lobby' to PURPUR 1.21.5.
 
 Running `update <group>` without subcommands opens an interactive wizard:
 
-``` title="Nimbus — Update Wizard"
+```text title="Nimbus — Update Wizard"
 nimbus » update Lobby
 Update Group: Lobby
 
@@ -530,14 +530,14 @@ Convert a group or individual service to static mode. Static services preserve t
 
 **Syntax:** `static group <name>` | `static service <name>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » static group BedWars
 ✓ Group 'BedWars' is now STATIC.
 New services will preserve their working directory across restarts.
 ⚠ 2 running service(s) are still dynamic. Use 'static service <name>' to convert them individually.
 ```
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » static service BedWars-1
 ℹ Converting 'BedWars-1' to static (copying working directory)...
 ✓ Service 'BedWars-1' is now static.
@@ -554,7 +554,7 @@ Set a group back to dynamic mode. Dynamic services start fresh from the template
 
 **Syntax:** `dynamic <group>`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » dynamic BedWars
 ✓ Group 'BedWars' is now DYNAMIC.
 New services will use temporary directories that are cleaned up on stop.
@@ -576,7 +576,7 @@ The `perms` command manages Nimbus's built-in permission system. All subcommands
 
 List all permission groups with their default status, priority, and parent groups.
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » perms group list
 ── Permission Groups ─────────────────────────────
 NAME        DEFAULT    PRIORITY  PREFIX       PERMISSIONS  PARENTS
@@ -591,7 +591,7 @@ Default     yes        0         -            3            -
 
 Show full details of a permission group including all permissions.
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » perms group info Admin
 ── Permission Group: Admin ──────────────────────
   Default:   no
@@ -667,7 +667,7 @@ Running `plugins` with no arguments (or `plugins search`) opens the **interactiv
 3. Use **↑↓** to navigate, **Space** to select multiple plugins, **Enter** to confirm
 4. Required dependencies are automatically downloaded
 
-``` title="Nimbus"
+```text title="Nimbus"
 plugins                        # Open interactive search
 plugins search global          # Search for plugins targeting all backends
 plugins search Lobby WorldEdit # Search "WorldEdit" for Lobby group's MC version
@@ -705,7 +705,7 @@ Full cluster overview showing groups, instances, player counts, and capacity.
 
 **Syntax:** `status`
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » status
 ── Network: MyNetwork ────────────────────────────
 Services: 5 ready / 5 total    Players: 36

@@ -30,7 +30,7 @@ No manual downloading, no extracting ZIPs, no hunting for the right modloader ve
 
 Just run the `import` command with a Modrinth slug or URL:
 
-``` title="Nimbus — Import Wizard"
+```text title="Nimbus — Import Wizard"
 nimbus » import adrenaserver
 Import Modpack
 Resolving modpack... ✓
@@ -71,7 +71,7 @@ Behind the scenes, the `import` command runs through six stages:
 
 After import, your template directory looks like this:
 
-``` title="Directory Structure"
+```text title="Directory Structure"
 templates/Adrenaserver/
 ├── fabric-server-launch.jar
 ├── mods/
@@ -122,7 +122,7 @@ This works for both imported modpacks AND manually created modded groups. Any Fo
 
 To update to a new modpack version, simply re-run the `import` command:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » import adrenaserver
 Import Modpack
 Resolving modpack... ✓
@@ -143,7 +143,7 @@ Re-importing will overwrite the existing template. For **STATIC** services, worl
 
 A lightweight server optimization pack — perfect for high-player-count lobbies:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » import adrenaserver
 Import Modpack
 Resolving modpack... ✓
@@ -157,7 +157,7 @@ Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
 
 Import a heavyweight Forge kitchen-sink pack straight from a Modrinth URL:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » import https://modrinth.com/modpack/all-the-mods-10
 Import Modpack
 Resolving modpack... ✓
@@ -176,7 +176,7 @@ Modpack 'All the Mods 10' imported as group 'AllTheMods10'!
 
 Import a custom pack you built yourself or downloaded manually:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » import ./my-custom-pack.mrpack
 Import Modpack
 Resolving modpack... ✓

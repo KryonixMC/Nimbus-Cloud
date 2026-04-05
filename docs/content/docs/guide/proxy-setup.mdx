@@ -129,7 +129,7 @@ Via plugins are deployed **only on backend servers**, never on the proxy itself.
 
 To enable Via plugins, place them in the global template directory:
 
-``` title="Directory Structure"
+```text title="Directory Structure"
 templates/
   global/
     plugins/
@@ -165,7 +165,7 @@ Updates are downloaded and staged automatically, but only take effect on the nex
 
 You can listen for these events via the [WebSocket API](/docs/reference/websocket) to trigger alerts, Discord notifications, or automated restart scripts.
 
-``` title="Nimbus — Auto-Patching"
+```text title="Nimbus — Auto-Patching"
 [18:00:01] ℹ New Velocity version available: 3.4.0 → 3.5.0
 [18:00:04] ℹ Downloaded Velocity 3.5.0 (12.4 MB)
 [18:00:04] ℹ Updated Velocity JAR for static service 'Proxy-1' (restart to apply)
@@ -285,7 +285,7 @@ Players trying to connect to a BedWars server will be sent back to the lobby wit
 
 Toggle maintenance via the console or in-game:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » maintenance on
 ✓ Global maintenance enabled.
   Players without bypass will be disconnected by the proxy.
@@ -375,7 +375,7 @@ When Bedrock support is enabled, Nimbus:
 
 ### Architecture
 
-``` title="Architecture"
+```text title="Architecture"
 Bedrock (UDP:19132) ──► Velocity + Geyser + Floodgate ──► Backends + Floodgate
 Java    (TCP:25565) ──►                                ──►
 ```
@@ -395,7 +395,7 @@ Both ports must be open on your server. Bedrock uses **UDP**, not TCP — make s
 
 The `status` command shows Bedrock support status:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » status
 ...
 Bedrock:  enabled (Geyser + Floodgate, base port 19132)
@@ -403,7 +403,7 @@ Bedrock:  enabled (Geyser + Floodgate, base port 19132)
 
 The `list` command shows both TCP and UDP ports for proxy services:
 
-``` title="Nimbus"
+```text title="Nimbus"
 nimbus » list
 Proxy-1    Proxy    ● READY    25565/19132    0    12345    1h 30m
 ```

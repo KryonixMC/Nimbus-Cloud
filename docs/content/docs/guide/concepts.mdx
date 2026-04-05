@@ -11,7 +11,7 @@ This page explains the fundamental building blocks of Nimbus. Understanding thes
 
 A **group** is a definition for a type of server. It specifies the software, version, resource limits, scaling rules, and lifecycle behavior. Groups are configured as TOML files in the `config/groups/` directory.
 
-``` title="Directory Structure"
+```text title="Directory Structure"
 config/groups/
 ├── proxy.toml      # Velocity proxy
 ├── lobby.toml      # Lobby servers
@@ -73,7 +73,7 @@ Services are named `<GroupName>-<N>`, where N is an incrementing number:
 
 Every service moves through a lifecycle of states:
 
-``` title="Service Lifecycle"
+```text title="Service Lifecycle"
 PREPARING → STARTING → READY → STOPPING → STOPPED
                          │
                          └──→ CRASHED
@@ -108,7 +108,7 @@ Templates define what files get copied into a service instance when it starts. N
 
 ### Template Layers
 
-``` title="Directory Structure"
+```text title="Directory Structure"
 templates/
 ├── global/            # Layer 1: All backend servers
 │   └── plugins/
@@ -268,7 +268,7 @@ When Nimbus needs to start a server, it resolves the correct Java executable thr
    - System directories (`/usr/lib/jvm`, `~/.sdkman/candidates/java`, `~/.jdks`, etc.)
 4. **Auto-download** — If no compatible JDK is found, Nimbus downloads one from [Eclipse Adoptium](https://adoptium.net/) (Temurin) automatically
 
-``` title="Nimbus — JDK Auto-Download"
+```text title="Nimbus — JDK Auto-Download"
 [12:00:01] ℹ Detected Java installations: Java 17, Java 21
 [12:00:05] ⚠ No Java 16 found — downloading automatically...
 [12:00:08] ℹ Downloaded Java 16 (187.3 MB), extracting...

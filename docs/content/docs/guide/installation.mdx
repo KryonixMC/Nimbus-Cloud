@@ -43,7 +43,7 @@ Nimbus checks for updates automatically on every startup by querying GitHub Rele
 | **Patch / Minor** (e.g. `0.1.0` → `0.1.3` or `0.2.0`) | Downloads and applies automatically. A backup of the previous JAR is kept. |
 | **Major** (e.g. `0.x` → `1.0.0`) | Shows changelog and prompts `Upgrade now? [y/N]` — you decide. |
 
-``` title="Nimbus"
+```text title="Nimbus"
 ℹ Update available: v0.1.0 -> v0.2.0 (minor)
   Downloading v0.2.0... done
 ✓ Updated to v0.2.0 (backup: nimbus-backup.jar)
@@ -97,7 +97,7 @@ BUILD SUCCESSFUL in 12s
 
 The output JAR will be at:
 
-``` title="Output Path"
+```text title="Output Path"
 nimbus-core/build/libs/nimbus-core-<version>-all.jar
 ```
 
@@ -131,7 +131,7 @@ On Java 21+, Nimbus automatically relaunches itself with the `--enable-native-ac
 
 After the setup wizard completes, your directory will look like this:
 
-``` title="Directory Structure"
+```text title="Directory Structure"
 my-network/
 ├── nimbus-core-<version>-all.jar    # The Nimbus application
 ├── config/                       # All configuration files
