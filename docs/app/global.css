@@ -6,32 +6,55 @@
   --fd-primary: 199 89% 48%;
 }
 
-.dark {
-  --fd-primary: 199 89% 48%;
-  --fd-background: 220 47% 7%;
-  --fd-muted: 220 30% 12%;
+@media (min-width: 768px) {
+  :root {
+    --fd-sidebar-width: 268px;
+    --fd-layout-width: 1600px;
+  }
 }
 
-/* Terminal styling for Nimbus console output */
+@media (min-width: 1024px) {
+  :root {
+    --fd-sidebar-width: 286px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --fd-toc-width: 286px;
+  }
+}
+
+/* Space between article and TOC */
+#nd-toc {
+  padding-left: 2rem;
+}
+
+.dark {
+  --fd-primary: 199 89% 48%;
+  --fd-background: 222 47% 6%;
+  --fd-muted: 222 30% 10%;
+}
+
+/* Terminal styling */
 .terminal {
-  background: #1a1b26;
+  background: #0f1117;
   border-radius: 12px;
   padding: 0;
-  margin: 16px 0;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: 1px solid hsl(var(--fd-border));
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.6;
 }
 
 .terminal-header {
-  background: #282a36;
+  background: hsl(var(--fd-muted));
   padding: 8px 16px;
   display: flex;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid #3a3d4d;
+  border-bottom: 1px solid hsl(var(--fd-border));
 }
 
 .terminal-header::before {
@@ -47,7 +70,7 @@
 }
 
 .terminal-title {
-  color: #8b8fa3;
+  color: hsl(var(--fd-muted-foreground));
   font-size: 12px;
   margin-left: 8px;
 }
@@ -80,140 +103,9 @@
 .t-bold { font-weight: 700; }
 .t-prompt { color: #89ddff; font-weight: 700; }
 
-.t-dot-green::before { content: '●'; color: #9ece6a; margin-right: 4px; }
-.t-dot-yellow::before { content: '●'; color: #e0af68; margin-right: 4px; }
-.t-dot-red::before { content: '●'; color: #f7768e; margin-right: 4px; }
-.t-dot-blue::before { content: '○'; color: #7aa2f7; margin-right: 4px; }
-.t-dot-dim::before { content: '○'; color: #565f89; margin-right: 4px; }
-
 /* Cursor blink */
 @keyframes cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
 }
 .t-cursor { color: #c0caf5; animation: cursor-blink 1s step-end infinite; }
-
-.dark .terminal {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-/* Home page sections */
-.home-section {
-  max-width: 960px;
-  margin: 4rem auto 0;
-  padding: 0 24px;
-}
-
-.home-section-title {
-  font-size: 1.8rem;
-  font-weight: 800;
-  text-align: center;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, hsl(var(--fd-primary)), hsl(199, 89%, 70%));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 8px;
-}
-
-.home-section-subtitle {
-  text-align: center;
-  color: var(--fd-muted-foreground);
-  font-size: 1.05rem;
-  margin-bottom: 2rem;
-  line-height: 1.6;
-}
-
-/* Auto-grid */
-.auto-grid {
-  margin-top: 24px;
-  padding: 24px;
-  background: hsl(var(--fd-muted));
-  border-radius: 14px;
-  border: 1px solid hsl(var(--fd-border));
-}
-
-.auto-grid-header {
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 16px;
-}
-
-.auto-grid-items {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px 32px;
-}
-
-@media (max-width: 640px) {
-  .auto-grid-items {
-    grid-template-columns: 1fr;
-  }
-}
-
-.auto-item {
-  font-size: 0.9rem;
-  color: var(--fd-muted-foreground);
-  line-height: 1.6;
-}
-
-.auto-item span {
-  color: #10b981;
-  font-weight: 700;
-  margin-right: 6px;
-}
-
-/* Comparison table */
-.comparison-table-wrapper table {
-  width: 100%;
-}
-
-.comparison-table-wrapper th:first-child,
-.comparison-table-wrapper td:first-child {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* Stats strip */
-.stats-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-@media (max-width: 640px) {
-  .stats-strip {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.stat-card {
-  text-align: center;
-  padding: 24px 16px;
-  border-radius: 14px;
-  background: hsl(var(--fd-muted));
-  border: 1px solid hsl(var(--fd-border));
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(14, 165, 233, 0.08);
-}
-
-.stat-number {
-  font-size: 2.4rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, hsl(var(--fd-primary)), hsl(199, 89%, 70%));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: 0.9rem;
-  color: var(--fd-muted-foreground);
-  margin-top: 4px;
-  font-weight: 500;
-}
