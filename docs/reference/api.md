@@ -807,6 +807,41 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 
 ---
 
+## Audit
+
+### GET /api/audit
+
+Returns paginated audit log entries. Admin-only.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | Int | `50` | Max entries to return (1–500) |
+| `offset` | Long | `0` | Skip first N entries (for pagination) |
+| `action` | String | — | Filter by action type (e.g. `SERVICE_STARTING`, `CONFIG_RELOADED`) |
+| `actor` | String | — | Filter by actor (e.g. `console`, `api:admin`, `system`) |
+
+**Response:**
+
+```json
+{
+  "entries": [
+    {
+      "timestamp": "2025-01-15T10:30:15.123Z",
+      "actor": "console",
+      "action": "SERVICE_STARTING",
+      "target": "Lobby-1",
+      "details": "group=Lobby, port=30001, node=local"
+    }
+  ],
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
 ## Permissions
 
 ### GET /api/permissions/groups

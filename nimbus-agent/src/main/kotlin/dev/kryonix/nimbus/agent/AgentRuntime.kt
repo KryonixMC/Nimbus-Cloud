@@ -29,6 +29,20 @@ class AgentRuntime(
     )
     private val client = HttpClient(CIO) {
         install(WebSockets)
+        engine {
+            https {
+                if (!config.agent.tlsVerify) {
+                    // Dev mode: trust all certificates (self-signed)
+                    trustManager = TlsHelper.trustAllManager()
+                    logger.warn("TLS verification disabled — accepting all certificates (dev only)")
+                } else if (config.agent.truststorePath.isNotBlank()) {
+                    // Custom trust store
+                    val ts = TlsHelper.loadTrustStore(config.agent.truststorePath, config.agent.truststorePassword)
+                    trustManager = TlsHelper.trustManagerFor(ts)
+                }
+                // else: use system default trust store
+            }
+        }
     }
 
     @Volatile private var running = true

@@ -6,6 +6,24 @@ The main configuration file for Nimbus. Located at `config/nimbus.toml` inside y
 After editing `nimbus.toml`, restart Nimbus for changes to take effect. Group configs can be hot-reloaded with the `reload` command, but main config changes require a restart.
 :::
 
+## Environment Variables
+
+Sensitive config values can be overridden via environment variables. Env vars take precedence over `nimbus.toml`.
+
+| Environment Variable | Overrides | Description |
+|---|---|---|
+| `NIMBUS_API_TOKEN` | `[api] token` | API bearer token |
+| `NIMBUS_DB_TYPE` | `[database] type` | Database type (sqlite, mysql, postgresql) |
+| `NIMBUS_DB_HOST` | `[database] host` | Database hostname |
+| `NIMBUS_DB_PORT` | `[database] port` | Database port |
+| `NIMBUS_DB_NAME` | `[database] name` | Database name |
+| `NIMBUS_DB_USERNAME` | `[database] username` | Database username |
+| `NIMBUS_DB_PASSWORD` | `[database] password` | Database password |
+| `NIMBUS_CLUSTER_TOKEN` | `[cluster] token` | Cluster authentication token |
+| `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` | `[cluster] keystore_password` | TLS keystore password |
+
+Agent env vars: `NIMBUS_AGENT_TOKEN`, `NIMBUS_AGENT_CONTROLLER` (see agent docs).
+
 ## Complete Example
 
 ```toml
@@ -414,12 +432,18 @@ Cluster mode is **disabled by default**. Single-node setups do not need it. All 
 | `heartbeat_interval` | Long | `5000` | Interval in milliseconds between heartbeat requests sent to agents. |
 | `node_timeout` | Long | `15000` | Time in milliseconds after which a node is considered disconnected if no heartbeat response is received. |
 | `placement_strategy` | String | `"least-services"` | Strategy for placing new services on nodes. `"least-services"` places on the node running the fewest services; `"least-memory"` uses the node with the most free memory. |
+| `tls_enabled` | Boolean | `true` | Enable TLS encryption for cluster WebSocket connections. When enabled without a keystore, Nimbus auto-generates a self-signed certificate. |
+| `keystore_path` | String | `""` | Path to a JKS/PKCS12 keystore for TLS. If empty and `tls_enabled = true`, a self-signed keystore is auto-generated at `config/cluster.jks`. |
+| `keystore_password` | String | `""` | Keystore password. If empty during auto-generation, uses a default internal password. Can be overridden via `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` env var. |
 
 ```toml
 [cluster]
 enabled = true
 token = "my-cluster-secret"
 agent_port = 8443
+tls_enabled = true
+# keystore_path = ""           # Auto-generated if empty
+# keystore_password = ""       # Auto-generated if empty
 heartbeat_interval = 5000
 node_timeout = 15000
 placement_strategy = "least-services"
@@ -432,6 +456,25 @@ The cluster token grants remote nodes the ability to run services on behalf of t
 ::: tip
 You can manage all cluster and load balancer settings from the console using the `cluster` command instead of editing this file manually. See [Commands Reference — cluster](/guide/commands#cluster).
 :::
+
+---
+
+## `[audit]`
+
+Audit logging records administrative actions for compliance and debugging.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | Boolean | `true` | Enable audit logging. Events are stored in the database. |
+| `retention_days` | Long | `90` | Days to retain audit entries before auto-pruning. |
+
+```toml
+[audit]
+enabled = true
+retention_days = 90
+```
+
+Recorded events: service lifecycle (start/stop/crash), scaling decisions, group changes, maintenance toggles, config reloads, module lifecycle, API start/stop. Each entry includes timestamp, actor, action, target, and details. Query via `audit` console command or `GET /api/audit`.
 
 ---
 

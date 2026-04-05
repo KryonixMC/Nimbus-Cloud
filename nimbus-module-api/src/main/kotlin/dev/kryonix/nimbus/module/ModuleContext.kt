@@ -57,6 +57,18 @@ interface ModuleContext {
     fun registerRoutes(block: Route.() -> Unit, auth: AuthLevel = AuthLevel.SERVICE)
 
     /**
+     * Register database migrations for this module.
+     * Migrations are collected during [NimbusModule.init] and executed
+     * after all modules have been enabled.
+     *
+     * Module migrations should use version ranges to avoid conflicts:
+     * - Core: 1–999
+     * - Perms module: 1000–1999
+     * - Scaling module: 2000–2999
+     */
+    fun registerMigrations(migrations: List<Migration>) {}
+
+    /**
      * Register a server-side plugin that should be deployed to backend services.
      * Called during [NimbusModule.init]. The core ServiceFactory will deploy
      * all registered plugins when creating service instances.

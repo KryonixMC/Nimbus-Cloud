@@ -79,8 +79,8 @@ node_timeout = 15000                # ms before node is considered dead
 placement_strategy = "least-services"
 ```
 
-::: warning Security
-The cluster WebSocket uses **unencrypted `ws://`** by default. When running agents on separate machines over untrusted networks, use a reverse proxy with TLS (e.g. nginx, Caddy) to wrap the connection in `wss://`, or restrict access via firewall rules to agent IPs only. Nimbus logs a warning if the cluster server binds to a non-loopback address without TLS.
+::: tip TLS Encryption
+Cluster TLS is **enabled by default** (`tls_enabled = true`). If no keystore is configured, Nimbus auto-generates a self-signed certificate on first startup. Agents connect via `wss://` and should set `tls_verify = false` when using self-signed certificates. For custom certificates, set `keystore_path` and `keystore_password`. See [nimbus.toml Reference — cluster](/config/nimbus-toml#cluster) for details.
 :::
 
 ### 2. Set up an agent node
@@ -128,11 +128,12 @@ The agent creates an `agent.toml` on first run:
 
 ```toml
 [agent]
-controller = "ws://10.0.0.1:8443/cluster"
+controller = "wss://10.0.0.1:8443/cluster"   # wss:// for TLS (default)
 token = "your-secret-token"
 node_name = "worker-1"
 max_memory = "16G"
 max_services = 10
+tls_verify = false              # Set to false for self-signed certs
 
 # Optional: specify paths to Java installations.
 # Leave empty for auto-detection / auto-download from Adoptium.

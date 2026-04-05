@@ -16,7 +16,8 @@ data class NimbusConfig(
     @Suppress("unused") // backward compat: old configs may have [permissions] section
     val permissions: PermissionsConfig = PermissionsConfig(),
     val bedrock: BedrockConfig = BedrockConfig(),
-    val cluster: ClusterConfig = ClusterConfig()
+    val cluster: ClusterConfig = ClusterConfig(),
+    val audit: AuditConfig = AuditConfig()
 )
 
 @Serializable
@@ -127,6 +128,13 @@ data class BedrockConfig(
 )
 
 @Serializable
+data class AuditConfig(
+    val enabled: Boolean = true,
+    @SerialName("retention_days")
+    val retentionDays: Long = 90
+)
+
+@Serializable
 data class ClusterConfig(
     val enabled: Boolean = false,
     val token: String = "",
@@ -139,5 +147,11 @@ data class ClusterConfig(
     @SerialName("node_timeout")
     val nodeTimeout: Long = 15000,
     @SerialName("placement_strategy")
-    val placementStrategy: String = "least-services"
+    val placementStrategy: String = "least-services",
+    @SerialName("tls_enabled")
+    val tlsEnabled: Boolean = true,
+    @SerialName("keystore_path")
+    val keystorePath: String = "",
+    @SerialName("keystore_password")
+    val keystorePassword: String = ""
 )

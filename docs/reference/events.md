@@ -5,7 +5,7 @@ All events in Nimbus are subclasses of `NimbusEvent`. Events are emitted through
 - WebSocket clients connected to `/api/events`
 - Internal subscribers (scaling engine, console logger, proxy sync)
 
-Every event includes a `timestamp` field (ISO 8601 format).
+Every event includes a `timestamp` field (ISO 8601 format) and an `actor` field identifying who triggered the event (`system`, `console`, `api:admin`, or `api:service`).
 
 ## WebSocket Message Format
 

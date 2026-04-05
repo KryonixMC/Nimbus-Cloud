@@ -60,6 +60,56 @@ object ConfigLoader {
         return loadGroupConfigs(groupsDir)
     }
 
+    fun applyEnvironmentOverrides(config: NimbusConfig): NimbusConfig {
+        var result = config
+        val applied = mutableListOf<String>()
+
+        System.getenv("NIMBUS_API_TOKEN")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(api = result.api.copy(token = it))
+            applied += "NIMBUS_API_TOKEN"
+        }
+        System.getenv("NIMBUS_DB_TYPE")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(database = result.database.copy(type = it))
+            applied += "NIMBUS_DB_TYPE"
+        }
+        System.getenv("NIMBUS_DB_HOST")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(database = result.database.copy(host = it))
+            applied += "NIMBUS_DB_HOST"
+        }
+        System.getenv("NIMBUS_DB_PORT")?.takeIf { it.isNotBlank() }?.let { value ->
+            value.toIntOrNull()?.let { port ->
+                result = result.copy(database = result.database.copy(port = port))
+                applied += "NIMBUS_DB_PORT"
+            } ?: logger.warn("Ignoring NIMBUS_DB_PORT: '{}' is not a valid integer", value)
+        }
+        System.getenv("NIMBUS_DB_NAME")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(database = result.database.copy(name = it))
+            applied += "NIMBUS_DB_NAME"
+        }
+        System.getenv("NIMBUS_DB_USERNAME")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(database = result.database.copy(username = it))
+            applied += "NIMBUS_DB_USERNAME"
+        }
+        System.getenv("NIMBUS_DB_PASSWORD")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(database = result.database.copy(password = it))
+            applied += "NIMBUS_DB_PASSWORD"
+        }
+        System.getenv("NIMBUS_CLUSTER_TOKEN")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(cluster = result.cluster.copy(token = it))
+            applied += "NIMBUS_CLUSTER_TOKEN"
+        }
+        System.getenv("NIMBUS_CLUSTER_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }?.let {
+            result = result.copy(cluster = result.cluster.copy(keystorePassword = it))
+            applied += "NIMBUS_CLUSTER_KEYSTORE_PASSWORD"
+        }
+
+        if (applied.isNotEmpty()) {
+            logger.info("Applied environment variable overrides: {}", applied.joinToString(", "))
+        }
+
+        return result
+    }
+
     private fun validateGroupConfig(config: GroupConfig, source: Path) {
         val group = config.group
         val scaling = group.scaling

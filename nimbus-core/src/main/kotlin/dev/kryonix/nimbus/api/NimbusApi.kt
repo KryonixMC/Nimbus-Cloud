@@ -55,7 +55,8 @@ class NimbusApi(
     private val stressTestManager: dev.kryonix.nimbus.stress.StressTestManager? = null,
     private val moduleContext: ModuleContextImpl? = null,
     private val moduleManager: dev.kryonix.nimbus.module.ModuleManager? = null,
-    private val dispatcher: dev.kryonix.nimbus.console.CommandDispatcher? = null
+    private val dispatcher: dev.kryonix.nimbus.console.CommandDispatcher? = null,
+    private val databaseManager: dev.kryonix.nimbus.database.DatabaseManager? = null
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -262,6 +263,9 @@ class NimbusApi(
                 }
                 if (moduleManager != null) {
                     moduleRoutes(moduleManager)
+                }
+                if (databaseManager != null && config.audit.enabled) {
+                    auditRoutes(databaseManager)
                 }
                 // Module admin-level routes
                 moduleContext?.adminRoutes?.forEach { block -> block() }
