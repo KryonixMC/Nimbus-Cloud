@@ -40,10 +40,11 @@ On first launch, the setup wizard starts automatically. You'll see the Nimbus ba
 ```text title="Nimbus"
    _  __ __ _   __ ___  _ __  ___
   / |/ // // \,' // o.)/// /,' _/
- / || // // \,' // o \/ U /_\ \`. 
+ / || // // \,' // o \/ U /_\ `.
 /_/|_//_//_/ /_//___,'\_,'/___,'
             C L O U D
   Let's get your cloud ready.
+  Detected OS: Linux
   Fetching available versions... ✓
 ```
 
@@ -60,92 +61,130 @@ The wizard asks for your network name. This is used in proxy MOTD and branding:
 You can change this later in `config/nimbus.toml` under `[network]`.
 </Callout>
 
-## 3. Proxy Setup
+## 3. Proxy & Bedrock
 
-Nimbus automatically selects the latest Velocity version. Velocity is backwards-compatible, so you always get the newest release:
+Nimbus automatically selects the latest Velocity version. Then you choose whether to enable Bedrock Edition support using an interactive picker — use **↑↓** to navigate and **Enter** to select:
 
 ```text title="Nimbus — Setup Wizard"
 [2] Proxy
   ✓ Velocity 3.4.0-SNAPSHOT (always latest — backwards compatible)
-```
 
-## 4. Bedrock & Permissions
-
-The wizard asks about optional features:
-
-```text title="Nimbus — Setup Wizard"
-Enable Bedrock Edition? (Geyser + Floodgate) [y/N]: n
-  Install built-in permissions plugin? (prefix, suffix, groups, tracks) [Y/n]: y
-  ✓ NimbusPerms will be deployed to all backend servers
+  Enable Bedrock Edition?
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● No      standard Java Edition only
+      ○ Yes     Geyser + Floodgate will be auto-installed
 ```
 
 <Callout type="info">
-**Bedrock Edition** enables [Geyser + Floodgate](/docs/guide/bedrock) so mobile and console players can join. **NimbusPerms** provides a built-in [permission system](/docs/guide/permissions) with groups, prefixes, and tracks. Both can be enabled later.
+**Bedrock Edition** enables [Geyser + Floodgate](/docs/guide/bedrock) so mobile and console players can join your Java server. This can be enabled later too.
+</Callout>
+
+## 4. Modules
+
+Nimbus ships with optional modules you can enable. Use **↑↓** to navigate, **Space** to toggle modules on/off, and **Enter** to confirm:
+
+```text title="Nimbus — Setup Wizard"
+[3] Modules
+
+  ↑↓ navigate  ·  space toggle  ·  enter confirm  ·  esc back
+    › ✓ Permissions    groups, tracks, prefix/suffix, audit log
+      ✓ Display        server selector signs + NPCs
+      ✓ Smart Scaling  time-based schedules, predictive warmup
+      ○ SyncProxy      tab list, MOTD, chat formatting
+```
+
+Selected modules are extracted to the `modules/` directory and loaded on startup.
+
+<Callout type="info">
+Modules can be added or removed later with the `modules` command. See each module's documentation for configuration details.
 </Callout>
 
 ## 5. Choose a Server Template
 
-Pick a template that matches your network layout:
+Pick a template that matches your network layout using the picker:
 
 ```text title="Nimbus — Setup Wizard"
-[3] Server Groups
-  Choose a template:
-    1  Standard Lobby  (Proxy + Lobby)
-    2  Lobby + Games   (Proxy + Lobby + Minigame server)
-    3  Custom          (configure everything yourself)
-  Template [1]: 2
+[4] Server Groups
+
+  ↑↓ navigate  ·  enter select  ·  esc back
+      ○ Standard Lobby  Proxy + Lobby
+    › ● Lobby + Games   Proxy + Lobby + Minigame server
+      ○ Custom          configure everything yourself
+  ✓ Lobby + Games
 ```
 
-For this walkthrough, we'll choose **2** (Lobby + Games). This creates a proxy, lobby, and a game server group — the most common network setup.
+For this walkthrough, we select **Lobby + Games**. This creates a proxy, lobby, and a game server group — the most common network setup.
 
 ## 6. Configure the Lobby
 
-The wizard walks you through lobby configuration — server software, version, and memory:
+The wizard walks you through lobby configuration. First, pick your server software with a picker:
 
 ```text title="Nimbus — Setup Wizard"
-Setting up: Proxy + Lobby + Game server
+  Setting up: Proxy + Lobby + Game server
+
   Lobby:
-  Server software [paper]: paper
+  Server software:
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● Paper        recommended, best plugin support
+      ○ Purpur       Paper fork with extra gameplay config
+      ○ Pufferfish   Paper fork optimized for large servers
+      ○ Leaf         Paper fork, performance + stability balance
+      ○ Folia        Paper fork with regionized multithreading
+  ✓ Paper
+```
+
+Then choose a version and memory — these are text prompts with tab completion:
+
+```text title="Nimbus — Setup Wizard"
   Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...
   Version [1.21.4]: 1.21.4
   Lobby memory [1G]: 1G
 ```
 
-Next, the wizard offers **Via plugin** installation for protocol compatibility:
+Next, the wizard offers **Via plugin** installation for protocol compatibility. This is a multi-select picker — use **Space** to toggle plugins and **Enter** to confirm:
 
 ```text title="Nimbus — Setup Wizard"
-Protocol support:
-  ViaVersion allows players with newer clients to join older servers.
-  ViaBackwards allows players with older clients to join newer servers.
-  ViaRewind extends backwards support to 1.7/1.8 clients.
-  Install ViaVersion? [y/N]: n
-  Install ViaBackwards? (older clients can join) [Y/n]: y
+  Protocol support:
+  ↑↓ navigate  ·  space toggle  ·  enter confirm  ·  esc back
+    › ○ ViaVersion     newer clients can join older servers
+      ✓ ViaBackwards   older clients can join newer servers
+      ○ ViaRewind      extends backwards support to 1.7/1.8
   → ViaVersion auto-included (required by ViaBackwards)
-  Install ViaRewind? (extends support to 1.7/1.8) [y/N]: n
   ✓ Via plugins: ViaVersion, ViaBackwards
-  ✓ Lobby (PAPER 1.21.4, 1G)
+  ✓ Lobby (Paper 1.21.4, 1G)
 ```
 
 <Callout title="Via plugins" type="info">
-Via plugins are installed on **backend servers only**, never on the proxy. This is the recommended setup for Velocity networks.
+Via plugins are installed on **backend servers only**, never on the proxy. This is the recommended setup for Velocity networks. Dependencies are enforced automatically — selecting ViaBackwards auto-includes ViaVersion.
 </Callout>
 
 ## 7. Configure the Game Server
 
-Since we chose template 2, the wizard now asks for game server details:
+Since we chose the Lobby + Games template, the wizard now asks for game server details. The same picker-based flow applies:
 
 ```text title="Nimbus — Setup Wizard"
-Game server:
-  Group name: BedWars
-  Server software [paper]: paper
+  Game server:
+  Group name [BedWars]: BedWars
+  Server software:
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● Paper        recommended, best plugin support
+      ○ Purpur       Paper fork with extra gameplay config
+      ○ Pufferfish   Paper fork optimized for large servers
+      ○ Leaf         Paper fork, performance + stability balance
+      ○ Folia        Paper fork with regionized multithreading
+  ✓ Paper
   Stable: 1.21.4  1.21.3  1.21.1  ...
   Version [1.21.4]: 1.21.4
   Memory per instance [2G]: 2G
   Max instances [10]: 10
-  Install ViaVersion? [y/N]: n
-  Install ViaBackwards? (older clients can join) [Y/n]: y
-  ✓ Via plugins: ViaBackwards
-  ✓ BedWars (PAPER 1.21.4, 2G, max 10)
+
+  Protocol support:
+  ↑↓ navigate  ·  space toggle  ·  enter confirm  ·  esc back
+    › ○ ViaVersion     newer clients can join older servers
+      ✓ ViaBackwards   older clients can join newer servers
+      ○ ViaRewind      extends backwards support to 1.7/1.8
+  ✓ Via plugins: ViaVersion, ViaBackwards
+  ✓ BedWars (Paper 1.21.4, 2G, max 10)
 ```
 
 <Callout title="Same version = shared download" type="info">
@@ -157,7 +196,7 @@ When your game server uses the same software and version as the lobby, Nimbus co
 Nimbus downloads all required server JARs automatically:
 
 ```text title="Nimbus — Setup Wizard"
-[4] Downloading
+[5] Downloading
   ↓ Velocity 3.4.0-SNAPSHOT ✓
   ↓ Paper 1.21.4 (Lobby) ✓
   ↓ ViaVersion (Lobby) ✓
@@ -173,18 +212,30 @@ If a download fails, Nimbus shows a `✗` marker. You can manually place the JAR
 
 ## 9. Configuration Saved
 
-The wizard writes all configuration files:
+The wizard writes all configuration files and optionally creates a start script:
 
 ```text title="Nimbus — Setup Wizard"
-[5] Saving configuration
+[6] Saving configuration
   + config/nimbus.toml
   + config/groups/proxy.toml
   + config/groups/lobby.toml
   + config/groups/bedwars.toml
+  + modules/nimbus-module-perms.jar
+  + modules/nimbus-module-display.jar
+  + modules/nimbus-module-scaling.jar
 ────────────────────────────────────────
-  Setup complete! 3 group(s) configured.
+  ✓ Setup complete! 3 group(s) configured.
 ────────────────────────────────────────
-  Start Nimbus now? [Y/n]: y
+
+[7] Start Script
+
+  Create a start.sh that runs Nimbus in a screen session.
+  Detach with Ctrl+A,D — reattach with: screen -r nimbus
+
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● Yes, create start script
+      ○ No, skip
+  + start.sh
 ```
 
 ## 10. First Boot
@@ -281,7 +332,43 @@ Type 'help <command>' for detailed usage.
 All commands support tab completion. Press `Tab` to autocomplete command names and service names.
 </Callout>
 
-## 13. Add More Game Modes
+## 13. Install Plugins
+
+Want to add plugins to your servers? The `plugins` command opens an interactive live search with real-time results from Hangar and Modrinth:
+
+```text title="Nimbus"
+nimbus » plugins
+```
+
+First, pick a target — install plugins globally (all backends) or for a specific group:
+
+```text title="Nimbus"
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● Global    all backend servers
+      ○ Lobby     Lobby servers only
+      ○ BedWars   BedWars servers only
+```
+
+Then type to search — results appear live as you type:
+
+```text title="Nimbus"
+  Search plugins (1.21.4)  2 selected
+  > world_
+
+  > ✓ H  WorldEdit      sk89q      15.2M
+          Fast, easy, and feature-rich world editor for Minecraft
+    ○ H  WorldGuard     sk89q      6.8M
+          Region protection, flags, and custom game mechanics
+    ○ M  WorldEditSUI   kennytv    820k
+          WorldEdit selection visualizer with particles
+  ↓ 2 more
+
+  ↑↓ navigate  ·  space select  ·  enter confirm  ·  esc cancel
+```
+
+Press **Space** to select multiple plugins, then **Enter** to install them all at once. Dependencies are resolved and downloaded automatically.
+
+## 14. Add More Game Modes
 
 Want to add another game server? Use the interactive `create` command:
 
@@ -289,15 +376,16 @@ Want to add another game server? Use the interactive `create` command:
 nimbus » create
 ```
 
-This launches a guided setup for a new server group, similar to the setup wizard. It will:
+This launches a guided setup for a new server group — the same picker-based flow as the setup wizard. It will:
 
 1. Ask for a group name (e.g., `SkyWars`)
-2. Let you pick server software and version
+2. Let you pick server software and version via interactive pickers
 3. Configure scaling rules (min/max instances, players per instance)
 4. Set memory allocation
-5. Download the server JAR automatically
-6. Write the group config to `config/groups/skywars.toml`
-7. Start the minimum instances
+5. Offer Via plugin selection with multi-select
+6. Download the server JAR automatically
+7. Write the group config to `config/groups/skywars.toml`
+8. Start the minimum instances
 
 ## Next Steps
 
