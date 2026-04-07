@@ -32,6 +32,7 @@ sealed class ClusterMessage {
         val groupName: String,
         val port: Int,
         val templateName: String,
+        val templateNames: List<String> = emptyList(),
         val templateHash: String,
         val software: String,
         val version: String,
@@ -84,6 +85,37 @@ sealed class ClusterMessage {
     data class ShutdownAgent(
         val reason: String = "controller shutdown",
         val graceful: Boolean = true
+    ) : ClusterMessage()
+
+    // ── Remote File Management ─────────────────────────
+
+    @Serializable @SerialName("FILE_LIST_REQUEST")
+    data class FileListRequest(
+        val serviceName: String,
+        val path: String,
+        val requestId: String
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_READ_REQUEST")
+    data class FileReadRequest(
+        val serviceName: String,
+        val path: String,
+        val requestId: String
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_WRITE_REQUEST")
+    data class FileWriteRequest(
+        val serviceName: String,
+        val path: String,
+        val content: String,
+        val requestId: String
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_DELETE_REQUEST")
+    data class FileDeleteRequest(
+        val serviceName: String,
+        val path: String,
+        val requestId: String
     ) : ClusterMessage()
 
     // ── Agent -> Controller ────────────────────────────
@@ -147,7 +179,47 @@ sealed class ClusterMessage {
         val level: String,
         val message: String
     ) : ClusterMessage()
+
+    // ── Remote File Management Responses ───────────────
+
+    @Serializable @SerialName("FILE_LIST_RESPONSE")
+    data class FileListResponse(
+        val requestId: String,
+        val entries: List<RemoteFileEntry> = emptyList(),
+        val error: String = ""
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_READ_RESPONSE")
+    data class FileReadResponse(
+        val requestId: String,
+        val content: String = "",
+        val size: Long = 0,
+        val error: String = ""
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_WRITE_RESPONSE")
+    data class FileWriteResponse(
+        val requestId: String,
+        val success: Boolean,
+        val error: String = ""
+    ) : ClusterMessage()
+
+    @Serializable @SerialName("FILE_DELETE_RESPONSE")
+    data class FileDeleteResponse(
+        val requestId: String,
+        val success: Boolean,
+        val error: String = ""
+    ) : ClusterMessage()
 }
+
+@Serializable
+data class RemoteFileEntry(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean,
+    val size: Long = 0,
+    val lastModified: String = ""
+)
 
 @Serializable
 data class ServiceHeartbeat(

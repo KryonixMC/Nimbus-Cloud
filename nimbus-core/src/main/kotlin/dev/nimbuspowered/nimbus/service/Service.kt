@@ -48,7 +48,8 @@ class Service(
     @Synchronized
     fun transitionTo(newState: ServiceState): Boolean {
         val allowed = when (_state) {
-            ServiceState.PREPARING -> setOf(ServiceState.STARTING, ServiceState.STOPPED)
+            ServiceState.PREPARING -> setOf(ServiceState.PREPARED, ServiceState.STARTING, ServiceState.STOPPED)
+            ServiceState.PREPARED -> setOf(ServiceState.STARTING, ServiceState.STOPPED)
             ServiceState.STARTING -> setOf(ServiceState.READY, ServiceState.CRASHED, ServiceState.STOPPED)
             ServiceState.READY -> setOf(ServiceState.DRAINING, ServiceState.STOPPING, ServiceState.CRASHED)
             ServiceState.DRAINING -> setOf(ServiceState.STOPPING, ServiceState.CRASHED)

@@ -117,6 +117,7 @@ class ScalingEngine(
             val readyServices = services.filter { it.state == ServiceState.READY }
 
             // Count services that are starting up — don't start more while these are pending
+            // PREPARED services are in the warm pool, not yet started — exclude them from pending count
             val pendingCount = services.count { it.state in listOf(ServiceState.PREPARING, ServiceState.STARTING) }
 
             // Services with a customState (e.g. INGAME, ENDING) are not routable —

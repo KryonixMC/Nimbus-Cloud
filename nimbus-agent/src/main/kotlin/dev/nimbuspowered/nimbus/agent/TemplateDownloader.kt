@@ -21,6 +21,32 @@ class TemplateDownloader(
     private val client = HttpClient(CIO)
     private val templateHashes = mutableMapOf<String, String>()
 
+    /**
+     * Ensures all templates in a stack are downloaded. Uses a combined hash
+     * keyed by the stack signature to detect when any template has changed.
+     */
+    suspend fun ensureTemplates(templateNames: List<String>, expectedHash: String, software: String = ""): Boolean {
+        if (templateNames.size <= 1) {
+            return ensureTemplate(templateNames.firstOrNull() ?: return false, expectedHash, software)
+        }
+
+        val stackKey = templateNames.joinToString("+")
+        val currentHash = templateHashes[stackKey]
+        val allExist = templateNames.all { templatesDir.resolve(it).exists() }
+        if (allExist && currentHash == expectedHash) {
+            logger.debug("Template stack {} is up to date", templateNames)
+            return true
+        }
+
+        // Download each template individually
+        for (tmpl in templateNames) {
+            val ok = ensureTemplate(tmpl, "", software)
+            if (!ok) return false
+        }
+        templateHashes[stackKey] = expectedHash
+        return true
+    }
+
     suspend fun ensureTemplate(templateName: String, expectedHash: String, software: String = ""): Boolean {
         val templateDir = templatesDir.resolve(templateName)
 

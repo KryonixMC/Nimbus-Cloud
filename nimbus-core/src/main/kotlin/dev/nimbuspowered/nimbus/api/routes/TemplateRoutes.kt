@@ -93,7 +93,7 @@ fun Route.templateRoutes(
  */
 private fun resolveGlobalDirs(templatesDir: Path, software: String): List<Path> {
     val dirs = mutableListOf<Path>()
-    val vanillaBased = software in listOf("PAPER", "PURPUR", "VELOCITY")
+    val vanillaBased = software in listOf("PAPER", "PURPUR", "PUFFERFISH", "LEAF", "FOLIA", "VELOCITY")
     if (vanillaBased) {
         dirs.add(templatesDir.resolve("global"))
     }

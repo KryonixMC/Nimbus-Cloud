@@ -71,6 +71,43 @@ class TemplateManager {
     }
 
     /**
+     * Prepares a service from a stack of templates applied in order.
+     * The first template is the base, subsequent templates overlay on top (overwriting files).
+     * This enables template composition: e.g., ["global", "paper-shared", "BedWars"].
+     */
+    fun prepareServiceFromStack(
+        templateNames: List<String>,
+        targetDir: Path,
+        templatesDir: Path,
+        preserveExisting: Boolean = false
+    ): Path {
+        require(templateNames.isNotEmpty()) { "Template stack must not be empty" }
+
+        if (templateNames.size == 1) {
+            return prepareService(templateNames.first(), targetDir, templatesDir, preserveExisting)
+        }
+
+        logger.info("Preparing service from template stack {} -> {}", templateNames, targetDir)
+        Files.createDirectories(targetDir)
+
+        // Apply first template as base
+        prepareService(templateNames.first(), targetDir, templatesDir, preserveExisting)
+
+        // Overlay remaining templates in order (always overwrite)
+        for (i in 1 until templateNames.size) {
+            val overlayDir = templatesDir.resolve(templateNames[i])
+            if (overlayDir.exists() && overlayDir.isDirectory()) {
+                applyGlobalTemplate(overlayDir, targetDir)
+                logger.info("Applied template overlay '{}' to '{}'", templateNames[i], targetDir)
+            } else {
+                logger.warn("Template '{}' in stack does not exist, skipping", templateNames[i])
+            }
+        }
+
+        return targetDir
+    }
+
+    /**
      * Overlays a global template directory onto the service working directory.
      * Always overwrites existing files (used for shared plugins, configs, etc.).
      */

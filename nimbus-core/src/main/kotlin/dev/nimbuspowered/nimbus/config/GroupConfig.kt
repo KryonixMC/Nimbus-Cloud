@@ -33,6 +33,7 @@ data class GroupDefinition(
     val name: String,
     val type: GroupType = GroupType.DYNAMIC,
     val template: String = "",
+    val templates: List<String> = emptyList(),
     val software: ServerSoftware = ServerSoftware.PAPER,
     val version: String = "1.21.4",
     @SerialName("modloader_version")
@@ -47,7 +48,14 @@ data class GroupDefinition(
     val scaling: ScalingConfig = ScalingConfig(),
     val lifecycle: LifecycleConfig = LifecycleConfig(),
     val jvm: JvmConfig = JvmConfig()
-)
+) {
+    /**
+     * Returns the effective list of templates. If [templates] is set, it is used directly.
+     * Otherwise, falls back to the single [template] field for backwards compatibility.
+     */
+    val resolvedTemplates: List<String>
+        get() = templates.ifEmpty { listOfNotNull(template.ifEmpty { null }) }
+}
 
 @Serializable
 data class ResourcesConfig(
@@ -67,7 +75,9 @@ data class ScalingConfig(
     @SerialName("scale_threshold")
     val scaleThreshold: Double = 0.8,
     @SerialName("idle_timeout")
-    val idleTimeout: Long = 0
+    val idleTimeout: Long = 0,
+    @SerialName("warm_pool_size")
+    val warmPoolSize: Int = 0
 )
 
 @Serializable
@@ -79,7 +89,11 @@ data class LifecycleConfig(
     @SerialName("max_restarts")
     val maxRestarts: Int = 5,
     @SerialName("drain_timeout")
-    val drainTimeout: Long = 30
+    val drainTimeout: Long = 30,
+    @SerialName("deploy_on_stop")
+    val deployOnStop: Boolean = false,
+    @SerialName("deploy_excludes")
+    val deployExcludes: List<String> = listOf("logs", "crash-reports", "cache", "libraries", "*.tmp")
 )
 
 @Serializable

@@ -139,10 +139,11 @@ class AgentRuntime(
         when (msg) {
             is ClusterMessage.StartService -> {
                 scope.launch {
-                    // Ensure template is available
-                    val templateReady = templateDownloader.ensureTemplate(msg.templateName, msg.templateHash, msg.software)
-                    if (!templateReady) {
-                        logger.error("Cannot start '{}': template '{}' download failed", msg.serviceName, msg.templateName)
+                    // Ensure all templates in the stack are available
+                    val templatesToDownload = msg.templateNames.ifEmpty { listOf(msg.templateName) }
+                    val templatesReady = templateDownloader.ensureTemplates(templatesToDownload, msg.templateHash, msg.software)
+                    if (!templatesReady) {
+                        logger.error("Cannot start '{}': template download failed", msg.serviceName)
                         session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),
                             ClusterMessage.ServiceStateChanged(
                                 serviceName = msg.serviceName,
@@ -249,6 +250,32 @@ class AgentRuntime(
                 shutdown()
             }
 
+            // Remote file management
+            is ClusterMessage.FileListRequest -> {
+                scope.launch {
+                    val response = handleFileList(msg)
+                    session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), response)))
+                }
+            }
+            is ClusterMessage.FileReadRequest -> {
+                scope.launch {
+                    val response = handleFileRead(msg)
+                    session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), response)))
+                }
+            }
+            is ClusterMessage.FileWriteRequest -> {
+                scope.launch {
+                    val response = handleFileWrite(msg)
+                    session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), response)))
+                }
+            }
+            is ClusterMessage.FileDeleteRequest -> {
+                scope.launch {
+                    val response = handleFileDelete(msg)
+                    session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), response)))
+                }
+            }
+
             else -> {
                 logger.warn("Unhandled message type: {}", msg::class.simpleName)
             }
@@ -268,6 +295,93 @@ class AgentRuntime(
         client.close()
         scope.cancel()
         logger.info("Agent stopped.")
+    }
+
+    // ── Remote File Management ────────────────────────
+
+    private fun resolveServiceFilePath(serviceName: String, path: String): java.nio.file.Path? {
+        val workDir = processManager.getWorkDir(serviceName) ?: return null
+        if (path.contains("..")) return null
+        val resolved = workDir.resolve(path).normalize()
+        if (!resolved.startsWith(workDir)) return null
+        return resolved
+    }
+
+    private fun handleFileList(msg: ClusterMessage.FileListRequest): ClusterMessage.FileListResponse {
+        val resolved = resolveServiceFilePath(msg.serviceName, msg.path)
+            ?: return ClusterMessage.FileListResponse(msg.requestId, error = "Invalid path or service not found")
+
+        if (!resolved.exists()) {
+            return ClusterMessage.FileListResponse(msg.requestId, error = "Path not found")
+        }
+        if (!java.nio.file.Files.isDirectory(resolved)) {
+            return ClusterMessage.FileListResponse(msg.requestId, error = "Not a directory")
+        }
+
+        val entries = java.nio.file.Files.list(resolved).use { stream ->
+            stream.map { entry ->
+                dev.nimbuspowered.nimbus.protocol.RemoteFileEntry(
+                    name = entry.fileName.toString(),
+                    path = processManager.getWorkDir(msg.serviceName)!!.relativize(entry).toString().replace('\\', '/'),
+                    isDirectory = java.nio.file.Files.isDirectory(entry),
+                    size = if (java.nio.file.Files.isRegularFile(entry)) java.nio.file.Files.size(entry) else 0,
+                    lastModified = java.nio.file.Files.getLastModifiedTime(entry).toInstant().toString()
+                )
+            }.toList()
+        }
+        return ClusterMessage.FileListResponse(msg.requestId, entries)
+    }
+
+    private fun handleFileRead(msg: ClusterMessage.FileReadRequest): ClusterMessage.FileReadResponse {
+        val resolved = resolveServiceFilePath(msg.serviceName, msg.path)
+            ?: return ClusterMessage.FileReadResponse(msg.requestId, error = "Invalid path or service not found")
+
+        if (!resolved.exists()) {
+            return ClusterMessage.FileReadResponse(msg.requestId, error = "File not found")
+        }
+        if (java.nio.file.Files.isDirectory(resolved)) {
+            return ClusterMessage.FileReadResponse(msg.requestId, error = "Cannot read directory")
+        }
+
+        return try {
+            val content = java.nio.file.Files.readString(resolved)
+            ClusterMessage.FileReadResponse(msg.requestId, content, java.nio.file.Files.size(resolved))
+        } catch (e: Exception) {
+            ClusterMessage.FileReadResponse(msg.requestId, error = "Failed to read file: ${e.message}")
+        }
+    }
+
+    private fun handleFileWrite(msg: ClusterMessage.FileWriteRequest): ClusterMessage.FileWriteResponse {
+        val resolved = resolveServiceFilePath(msg.serviceName, msg.path)
+            ?: return ClusterMessage.FileWriteResponse(msg.requestId, false, "Invalid path or service not found")
+
+        return try {
+            resolved.parent?.let { java.nio.file.Files.createDirectories(it) }
+            java.nio.file.Files.writeString(resolved, msg.content)
+            ClusterMessage.FileWriteResponse(msg.requestId, true)
+        } catch (e: Exception) {
+            ClusterMessage.FileWriteResponse(msg.requestId, false, "Failed to write file: ${e.message}")
+        }
+    }
+
+    private fun handleFileDelete(msg: ClusterMessage.FileDeleteRequest): ClusterMessage.FileDeleteResponse {
+        val resolved = resolveServiceFilePath(msg.serviceName, msg.path)
+            ?: return ClusterMessage.FileDeleteResponse(msg.requestId, false, "Invalid path or service not found")
+
+        if (!resolved.exists()) {
+            return ClusterMessage.FileDeleteResponse(msg.requestId, false, "Path not found")
+        }
+
+        return try {
+            if (java.nio.file.Files.isDirectory(resolved)) {
+                resolved.toFile().deleteRecursively()
+            } else {
+                java.nio.file.Files.delete(resolved)
+            }
+            ClusterMessage.FileDeleteResponse(msg.requestId, true)
+        } catch (e: Exception) {
+            ClusterMessage.FileDeleteResponse(msg.requestId, false, "Failed to delete: ${e.message}")
+        }
     }
 
     private fun getSystemCpuUsage(): Double {

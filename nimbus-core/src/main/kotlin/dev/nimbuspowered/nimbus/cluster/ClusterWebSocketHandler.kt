@@ -22,7 +22,8 @@ class ClusterWebSocketHandler(
     private val registry: ServiceRegistry,
     private val eventBus: EventBus,
     private val portAllocator: PortAllocator? = null,
-    private val groupManager: GroupManager? = null
+    private val groupManager: GroupManager? = null,
+    val remoteFileProxy: RemoteFileProxy = RemoteFileProxy()
 ) {
     private val logger = LoggerFactory.getLogger(ClusterWebSocketHandler::class.java)
 
@@ -194,6 +195,11 @@ class ClusterWebSocketHandler(
             is ClusterMessage.LogMessage -> {
                 logger.info("[{}] {}: {}", nodeId, message.level, message.message)
             }
+            // Remote file management responses
+            is ClusterMessage.FileListResponse -> remoteFileProxy.onFileListResponse(message)
+            is ClusterMessage.FileReadResponse -> remoteFileProxy.onFileReadResponse(message)
+            is ClusterMessage.FileWriteResponse -> remoteFileProxy.onFileWriteResponse(message)
+            is ClusterMessage.FileDeleteResponse -> remoteFileProxy.onFileDeleteResponse(message)
             else -> {
                 logger.warn("Unexpected message type from node '{}': {}", nodeId, message::class.simpleName)
             }

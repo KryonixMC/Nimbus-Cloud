@@ -21,6 +21,10 @@ sealed class NimbusEvent {
     data class ScaleUp(val groupName: String, val currentInstances: Int, val targetInstances: Int, val reason: String) : NimbusEvent()
     data class ScaleDown(val groupName: String, val serviceName: String, val reason: String) : NimbusEvent()
 
+    // Warm Pool
+    data class ServicePrepared(val serviceName: String, val groupName: String) : NimbusEvent()
+    data class WarmPoolReplenished(val groupName: String, val poolSize: Int) : NimbusEvent()
+
     // Custom state (set by plugins via SDK)
     data class ServiceCustomStateChanged(
         val serviceName: String,
@@ -29,9 +33,13 @@ sealed class NimbusEvent {
         val newState: String?
     ) : NimbusEvent()
 
-    // Player (for future use)
-    data class PlayerConnected(val playerName: String, val serviceName: String) : NimbusEvent()
-    data class PlayerDisconnected(val playerName: String, val serviceName: String) : NimbusEvent()
+    // Service Deployments
+    data class ServiceDeployed(val serviceName: String, val groupName: String, val filesChanged: Int) : NimbusEvent()
+
+    // Player
+    data class PlayerConnected(val playerName: String, val uuid: String, val serviceName: String) : NimbusEvent()
+    data class PlayerDisconnected(val playerName: String, val uuid: String, val serviceName: String) : NimbusEvent()
+    data class PlayerServerSwitch(val playerName: String, val uuid: String, val fromService: String, val toService: String) : NimbusEvent()
 
     // Group management
     data class GroupCreated(val groupName: String) : NimbusEvent()

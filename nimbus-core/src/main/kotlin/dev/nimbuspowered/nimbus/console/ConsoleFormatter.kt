@@ -92,6 +92,7 @@ object ConsoleFormatter {
         ServiceState.READY -> "${GREEN}●$RESET"
         ServiceState.STARTING -> "${YELLOW}●$RESET"
         ServiceState.PREPARING -> "${BLUE}○$RESET"
+        ServiceState.PREPARED -> "${CYAN}◉$RESET"
         ServiceState.DRAINING -> "${MAGENTA}●$RESET"
         ServiceState.STOPPING -> "${YELLOW}●$RESET"
         ServiceState.STOPPED -> "${DIM}○$RESET"
@@ -102,6 +103,7 @@ object ConsoleFormatter {
         ServiceState.READY -> GREEN
         ServiceState.STARTING -> YELLOW
         ServiceState.PREPARING -> BLUE
+        ServiceState.PREPARED -> CYAN
         ServiceState.DRAINING -> MAGENTA
         ServiceState.STOPPING -> YELLOW
         ServiceState.STOPPED -> GRAY
@@ -183,12 +185,20 @@ object ConsoleFormatter {
                 "${error("✖ CRASHED")} ${BOLD}${event.serviceName}${RESET} ${DIM}(exit=${event.exitCode}, attempt=${event.restartAttempt})${RESET}"
             is NimbusEvent.ServiceRecovered ->
                 "${success("⟳ RECOVERED")} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName}, PID=${event.pid}, port=${event.port})${RESET}"
+            is NimbusEvent.ServiceDeployed ->
+                "${success("⬆ DEPLOYED")} ${BOLD}${event.serviceName}${RESET} ${DIM}(${event.filesChanged} file(s) → template, group=${event.groupName})${RESET}"
+            is NimbusEvent.ServicePrepared ->
+                "${colorize("◉ PREPARED", CYAN)} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName}, warm pool)${RESET}"
+            is NimbusEvent.WarmPoolReplenished ->
+                "${colorize("◉ WARM POOL", CYAN)} group=${BOLD}${event.groupName}${RESET} ${DIM}(${event.poolSize} prepared)${RESET}"
             is NimbusEvent.ScaleUp ->
                 "${success("↑ SCALE UP")} group=${BOLD}${event.groupName}${RESET} ${event.currentInstances} → ${event.targetInstances} ${DIM}(${event.reason})${RESET}"
             is NimbusEvent.ScaleDown ->
                 "${warn("↓ SCALE DOWN")} ${BOLD}${event.serviceName}${RESET} ${DIM}from group=${event.groupName} (${event.reason})${RESET}"
             is NimbusEvent.PlayerConnected ->
                 "${success("+")} ${BOLD}${event.playerName}${RESET} joined ${CYAN}${event.serviceName}${RESET}"
+            is NimbusEvent.PlayerServerSwitch ->
+                "${info("⇄")} ${BOLD}${event.playerName}${RESET} ${CYAN}${event.fromService}${RESET} → ${CYAN}${event.toService}${RESET}"
             is NimbusEvent.PlayerDisconnected ->
                 "${error("−")} ${BOLD}${event.playerName}${RESET} left ${CYAN}${event.serviceName}${RESET}"
             is NimbusEvent.ApiStarted ->

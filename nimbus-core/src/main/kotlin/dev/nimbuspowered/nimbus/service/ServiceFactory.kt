@@ -107,10 +107,17 @@ class ServiceFactory(
             isStatic = isStatic
         )
 
-        // Ensure template directory exists and JAR is available (auto-download/install if missing)
-        val templateDir = templatesDir.resolve(group.config.group.template)
+        // Ensure template directories exist and JAR is available (auto-download/install if missing)
+        val resolvedTemplates = group.config.group.resolvedTemplates
+        val primaryTemplate = resolvedTemplates.firstOrNull() ?: group.name.lowercase()
+        val templateDir = templatesDir.resolve(primaryTemplate)
         if (!templateDir.exists()) {
             templateDir.createDirectories()
+        }
+        // Ensure overlay template directories exist
+        for (tmpl in resolvedTemplates.drop(1)) {
+            val overlayDir = templatesDir.resolve(tmpl)
+            if (!overlayDir.exists()) overlayDir.createDirectories()
         }
 
         val jarAvailable = softwareResolver.ensureJarAvailable(
@@ -164,8 +171,8 @@ class ServiceFactory(
         logger.info("Preparing service '{}' on port {}", serviceName, port)
 
         return try {
-            val workDir = templateManager.prepareService(
-                templateName = group.config.group.template,
+            val workDir = templateManager.prepareServiceFromStack(
+                templateNames = resolvedTemplates,
                 targetDir = workingDirectory,
                 templatesDir = templatesDir,
                 preserveExisting = isStatic

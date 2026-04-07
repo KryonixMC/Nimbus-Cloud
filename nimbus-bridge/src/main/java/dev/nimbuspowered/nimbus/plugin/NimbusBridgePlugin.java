@@ -115,7 +115,7 @@ public class NimbusBridgePlugin {
                 cloudCommand.setMaintenanceHandler(maintenanceHandler);
             }
 
-            proxySyncListener = new ProxySyncListener(server, logger, sharedApiClient, sharedEventStream);
+            proxySyncListener = new ProxySyncListener(server, logger, sharedApiClient, sharedEventStream, sharedSdkClient);
             proxySyncListener.setMaintenanceHandler(maintenanceHandler);
             proxySyncListener.init();
             server.getEventManager().register(this, proxySyncListener);

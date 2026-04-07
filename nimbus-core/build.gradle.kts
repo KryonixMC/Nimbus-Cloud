@@ -142,7 +142,8 @@ tasks.jar {
 val embeddedModules = mapOf(
     ":nimbus-module-perms" to "nimbus-module-perms.jar",
     ":nimbus-module-display" to "nimbus-module-display.jar",
-    ":nimbus-module-scaling" to "nimbus-module-scaling.jar"
+    ":nimbus-module-scaling" to "nimbus-module-scaling.jar",
+    ":nimbus-module-players" to "nimbus-module-players.jar"
 )
 
 tasks.shadowJar {

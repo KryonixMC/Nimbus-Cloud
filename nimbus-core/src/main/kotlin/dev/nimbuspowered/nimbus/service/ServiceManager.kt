@@ -50,13 +50,17 @@ class ServiceManager(
 
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
 
+    /** Warm pool manager, set after construction in Nimbus.kt. */
+    var warmPoolManager: WarmPoolManager? = null
+
     private val processHandles = ConcurrentHashMap<String, ServiceHandle>()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
     private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
     private val compatibilityChecker = CompatibilityChecker(groupManager, config, javaResolver)
     private val performanceOptimizer = PerformanceOptimizer()
+    private val serviceDeployer = dev.nimbuspowered.nimbus.template.ServiceDeployer()
 
-    private val serviceFactory = ServiceFactory(
+    internal val serviceFactory = ServiceFactory(
         config = config,
         registry = registry,
         portAllocator = portAllocator,
@@ -71,7 +75,10 @@ class ServiceManager(
     )
 
     suspend fun startService(groupName: String): Service? {
-        val prepared = serviceFactory.prepare(groupName) ?: return null
+        // Try warm pool first for instant start
+        val prepared = warmPoolManager?.take(groupName)
+            ?: serviceFactory.prepare(groupName)
+            ?: return null
         val (service, workDir, command, readyPattern, isModded, readyTimeout) = prepared
         val serviceName = service.name
 
@@ -183,8 +190,10 @@ class ServiceManager(
         groupConfig: GroupDefinition
     ): ClusterMessage.StartService {
         val templatesDir = Path(config.paths.templates)
-        val templateDir = templatesDir.resolve(groupConfig.template)
-        val templateHash = computeTemplateHash(templateDir, groupConfig.software)
+        val resolvedTemplates = groupConfig.resolvedTemplates
+        val primaryTemplate = resolvedTemplates.firstOrNull() ?: groupConfig.name.lowercase()
+        val templateDir = templatesDir.resolve(primaryTemplate)
+        val templateHash = computeTemplateHash(templateDir, groupConfig.software, resolvedTemplates)
         val forwardingMode = compatibilityChecker.determineForwardingMode()
         val forwardingSecret = computeForwardingSecret()
         val isModded = groupConfig.software in listOf(
@@ -195,7 +204,8 @@ class ServiceManager(
             serviceName = service.name,
             groupName = service.groupName,
             port = service.port,
-            templateName = groupConfig.template,
+            templateName = primaryTemplate,
+            templateNames = resolvedTemplates,
             templateHash = templateHash,
             software = groupConfig.software.name,
             version = groupConfig.version,
@@ -284,7 +294,7 @@ class ServiceManager(
         registry.unregister(service.name)
     }
 
-    private fun computeTemplateHash(templateDir: Path, software: ServerSoftware): String {
+    private fun computeTemplateHash(templateDir: Path, software: ServerSoftware, templateStack: List<String> = emptyList()): String {
         if (!templateDir.exists()) return ""
         val digest = MessageDigest.getInstance("SHA-256")
         val templatesDir = Path(config.paths.templates)
@@ -298,8 +308,14 @@ class ServiceManager(
             hashDir(digest, templatesDir.resolve("global_proxy"))
         }
 
-        // Then hash the group template
-        hashDir(digest, templateDir)
+        // Hash all templates in the stack (or just the primary template)
+        if (templateStack.size > 1) {
+            for (tmpl in templateStack) {
+                hashDir(digest, templatesDir.resolve(tmpl))
+            }
+        } else {
+            hashDir(digest, templateDir)
+        }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
@@ -444,6 +460,21 @@ class ServiceManager(
             registry.unregister(name)
             processHandles.remove(name)
             stateStore?.removeService(name)
+
+            // Deploy changed files back to template (if configured)
+            val group = groupManager.getGroup(service.groupName)
+            if (group?.config?.group?.lifecycle?.deployOnStop == true) {
+                val templatesDir = Path(config.paths.templates)
+                val primaryTemplate = group.config.group.resolvedTemplates.firstOrNull()
+                if (primaryTemplate != null) {
+                    val templateDir = templatesDir.resolve(primaryTemplate)
+                    val excludes = group.config.group.lifecycle.deployExcludes
+                    val changed = serviceDeployer.deployBack(service.workingDirectory, templateDir, excludes)
+                    if (changed > 0) {
+                        eventBus.emit(NimbusEvent.ServiceDeployed(name, service.groupName, changed))
+                    }
+                }
+            }
 
             if (!service.isStatic) {
                 cleanupWorkingDirectory(service.workingDirectory)

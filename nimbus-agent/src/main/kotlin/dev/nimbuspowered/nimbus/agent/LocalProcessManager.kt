@@ -29,7 +29,7 @@ class LocalProcessManager(
         return try {
             val templatesDir = baseDir.resolve("templates")
             val servicesDir = baseDir.resolve("services")
-            val templateDir = templatesDir.resolve(msg.templateName)
+            val resolvedTemplates = msg.templateNames.ifEmpty { listOf(msg.templateName) }
 
             val workDir = if (msg.isStatic) {
                 servicesDir.resolve("static").resolve(msg.serviceName)
@@ -39,8 +39,15 @@ class LocalProcessManager(
             }
             workDir.createDirectories()
 
-            // Copy template to work dir
-            copyTemplate(templateDir, workDir, msg.isStatic)
+            // Copy template stack to work dir (first = base, rest = overlays)
+            val primaryDir = templatesDir.resolve(resolvedTemplates.first())
+            copyTemplate(primaryDir, workDir, msg.isStatic)
+            for (tmpl in resolvedTemplates.drop(1)) {
+                val overlayDir = templatesDir.resolve(tmpl)
+                if (overlayDir.exists()) {
+                    copyTemplate(overlayDir, workDir, preserveExisting = false)
+                }
+            }
 
             // Patch server.properties port + online-mode
             patchServerPort(workDir, msg.port)

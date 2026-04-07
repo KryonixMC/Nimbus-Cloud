@@ -28,6 +28,7 @@ import dev.nimbuspowered.nimbus.service.ControllerStateStore
 import dev.nimbuspowered.nimbus.service.PortAllocator
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
+import dev.nimbuspowered.nimbus.service.WarmPoolManager
 import dev.nimbuspowered.nimbus.setup.SetupWizard
 import dev.nimbuspowered.nimbus.template.PluginDeployer
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
@@ -330,6 +331,17 @@ fun nimbusMain() = runBlocking {
     val stressTestManager = StressTestManager(registry, groupManager, eventBus, proxySyncManager, scope)
     scalingEngine.stressTestManager = stressTestManager
 
+    // Create warm pool manager (reuses ServiceManager's internal ServiceFactory)
+    val warmPoolManager = WarmPoolManager(
+        serviceFactory = serviceManager.serviceFactory,
+        registry = registry,
+        groupManager = groupManager,
+        portAllocator = portAllocator,
+        eventBus = eventBus,
+        scope = scope
+    )
+    serviceManager.warmPoolManager = warmPoolManager
+
     // Scaling engine is created here but started AFTER startMinimumInstances()
     // to prevent it from racing the phased startup (proxy must be READY before backends).
     var scalingJob: kotlinx.coroutines.Job? = null
@@ -389,6 +401,7 @@ fun nimbusMain() = runBlocking {
             auditCollector?.shutdown()
             metricsCollector.shutdown()
             metricsJobs.forEach { it.cancel() }
+            warmPoolManager.shutdown()
             scalingEngine.shutdown()
             scalingJob?.cancel()
             moduleManager.disableAll()
@@ -485,6 +498,9 @@ fun nimbusMain() = runBlocking {
     scalingJob = scalingEngine.start()
     logger.info("Scaling engine started")
 
+    // Start warm pool replenishment after scaling engine
+    val warmPoolJob = warmPoolManager.start()
+
     // Start interactive console REPL (blocks until shutdown)
     console.start()
 
@@ -504,6 +520,8 @@ fun nimbusMain() = runBlocking {
         auditCollector?.shutdown()
         metricsJobs.forEach { it.cancel() }
         updaterJob.cancel()
+        warmPoolManager.shutdown()
+        warmPoolJob.cancel()
         scalingEngine.shutdown()
         scalingJob?.cancel()
         moduleManager.disableAll()

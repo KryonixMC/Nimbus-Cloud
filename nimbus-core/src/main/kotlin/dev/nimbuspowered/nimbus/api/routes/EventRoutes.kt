@@ -166,6 +166,21 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
                 if (newState != null) put("newState", newState)
             }
         )
+        is NimbusEvent.ServiceDeployed -> EventMessage(
+            type = "SERVICE_DEPLOYED",
+            timestamp = timestamp.toString(),
+            data = mapOf("service" to serviceName, "group" to groupName, "filesChanged" to filesChanged.toString())
+        )
+        is NimbusEvent.ServicePrepared -> EventMessage(
+            type = "SERVICE_PREPARED",
+            timestamp = timestamp.toString(),
+            data = mapOf("service" to serviceName, "group" to groupName)
+        )
+        is NimbusEvent.WarmPoolReplenished -> EventMessage(
+            type = "WARM_POOL_REPLENISHED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName, "poolSize" to poolSize.toString())
+        )
         is NimbusEvent.ScaleUp -> EventMessage(
             type = "SCALE_UP",
             timestamp = timestamp.toString(),
@@ -179,12 +194,17 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
         is NimbusEvent.PlayerConnected -> EventMessage(
             type = "PLAYER_CONNECTED",
             timestamp = timestamp.toString(),
-            data = mapOf("player" to playerName, "service" to serviceName)
+            data = mapOf("player" to playerName, "uuid" to uuid, "service" to serviceName)
+        )
+        is NimbusEvent.PlayerServerSwitch -> EventMessage(
+            type = "PLAYER_SERVER_SWITCH",
+            timestamp = timestamp.toString(),
+            data = mapOf("player" to playerName, "uuid" to uuid, "from" to fromService, "to" to toService)
         )
         is NimbusEvent.PlayerDisconnected -> EventMessage(
             type = "PLAYER_DISCONNECTED",
             timestamp = timestamp.toString(),
-            data = mapOf("player" to playerName, "service" to serviceName)
+            data = mapOf("player" to playerName, "uuid" to uuid, "service" to serviceName)
         )
         is NimbusEvent.GroupCreated -> EventMessage(
             type = "GROUP_CREATED",

@@ -8,10 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
-import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.update
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -33,9 +31,6 @@ class MetricsCollector(
     // Queues for batched writes
     private val serviceEventQueue = ConcurrentLinkedQueue<ServiceEventEntry>()
     private val scalingEventQueue = ConcurrentLinkedQueue<ScalingEventEntry>()
-    private val playerConnectQueue = ConcurrentLinkedQueue<PlayerConnectEntry>()
-    private val playerDisconnectQueue = ConcurrentLinkedQueue<PlayerDisconnectEntry>()
-
     private var flushJob: Job? = null
 
     private data class ServiceEventEntry(
@@ -48,14 +43,6 @@ class MetricsCollector(
         val timestamp: String, val eventType: String, val groupName: String,
         val serviceName: String? = null, val currentInstances: Int? = null,
         val targetInstances: Int? = null, val reason: String
-    )
-
-    private data class PlayerConnectEntry(
-        val playerName: String, val serviceName: String, val connectedAt: String
-    )
-
-    private data class PlayerDisconnectEntry(
-        val playerName: String, val serviceName: String, val disconnectedAt: String
     )
 
     fun start(): List<Job> {
@@ -122,21 +109,6 @@ class MetricsCollector(
             ))
         }
 
-        // Player sessions
-        jobs += eventBus.on<NimbusEvent.PlayerConnected> { event ->
-            playerConnectQueue.add(PlayerConnectEntry(
-                playerName = event.playerName, serviceName = event.serviceName,
-                connectedAt = event.timestamp.toString()
-            ))
-        }
-
-        jobs += eventBus.on<NimbusEvent.PlayerDisconnected> { event ->
-            playerDisconnectQueue.add(PlayerDisconnectEntry(
-                playerName = event.playerName, serviceName = event.serviceName,
-                disconnectedAt = event.timestamp.toString()
-            ))
-        }
-
         // Start periodic flush loop
         flushJob = scope.launch {
             while (isActive) {
@@ -154,10 +126,7 @@ class MetricsCollector(
     private suspend fun flush() {
         val serviceEvents = drainQueue(serviceEventQueue)
         val scalingEvents = drainQueue(scalingEventQueue)
-        val connects = drainQueue(playerConnectQueue)
-        val disconnects = drainQueue(playerDisconnectQueue)
-
-        if (serviceEvents.isEmpty() && scalingEvents.isEmpty() && connects.isEmpty() && disconnects.isEmpty()) return
+        if (serviceEvents.isEmpty() && scalingEvents.isEmpty()) return
 
         try {
             db.query {
@@ -185,29 +154,9 @@ class MetricsCollector(
                     }
                 }
 
-                if (connects.isNotEmpty()) {
-                    PlayerSessions.batchInsert(connects) { entry ->
-                        this[PlayerSessions.playerName] = entry.playerName
-                        this[PlayerSessions.serviceName] = entry.serviceName
-                        this[PlayerSessions.connectedAt] = entry.connectedAt
-                    }
-                }
-
-                // Disconnects need individual UPDATEs (different WHERE per row)
-                for (entry in disconnects) {
-                    PlayerSessions.update(
-                        where = {
-                            (PlayerSessions.playerName eq entry.playerName) and
-                            (PlayerSessions.serviceName eq entry.serviceName) and
-                            (PlayerSessions.disconnectedAt.isNull())
-                        }
-                    ) {
-                        it[disconnectedAt] = entry.disconnectedAt
-                    }
-                }
             }
         } catch (e: Exception) {
-            val total = serviceEvents.size + scalingEvents.size + connects.size + disconnects.size
+            val total = serviceEvents.size + scalingEvents.size
             logger.warn("Failed to flush metrics batch ({} entries): {}", total, e.message)
         }
     }
@@ -245,9 +194,8 @@ class MetricsCollector(
             db.query {
                 val deletedServices = ServiceEvents.deleteWhere { timestamp less cutoff }
                 val deletedScaling = ScalingEvents.deleteWhere { timestamp less cutoff }
-                val deletedSessions = PlayerSessions.deleteWhere { connectedAt less cutoff }
-                logger.info("Metrics retention cleanup: pruned {} service events, {} scaling events, {} player sessions older than {} days",
-                    deletedServices, deletedScaling, deletedSessions, retentionDays)
+                logger.info("Metrics retention cleanup: pruned {} service events, {} scaling events older than {} days",
+                    deletedServices, deletedScaling, retentionDays)
             }
         } catch (e: Exception) {
             logger.warn("Failed to prune old metrics: {}", e.message)

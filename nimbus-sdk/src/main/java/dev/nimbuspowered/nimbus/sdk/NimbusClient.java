@@ -102,6 +102,39 @@ public class NimbusClient implements AutoCloseable {
         return put("/api/services/" + encode(serviceName) + "/players", body).thenApply(r -> null);
     }
 
+    // ── Player Events (reported via generic proxy event endpoint) ──────
+
+    /** Report a player connect event to the controller. */
+    public CompletableFuture<Void> reportPlayerConnect(String serviceName, String playerName, String uuid) {
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "PLAYER_CONNECTED");
+        body.addProperty("player", playerName);
+        body.addProperty("uuid", uuid);
+        body.addProperty("service", serviceName);
+        return post("/api/proxy/events", body).thenApply(r -> null);
+    }
+
+    /** Report a player disconnect event to the controller. */
+    public CompletableFuture<Void> reportPlayerDisconnect(String serviceName, String playerName, String uuid) {
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "PLAYER_DISCONNECTED");
+        body.addProperty("player", playerName);
+        body.addProperty("uuid", uuid);
+        body.addProperty("service", serviceName);
+        return post("/api/proxy/events", body).thenApply(r -> null);
+    }
+
+    /** Report a player server switch event to the controller. */
+    public CompletableFuture<Void> reportPlayerSwitch(String playerName, String uuid, String fromService, String toService) {
+        JsonObject body = new JsonObject();
+        body.addProperty("type", "PLAYER_SERVER_SWITCH");
+        body.addProperty("player", playerName);
+        body.addProperty("uuid", uuid);
+        body.addProperty("fromService", fromService);
+        body.addProperty("toService", toService);
+        return post("/api/proxy/events", body).thenApply(r -> null);
+    }
+
     // ── Health Reporting ────────────────────────────────────────────────
 
     /** Report TPS and memory usage for a service (called periodically by SDK). */

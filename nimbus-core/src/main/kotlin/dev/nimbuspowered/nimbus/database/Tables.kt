@@ -60,18 +60,3 @@ object ScalingEvents : Table("scaling_events") {
     }
 }
 
-object PlayerSessions : Table("player_sessions") {
-    val id = integer("id").autoIncrement()
-    val playerName = varchar("player_name", 16)
-    val serviceName = varchar("service_name", 128)
-    val connectedAt = varchar("connected_at", 30)
-    val disconnectedAt = varchar("disconnected_at", 30).nullable()
-
-    override val primaryKey = PrimaryKey(id)
-
-    init {
-        index(false, playerName, connectedAt)
-        index(false, serviceName)
-        index(false, playerName, serviceName, disconnectedAt)
-    }
-}
