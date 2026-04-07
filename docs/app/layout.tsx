@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   description:
     'Dynamic server management from a single JAR. Auto-scaling, proxy integration, and a powerful API.',
-  icons: { icon: '/icon.png' },
+  icons: { icon: './icon.png' },
   metadataBase: new URL('https://NimbusPowered.github.io/Nimbus'),
   openGraph: {
     type: 'website',

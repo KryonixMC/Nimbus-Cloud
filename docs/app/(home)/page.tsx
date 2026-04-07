@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { InstallTabs } from './install-tabs';
 
+const basePath = process.env.NODE_ENV === 'production' ? '/Nimbus' : '';
+
 const features = [
   {
     icon: <ZapIcon className="size-5" />,
@@ -227,7 +229,7 @@ export default function Page() {
             <div>
               <div className="flex items-center gap-2.5 mb-3">
                 <Image
-                  src="/icon.png"
+                  src={`${basePath}/icon.png`}
                   alt="Nimbus"
                   width={28}
                   height={28}
