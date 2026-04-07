@@ -39,6 +39,9 @@ jobs:
         run: npm run build
         working-directory: docs
 
+      - name: Add .nojekyll
+        run: touch docs/out/.nojekyll
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
