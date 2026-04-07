@@ -176,6 +176,55 @@ my-network/
 | `permissions/` | Built-in permission system data. |
 | `plugins/` | Optional Nimbus plugins available for manual installation. |
 
+## Remote CLI Installation
+
+The **Remote CLI** (`nimbus-cli`) is a standalone tool for managing Nimbus from any machine. It connects to the controller's REST API and provides the same commands, tab completion, and formatting as the local console.
+
+<Tabs items={['Linux / macOS', 'Windows']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+Or download `nimbus-cli-<version>.jar` from [GitHub Releases](https://github.com/NimbusPowered/Nimbus/releases) and run it directly:
+
+```bash title="Terminal"
+java -jar nimbus-cli-0.3.1.jar
+```
+
+On first launch without arguments, the CLI starts an interactive setup wizard:
+
+```text title="Nimbus CLI"
+Nimbus Remote CLI — Connection Setup
+No connection configured. Enter your controller details.
+
+Host [127.0.0.1]: 192.168.1.10
+Port [8080]: 8080
+API Token: your-api-token-here
+
+Save as profile? (name or empty to skip): prod
+Saved as 'prod' (set as default).
+```
+
+After saving a profile, subsequent launches connect automatically. You can also pass credentials directly:
+
+```bash title="Terminal"
+nimbus-cli --host 192.168.1.10 --port 8080 --token your-api-token
+```
+
+<Callout title="API must be enabled" type="warn">
+The controller's REST API must be running and accessible from the CLI machine. Configure `[api] bind = "0.0.0.0"` in `nimbus.toml` if you need remote access (default is `127.0.0.1`).
+</Callout>
+
+See the [Remote CLI guide](/docs/guide/remote-cli) for full usage documentation.
+
 ## What's Next?
 
 Follow the [Quick Start](/docs/guide/quickstart) guide to walk through your first network setup, or read about [Core Concepts](/docs/guide/concepts) to understand how Nimbus works.

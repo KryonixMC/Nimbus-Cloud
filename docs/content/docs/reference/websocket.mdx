@@ -5,7 +5,7 @@ description: Real-time WebSocket endpoints for event streaming, per-service cons
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Nimbus provides two WebSocket endpoints for real-time communication: a global event stream and per-service console access.
+Nimbus provides three WebSocket endpoints for real-time communication: a global event stream, per-service console access, and the Remote CLI console stream.
 
 ## Authentication
 
@@ -182,6 +182,90 @@ async def console_session():
 
 asyncio.run(console_session())
 ```
+
+---
+
+## CLI Console Stream
+
+### `ws://host:port/api/console/stream`
+
+Multiplexed WebSocket for the [Remote CLI](/docs/guide/remote-cli). Carries command execution, tab completion, live events, and screen sessions over a single connection.
+
+**Auth:** Master API token required (via `Authorization` header or `?token=` query parameter).
+
+### Client → Server Messages
+
+```json title="Execute a command"
+{"type": "execute", "id": "1", "input": "status"}
+```
+
+```json title="Tab completion via WebSocket"
+{"type": "complete", "id": "2", "input": "start Lo"}
+```
+
+```json title="Attach to service console"
+{"type": "screen_attach", "service": "Lobby-1"}
+```
+
+```json title="Send input to attached screen"
+{"type": "screen_input", "service": "Lobby-1", "text": "say hello"}
+```
+
+```json title="Detach from screen"
+{"type": "screen_detach"}
+```
+
+```json title="Hello (sent on connect with client info)"
+{"type": "hello", "text": "{\"username\":\"jonas\",\"hostname\":\"DESKTOP-ABC\",\"os\":\"Windows 11 amd64\"}"}
+```
+
+### Server → Client Messages
+
+```json title="Command output line"
+{"type": "output", "id": "1", "line": {"type": "header", "text": "Network: MyServer"}}
+```
+
+```json title="Command finished"
+{"type": "output_end", "id": "1"}
+```
+
+```json title="Tab completion results"
+{"type": "completions", "id": "2", "candidates": ["Lobby"]}
+```
+
+```json title="Live event"
+{"type": "event", "event": {"type": "SERVICE_READY", "timestamp": "...", "data": {"service": "Lobby-1"}}}
+```
+
+```json title="Screen output line"
+{"type": "screen_line", "text": "[14:23:01 INFO]: Done (2.341s)!"}
+```
+
+```json title="Screen attached/detached"
+{"type": "screen_attached", "text": "Lobby-1"}
+{"type": "screen_detached"}
+```
+
+### Output Line Types
+
+Each command output line has a `type` field that indicates how it should be rendered:
+
+| Type | Meaning | Rendering |
+|------|---------|-----------|
+| `header` | Section title | Bold, colored header bar |
+| `info` | Neutral information | Cyan/gray |
+| `success` | Success message | Green |
+| `error` | Error message | Red |
+| `item` | List item | Indented |
+| `text` | Pre-formatted text | Pass-through (may contain ANSI) |
+
+### Session Lifecycle
+
+1. Client connects and sends a `hello` message with system username, hostname, and OS
+2. Server emits `CliSessionConnected` event (visible on local console)
+3. Client sends `execute`/`complete`/`screen_*` messages, server responds
+4. On disconnect, server emits `CliSessionDisconnected` with duration and command count
+5. Session is persisted to the `cli_sessions` database table
 
 ---
 

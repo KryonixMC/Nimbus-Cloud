@@ -7,6 +7,10 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 Nimbus provides an interactive console with tab completion, command history, and ANSI-colored output. Type `help` or `?` to see all available commands.
 
+<Callout type="info">
+All console commands are also available remotely via the [Remote CLI](/docs/guide/remote-cli) (`nimbus-cli`). The CLI connects to the controller's API and provides the same experience — same commands, same tab completion, same formatting.
+</Callout>
+
 ## Service Management
 
 ### `list`
@@ -869,3 +873,43 @@ Manage cluster mode and load balancer settings from the console without editing 
 | `cluster token regenerate` | Generate a new cluster token (update all agents!) |
 
 **Tab completion:** `status`, `enable`, `disable`, `token` → `regenerate`.
+
+---
+
+## Remote CLI Sessions
+
+### `sessions`
+
+View active and historical Remote CLI connections. Each session records the client's username, hostname, OS, IP address, GeoIP location, duration, and number of commands executed.
+
+**Syntax:** `sessions [active|history] [--limit <n>]`
+
+#### `sessions active`
+
+Show currently connected Remote CLI sessions:
+
+```text title="Nimbus"
+nimbus » sessions active
+── Active CLI Sessions ──────────────────────────────
+ID   USER@HOST            OS                IP             LOCATION                CONNECTED         DURATION
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#3   jonas@DESKTOP-ABC    Windows 11 amd64  85.123.45.67   Berlin, Germany         07.04.2026 14:32  13m 7s
+1 active session(s)
+```
+
+#### `sessions history`
+
+Show recent session history (default: last 20):
+
+```text title="Nimbus"
+nimbus » sessions history --limit 5
+── CLI Session History ──────────────────────────────
+ID   USER@HOST            IP             LOCATION            CONNECTED         DURATION  CMDS  STATUS
+────────────────────────────────────────────────────────────────────────────────────────────────────────
+#3   jonas@DESKTOP-ABC    85.123.45.67   Berlin, Germany     07.04.2026 14:32  13m 7s    24    ● online
+#2   admin@server-01      10.0.0.5       local               07.04.2026 12:10  1h 23m    67    ○ closed
+#1   jonas@DESKTOP-ABC    85.123.45.67   Berlin, Germany     07.04.2026 10:05  45m 12s   31    ○ closed
+3 session(s)
+```
+
+**Tab completion:** `active`, `history`.

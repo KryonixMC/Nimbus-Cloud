@@ -98,14 +98,6 @@ const serverSoftware = [
     bestFor: 'Aggregates patches from multiple forks — for adventurous admins',
     logo: 'https://raw.githubusercontent.com/Winds-Studio/Leaf/ver/1.21.11/public/image/leaf_logo.png',
   },
-  {
-    name: 'Folia',
-    tagline: 'Regionized multithreading',
-    ratings: { performance: 5, stability: 3, plugins: 1, customization: 2 },
-    minVersion: '1.19.4+',
-    bestFor: '200+ spread-out players on 16+ core hardware',
-    logo: 'https://raw.githubusercontent.com/PaperMC/website/main/src/assets/brand/folia.svg',
-  },
 ] as const;
 
 const ratingLabels: Record<string, string> = {
@@ -251,7 +243,7 @@ export default function Page() {
           </p>
         </div>
 
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {serverSoftware.map((sw) => (
             <div
               key={sw.name}

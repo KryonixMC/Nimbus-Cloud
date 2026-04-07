@@ -2136,3 +2136,42 @@ a1b2c3d4e5f6...
 | 200 | Hash returned (plain text) |
 | 401 | Invalid token |
 | 404 | Template not found |
+
+---
+
+## Remote CLI
+
+Endpoints used by the [Remote CLI](/docs/guide/remote-cli) (`nimbus-cli`) for tab completion. Command execution and streaming happen over the [WebSocket console stream](./websocket#cli-console-stream).
+
+### POST /api/console/complete
+
+Server-side tab completion. Returns candidates for the given input buffer.
+
+**Auth:** Admin token required.
+
+**Request:**
+
+```json title="Request"
+{
+  "buffer": "start Lo",
+  "cursor": 8
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `buffer` | string | Current input buffer text |
+| `cursor` | integer | Cursor position (-1 for end of buffer) |
+
+**Response:**
+
+```json title="Response (200 OK)"
+{
+  "candidates": ["Lobby"]
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Completion candidates returned |
+| 401 | Authentication failed |

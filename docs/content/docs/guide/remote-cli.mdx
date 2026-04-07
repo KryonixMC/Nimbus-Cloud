@@ -1,0 +1,199 @@
+---
+title: Remote CLI
+description: Manage your Nimbus cloud from any machine using the standalone Remote CLI with full console features, session tracking, and GeoIP location.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+The **Remote CLI** (`nimbus-cli`) is a standalone 11MB binary that connects to the controller's API and provides the full console experience remotely — same commands, same tab completion, same ANSI formatting, same live events.
+
+## Installation
+
+<Tabs items={['Linux / macOS', 'Windows', 'Manual']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.ps1 | iex
+    ```
+  </Tab>
+  <Tab value="Manual">
+    Download `nimbus-cli-<version>.jar` from [GitHub Releases](https://github.com/NimbusPowered/Nimbus/releases) and run:
+    ```bash title="Terminal"
+    java -jar nimbus-cli-0.3.1.jar
+    ```
+  </Tab>
+</Tabs>
+
+**Requirements:** Java 21+ on the client machine. No Minecraft dependencies.
+
+## Connecting
+
+### Interactive Setup (First Run)
+
+When launched without arguments or saved profiles, the CLI starts an interactive setup:
+
+```text title="Nimbus CLI"
+Nimbus Remote CLI — Connection Setup
+No connection configured. Enter your controller details.
+
+Host [127.0.0.1]: 192.168.1.10
+Port [8080]: 8080
+API Token: your-api-token-here
+
+Save as profile? (name or empty to skip): prod
+Saved as 'prod' (set as default).
+```
+
+After saving a profile, subsequent launches connect automatically.
+
+### Command-Line Flags
+
+```bash title="Terminal"
+nimbus-cli --host 192.168.1.10 --port 8080 --token your-api-token
+```
+
+| Flag | Description |
+|------|-------------|
+| `--host`, `-h` | Controller host (default: `127.0.0.1`) |
+| `--port`, `-p` | Controller API port (default: `8080`) |
+| `--token`, `-t` | API authentication token |
+| `--profile` | Use a saved connection profile |
+| `--save-profile` | Save current connection as a named profile |
+| `--list-profiles` | List all saved profiles |
+| `--version`, `-v` | Show CLI version |
+| `--help` | Show usage help |
+
+### Connection Profiles
+
+Profiles are stored in `~/.nimbus/cli.json`. Save a profile once, then connect with just a name:
+
+```bash title="Terminal"
+# Save
+nimbus-cli --host 10.0.0.5 --port 8080 --token abc123 --save-profile staging
+
+# Use
+nimbus-cli --profile staging
+```
+
+The first saved profile becomes the default — launched without arguments, the CLI connects to it automatically.
+
+## Usage
+
+Once connected, you have the full Nimbus console:
+
+```text title="Nimbus CLI"
+  Nimbus Remote CLI
+  Controller: 192.168.1.10:8080 — connected
+  Type 'help' for commands, 'exit' to disconnect.
+
+nimbus (remote) » status
+── Network: MyNetwork ────────────────────────────
+Services: 5 ready / 5 total    Players: 36
+...
+
+nimbus (remote) » start BedWars
+ℹ Starting new instance for group 'BedWars'...
+✓ Service 'BedWars-3' starting on port 30005.
+```
+
+### Tab Completion
+
+Press **Tab** to complete command names, group names, service names — all resolved live from the controller.
+
+### Live Events
+
+Events from the controller (service starts, crashes, scaling, player connections) appear automatically above the prompt, just like the local console:
+
+```text title="Nimbus CLI"
+[14:32:05] ● READY BedWars-3 (group=BedWars)
+[14:33:12] ↑ SCALE UP BedWars 3 → 4 (high_load)
+nimbus (remote) »
+```
+
+### Screen Sessions
+
+Attach to a service's console remotely:
+
+```text title="Nimbus CLI"
+nimbus (remote) » screen Lobby-1
+ℹ Attaching to Lobby-1... (Ctrl+C or type 'exit' to detach)
+[Lobby-1] » say Hello from remote CLI!
+[14:35:01 INFO]: [Server] Hello from remote CLI!
+[Lobby-1] » exit
+ℹ Detached from Lobby-1.
+```
+
+### CLI-Only Commands
+
+These commands are only available in the Remote CLI:
+
+| Command | Description |
+|---------|-------------|
+| `exit` / `quit` / `disconnect` | Disconnect from the controller |
+| `reconnect` | Reconnect to the controller |
+| `clear` | Clear the local terminal |
+
+<Callout type="info">
+Some commands are not available remotely: `shutdown` (security — local console only), `create`, `import`, `update`, `plugins`, `modules` (require interactive terminal features on the controller).
+</Callout>
+
+## Session Tracking
+
+Every Remote CLI connection is logged on the controller. The CLI sends its system username, hostname, and OS on connect. The controller performs a GeoIP lookup on the client's public IP.
+
+### Console Events
+
+CLI connections appear as live events on the controller's local console:
+
+```text title="Controller Console"
+[14:32:05] ◆ CLI jonas@DESKTOP-ABC connected from 85.123.45.67 (Berlin, Germany) [Windows 11 amd64]
+[14:45:12] ◇ CLI jonas disconnected (85.123.45.67, 13m 7s, 24 cmds)
+```
+
+### `sessions` Command
+
+The controller provides a [`sessions`](/docs/guide/commands#sessions) command to view active and historical CLI connections:
+
+```text title="Controller Console"
+nimbus » sessions active
+── Active CLI Sessions ──────────────────────────────
+ID   USER@HOST            OS                IP             LOCATION            CONNECTED         DURATION
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#3   jonas@DESKTOP-ABC    Windows 11 amd64  85.123.45.67   Berlin, Germany     07.04.2026 14:32  13m 7s
+1 active session(s)
+```
+
+### Database Persistence
+
+Sessions are stored in the `cli_sessions` database table with:
+
+| Field | Description |
+|-------|-------------|
+| `session_id` | Unique session number |
+| `remote_ip` | Client IP address |
+| `client_username` | System username from client |
+| `client_hostname` | Machine hostname from client |
+| `client_os` | OS name and architecture |
+| `location` | GeoIP-resolved location (city, region, country) |
+| `connected_at` | Connection timestamp |
+| `disconnected_at` | Disconnection timestamp (null if active) |
+| `duration_seconds` | Total session duration |
+| `command_count` | Number of commands executed |
+
+## Architecture
+
+The CLI uses a hybrid REST + WebSocket approach:
+
+- **REST** (`POST /api/console/complete`) — Tab completion requests (stateless, fast)
+- **WebSocket** (`WS /api/console/stream`) — Command execution with streaming output, live events, and screen sessions (persistent connection)
+
+This architecture is designed to also serve the future Web Dashboard — the same endpoints will be consumed by a browser-based UI.
+
+<Callout type="info">
+The CLI requires the **master API token** (not a service token or scoped JWT). Only the full admin token can access the console stream.
+</Callout>

@@ -1070,3 +1070,67 @@ Emitted when a stress test starts, stops, or ramps to a new player target.
 <Callout type="info">
 Use this event to build real-time stress test dashboards. The `action` field indicates the lifecycle stage: `started` when a test begins, `ramped` when the target is adjusted mid-test, and `stopped` when the test ends.
 </Callout>
+
+---
+
+## CLI Session Events
+
+Events emitted when [Remote CLI](/docs/guide/remote-cli) clients connect to or disconnect from the controller.
+
+### `CLI_SESSION_CONNECTED`
+
+A Remote CLI client has connected.
+
+```json title="Event Payload"
+{
+  "type": "CLI_SESSION_CONNECTED",
+  "timestamp": "2026-04-07T14:32:05.123Z",
+  "data": {
+    "sessionId": "3",
+    "remoteIp": "85.123.45.67",
+    "clientUsername": "jonas",
+    "clientHostname": "DESKTOP-ABC",
+    "clientOs": "Windows 11 amd64",
+    "location": "Berlin, Brandenburg, Germany"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `sessionId` | Unique session number |
+| `remoteIp` | Client's IP address |
+| `clientUsername` | System username from the client machine |
+| `clientHostname` | Hostname of the client machine |
+| `clientOs` | Operating system and architecture |
+| `location` | GeoIP-resolved location (empty for local/private IPs) |
+
+### `CLI_SESSION_DISCONNECTED`
+
+A Remote CLI client has disconnected.
+
+```json title="Event Payload"
+{
+  "type": "CLI_SESSION_DISCONNECTED",
+  "timestamp": "2026-04-07T14:45:12.456Z",
+  "data": {
+    "sessionId": "3",
+    "remoteIp": "85.123.45.67",
+    "clientUsername": "jonas",
+    "durationSeconds": "787",
+    "commandCount": "24"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `sessionId` | Session number (matches the connect event) |
+| `remoteIp` | Client's IP address |
+| `clientUsername` | System username |
+| `durationSeconds` | Total session duration in seconds |
+| `commandCount` | Number of commands executed during the session |
+
+<Callout type="info">
+CLI session events are also displayed as live events on the controller's local console, making it easy to see who is managing the cloud remotely.
+</Callout>

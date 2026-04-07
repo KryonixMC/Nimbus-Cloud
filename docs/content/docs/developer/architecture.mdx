@@ -9,7 +9,7 @@ This page covers Nimbus's internal architecture for developers who want to under
 
 ## Module structure
 
-Nimbus is organized into twelve modules:
+Nimbus is organized into thirteen modules:
 
 ```text title="Module Structure"
 nimbus-core (Controller)
@@ -82,6 +82,14 @@ nimbus-display (Paper Plugin)
 ├── SignManager             → Sign lifecycle + rendering
 ├── SignConfig             → YAML persistence
 └── SignListener           → Click-to-join handling
+
+nimbus-cli (Remote CLI)
+├── NimbusCli           → Entry point, arg parsing, native access relaunch
+├── CliConfig           → Connection profiles (~/.nimbus/cli.json)
+├── CliConsole          → JLine3 REPL, event display, screen sessions
+├── CompletionClient    → REST client for POST /api/console/complete
+├── StreamClient        → WebSocket client for /api/console/stream
+└── OutputRenderer      → Typed output lines → ANSI, event formatting
 
 nimbus-module-perms (Permissions Module)
 ├── PermissionManager, PermissionGroup, PermissionTrack

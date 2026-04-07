@@ -65,6 +65,7 @@ Nimbus takes a different approach:
 - **Velocity proxy auto-management** — Proxy server list is automatically kept in sync as services start and stop.
 - **Built-in permissions** — Permission system included out of the box.
 - **Interactive console** — JLine3-powered REPL with tab completion, command history, and live event streaming.
+- **Remote CLI** — Standalone binary (`nimbus-cli`) that connects to the controller API for remote management with the same commands and formatting. Session tracking with GeoIP location.
 - **Template system** — Global and per-group templates for consistent server configuration.
 - **Via plugin support** — ViaVersion, ViaBackwards, and ViaRewind managed automatically on backend servers. Dependencies are enforced (ViaBackwards auto-includes ViaVersion).
 
@@ -105,6 +106,7 @@ Nimbus is built from several modules:
 | **nimbus-protocol** | Shared message definitions for controller-agent communication (internal, not user-facing). |
 | **nimbus-bridge** | Velocity plugin that provides hub commands and connects the proxy to the Nimbus API. Auto-deployed to all proxy instances. |
 | **nimbus-sdk** | Backend server plugin (Paper/Purpur/Leaf) that connects game servers to the Nimbus API. Auto-deployed to all backend instances (excluded on Folia). |
+| **nimbus-cli** | Remote CLI that connects to the controller's REST API + WebSocket. Same commands, tab completion, and formatting as the local console. Includes session tracking. |
 | **nimbus-display** | Display plugin for server-selector signs and NPCs (FancyNpcs-powered player skins, entity types, holograms, equipment, floating items, server inventory). Auto-deployed with FancyNpcs. |
 
 ## What's Next?
