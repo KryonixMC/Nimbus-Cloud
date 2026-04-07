@@ -18,7 +18,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | Version | Status | Theme |
 |---------|--------|-------|
 | [v0.1.0 – v0.1.4](#v01x--foundation) | Released | Foundation & core cloud features |
-| [v0.2.0](#v020--security--production-readiness) | Released | Security, stability & production readiness |
+| [v0.2.0 – v0.2.1](#v02x--security--production-readiness) | Released | Security, stability & production readiness |
 | [v0.3.0](#v030--competitive-features) | Planned | Warm pool, player tracking, smarter scaling |
 | [v0.4.0+](#v040--cloud-native) | Vision | Docker, S3 storage, dashboard |
 
@@ -83,9 +83,11 @@ The first public release shipped a fully functional cloud system:
 
 ---
 
-## v0.2.0 — Security & Production Readiness (April 7, 2026)
+## v0.2.x — Security & Production Readiness
 
 **Theme:** Make Nimbus production-ready. Fix the gaps that matter when real players are online and real money is on the line.
+
+### v0.2.0 — Security & Production Readiness (April 7, 2026)
 
 Three pillars: **resilience** (services survive controller crashes), **security** (proper API auth), and **correctness** (no duplicate services after restart).
 
@@ -100,6 +102,14 @@ Three pillars: **resilience** (services survive controller crashes), **security*
 - **Org Rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
 - **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
 - **Interactive Pickers** — Arrow-key selection replacing Y/N prompts throughout
+
+### v0.2.1 — Polish & Hardening (April 7, 2026)
+
+- **Console command feedback** — `start`, `stop`, `restart` now check return values and report actual success/failure. `start` shows allocated service name and port
+- **Config validation** — `controller.max_memory`, `bedrock.base_port`, and `database.port` validated at startup instead of failing later
+- **Scaling debug logging** — Cooldown and pending-service skips now logged at DEBUG level
+- **Memory parsing warnings** — Invalid cluster node memory formats logged instead of silently returning 0
+- **Proxy sync error details** — Full stack traces on TOML parse failures
 
 ---
 

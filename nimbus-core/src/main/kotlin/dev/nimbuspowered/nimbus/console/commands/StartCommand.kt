@@ -32,8 +32,12 @@ class StartCommand(
 
         println(ConsoleFormatter.info("Starting new instance for group '$groupName'..."))
         try {
-            serviceManager.startService(groupName)
-            println(ConsoleFormatter.success("Service start initiated for group '$groupName'."))
+            val service = serviceManager.startService(groupName)
+            if (service != null) {
+                println(ConsoleFormatter.success("Service '${service.name}' starting on port ${service.port}."))
+            } else {
+                println(ConsoleFormatter.error("Failed to start service for group '$groupName'."))
+            }
         } catch (e: Exception) {
             println(ConsoleFormatter.error("Failed to start service: ${e.message}"))
         }

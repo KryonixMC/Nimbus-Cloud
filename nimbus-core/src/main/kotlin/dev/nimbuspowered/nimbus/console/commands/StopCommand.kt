@@ -29,8 +29,12 @@ class StopCommand(
 
         println(ConsoleFormatter.info("Stopping service '$serviceName'..."))
         try {
-            serviceManager.stopService(serviceName)
-            println(ConsoleFormatter.success("Service '$serviceName' stop initiated."))
+            val stopped = serviceManager.stopService(serviceName)
+            if (stopped) {
+                println(ConsoleFormatter.success("Service '$serviceName' stop initiated."))
+            } else {
+                println(ConsoleFormatter.error("Failed to stop service '$serviceName'."))
+            }
         } catch (e: Exception) {
             println(ConsoleFormatter.error("Failed to stop service: ${e.message}"))
         }

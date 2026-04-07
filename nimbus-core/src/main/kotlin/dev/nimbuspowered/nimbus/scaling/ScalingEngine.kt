@@ -127,7 +127,10 @@ class ScalingEngine(
 
             // --- Scale Up ---
             // Don't scale up if we already have services starting
-            if (pendingCount > 0) continue
+            if (pendingCount > 0) {
+                logger.debug("Skipping scale-up for group '{}': {} service(s) still starting", group.name, pendingCount)
+                continue
+            }
 
             // Global hard cap: never exceed controller.max_services across all groups
             if (globalMaxServices > 0 && registry.getAll().size >= globalMaxServices) {
@@ -137,7 +140,10 @@ class ScalingEngine(
 
             // Cooldown: skip if we recently scaled up this group
             val lastUp = lastScaleUp[group.name]
-            if (lastUp != null && Duration.between(lastUp, Instant.now()).seconds < SCALE_UP_COOLDOWN_SECONDS) continue
+            if (lastUp != null && Duration.between(lastUp, Instant.now()).seconds < SCALE_UP_COOLDOWN_SECONDS) {
+                logger.debug("Skipping scale-up for group '{}': cooldown active", group.name)
+                continue
+            }
 
             val scaleUpReason = ScalingRule.shouldScaleUp(
                 totalPlayers = totalPlayers,
@@ -166,7 +172,10 @@ class ScalingEngine(
             // --- Scale Down ---
             // Cooldown: skip if we recently scaled down this group
             val lastDown = lastScaleDown[group.name]
-            if (lastDown != null && Duration.between(lastDown, Instant.now()).seconds < SCALE_DOWN_COOLDOWN_SECONDS) continue
+            if (lastDown != null && Duration.between(lastDown, Instant.now()).seconds < SCALE_DOWN_COOLDOWN_SECONDS) {
+                logger.debug("Skipping scale-down for group '{}': cooldown active", group.name)
+                continue
+            }
             var currentRoutableCount = routableCount
             for (service in readyServices) {
                 // Never scale down a service with an active custom state (e.g. mid-game)

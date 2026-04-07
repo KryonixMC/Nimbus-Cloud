@@ -17,6 +17,12 @@
   border-top-color: transparent;
 }
 
+/* Version dot pulse for new releases */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.8; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 /* Callouts: remove left bar, tint entire card with callout color */
 [style*="--callout-color"] {
   background-color: color-mix(in oklab, var(--callout-color) 8%, var(--color-fd-card)) !important;

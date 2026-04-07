@@ -29,8 +29,12 @@ class RestartCommand(
 
         println(ConsoleFormatter.info("Restarting service '$serviceName'..."))
         try {
-            serviceManager.restartService(serviceName)
-            println(ConsoleFormatter.success("Service '$serviceName' restart initiated."))
+            val newService = serviceManager.restartService(serviceName)
+            if (newService != null) {
+                println(ConsoleFormatter.success("Service restarted as '${newService.name}' on port ${newService.port}."))
+            } else {
+                println(ConsoleFormatter.error("Failed to restart service '$serviceName'."))
+            }
         } catch (e: Exception) {
             println(ConsoleFormatter.error("Failed to restart service: ${e.message}"))
         }

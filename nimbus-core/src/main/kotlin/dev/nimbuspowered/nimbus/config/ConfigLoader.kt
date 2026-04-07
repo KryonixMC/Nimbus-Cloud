@@ -21,7 +21,11 @@ object ConfigLoader {
         }
         return try {
             val content = path.readText()
-            toml.decodeFromString(serializer<NimbusConfig>(), content)
+            val config = toml.decodeFromString(serializer<NimbusConfig>(), content)
+            validateNimbusConfig(config, path)
+            config
+        } catch (e: ConfigException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to parse nimbus config at {}: {}", path, e.message, e)
             throw ConfigException("Failed to parse nimbus config: ${e.message}", e)
@@ -108,6 +112,25 @@ object ConfigLoader {
         }
 
         return result
+    }
+
+    private fun validateNimbusConfig(config: NimbusConfig, source: Path) {
+        val memoryPattern = Regex("^\\d+[MmGg]$")
+        if (!memoryPattern.matches(config.controller.maxMemory)) {
+            throw ConfigException(
+                "Invalid controller.max_memory format '${config.controller.maxMemory}' in $source — expected format like '512M' or '10G'"
+            )
+        }
+        if (config.bedrock.basePort !in 1..65535) {
+            throw ConfigException(
+                "bedrock.base_port must be between 1 and 65535 in $source (got ${config.bedrock.basePort})"
+            )
+        }
+        if (config.database.port !in 1..65535) {
+            throw ConfigException(
+                "database.port must be between 1 and 65535 in $source (got ${config.database.port})"
+            )
+        }
     }
 
     private fun validateGroupConfig(config: GroupConfig, source: Path) {

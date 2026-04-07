@@ -11,6 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       }}
       links={[
         { text: 'Documentation', url: '/docs/guide/introduction' },
+        { text: 'Changelog', url: '/docs/project/changelog' },
         {
           type: 'icon',
           label: 'GitHub',

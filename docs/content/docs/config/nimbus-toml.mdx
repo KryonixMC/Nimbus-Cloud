@@ -128,7 +128,7 @@ Resource limits and scaling engine settings.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `max_memory` | String | `"10G"` | Total memory budget for all running services. Format: number + `M` or `G` (e.g., `"512M"`, `"8G"`). Nimbus will not start new services if the total allocated memory would exceed this limit. |
+| `max_memory` | String | `"10G"` | Total memory budget for all running services. Format: number + `M` or `G` (e.g., `"512M"`, `"8G"`). Validated on startup — Nimbus will not start if the format is invalid. Nimbus will not start new services if the total allocated memory would exceed this limit. |
 | `max_services` | Int | `20` | Maximum number of concurrent services across all groups. Enforced as a global hard cap by the scaling engine — no new instances are started once this limit is reached, regardless of per-group `max_instances` settings. |
 | `heartbeat_interval` | Long | `5000` | Interval in milliseconds between scaling engine evaluation cycles. Each cycle checks player counts and applies scaling rules. |
 
@@ -239,7 +239,7 @@ Database backend configuration for permissions and cloud metrics.
 |--------|------|---------|-------------|
 | `type` | String | `"sqlite"` | Database type. Supported values: `sqlite`, `mysql`, `mariadb`, `postgresql`, `postgres`. |
 | `host` | String | `"localhost"` | Database server hostname. Only used for MySQL and PostgreSQL. |
-| `port` | Int | `3306` | Database server port. Only used for MySQL and PostgreSQL. Automatically defaults to `5432` for PostgreSQL if set to `3306`. |
+| `port` | Int | `3306` | Database server port. Must be between 1 and 65535. Only used for MySQL and PostgreSQL. Automatically defaults to `5432` for PostgreSQL if set to `3306`. |
 | `name` | String | `"nimbus"` | Database name. Only used for MySQL and PostgreSQL. For MySQL, the database is auto-created if it doesn't exist. |
 | `username` | String | `""` | Database username. Only used for MySQL and PostgreSQL. |
 | `password` | String | `""` | Database password. Only used for MySQL and PostgreSQL. |
@@ -376,7 +376,7 @@ Bedrock support is **disabled by default**. When enabled, Nimbus automatically d
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable Bedrock Edition support. Nimbus auto-deploys Geyser (Velocity plugin) and Floodgate (Velocity + backend plugin). |
-| `base_port` | Int | `19132` | Starting UDP port for Bedrock connections. Each proxy instance gets its own port, incrementing from this value (19132, 19133, ...). |
+| `base_port` | Int | `19132` | Starting UDP port for Bedrock connections. Must be between 1 and 65535. Each proxy instance gets its own port, incrementing from this value (19132, 19133, ...). |
 
 ```toml title="config/nimbus.toml"
 [bedrock]

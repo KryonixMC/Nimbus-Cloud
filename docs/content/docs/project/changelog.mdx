@@ -9,6 +9,21 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.2.1 (April 7, 2026)
+
+Bug fixes, improved console feedback, and config validation hardening.
+
+### Fixed
+- **Console command feedback**: `start`, `stop`, and `restart` commands now check return values and report success or failure accurately. `start` shows allocated service name and port, `restart` shows the new service name and port
+- **Silent memory parsing**: `NodeConnection.parseMemoryMb()` now logs a warning on invalid memory formats (e.g., `"abc"`, `"10GB"`) instead of silently returning 0, which could cause incorrect node placement decisions in cluster mode
+
+### Improved
+- **Config validation on startup**: `controller.max_memory` format (must match `^\d+[MmGg]$`), `bedrock.base_port` range (1-65535), and `database.port` range (1-65535) are now validated at config load time instead of failing later with cryptic errors
+- **Scaling debug logging**: The scaling engine now logs at DEBUG level when scale-up or scale-down is skipped due to cooldown or pending services, making it easier to diagnose why scaling isn't triggering
+- **Proxy sync error logging**: `ProxySyncManager` now logs full stack traces when TOML config parsing fails (motd.toml, tablist.toml, chat.toml), instead of only the exception message
+
+---
+
 ## v0.2.0 (April 7, 2026)
 
 Security, stability, and production readiness.

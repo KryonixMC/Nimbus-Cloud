@@ -64,12 +64,25 @@ class NodeConnection(
     }
 
     companion object {
+        private val log = LoggerFactory.getLogger(NodeConnection::class.java)
+
         fun parseMemoryMb(memory: String): Long {
-            val num = memory.dropLast(1).toLongOrNull() ?: return 0
+            if (memory.length < 2) {
+                log.warn("Invalid memory format '{}': expected format like '512M' or '2G'", memory)
+                return 0
+            }
+            val num = memory.dropLast(1).toLongOrNull()
+            if (num == null) {
+                log.warn("Invalid memory format '{}': expected format like '512M' or '2G'", memory)
+                return 0
+            }
             return when (memory.last().uppercaseChar()) {
                 'G' -> num * 1024
                 'M' -> num
-                else -> num
+                else -> {
+                    log.warn("Unknown memory suffix '{}' in '{}': expected 'M' or 'G'", memory.last(), memory)
+                    num
+                }
             }
         }
     }

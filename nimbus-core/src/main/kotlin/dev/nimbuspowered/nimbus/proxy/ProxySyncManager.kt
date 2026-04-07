@@ -90,7 +90,7 @@ class ProxySyncManager(private val proxyDir: Path) {
             try {
                 motd = parseMotdToml(motdFile.readText())
             } catch (e: Exception) {
-                logger.warn("Failed to load motd.toml: {}", e.message)
+                logger.warn("Failed to load motd.toml: {}", e.message, e)
             }
         }
 
@@ -98,7 +98,7 @@ class ProxySyncManager(private val proxyDir: Path) {
             try {
                 tabList = parseTablistToml(tablistFile.readText())
             } catch (e: Exception) {
-                logger.warn("Failed to load tablist.toml: {}", e.message)
+                logger.warn("Failed to load tablist.toml: {}", e.message, e)
             }
         }
 
@@ -106,7 +106,7 @@ class ProxySyncManager(private val proxyDir: Path) {
             try {
                 chat = parseChatToml(chatFile.readText())
             } catch (e: Exception) {
-                logger.warn("Failed to load chat.toml: {}", e.message)
+                logger.warn("Failed to load chat.toml: {}", e.message, e)
             }
         }
 
