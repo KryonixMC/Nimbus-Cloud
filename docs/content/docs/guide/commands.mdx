@@ -1,0 +1,871 @@
+---
+title: Console Commands
+description: Full reference for all Nimbus interactive console commands — service management, groups, permissions, plugins, cluster, load balancer, and more.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Nimbus provides an interactive console with tab completion, command history, and ANSI-colored output. Type `help` or `?` to see all available commands.
+
+## Service Management
+
+### `list`
+
+Show all running services with status, health, port, player count, and uptime.
+
+**Syntax:** `list [group]`
+
+```text title="Nimbus"
+nimbus » list
+── Services ──────────────────────────────────────
+NAME            GROUP       STATE           HP  PORT    PLAYERS  PID     UPTIME
+────────────────────────────────────────────────────────────────────────────────────
+Proxy-1         Proxy       ● READY          ✓   25565/19132   36       48190   2h 15m
+Lobby-1         Lobby       ● READY          ✓   30001   12       48201   2h 15m
+Lobby-2         Lobby       ● READY          ✗   30002   8        48215   1h 42m
+BedWars-1       BedWars     ● READY          ✓   30003   16       48230   0h 55m
+BedWars-2       BedWars     ● STARTING       -   30004   0        48245   0m 01s
+5 service(s)
+```
+
+The **HP** column shows a quick health indicator: **✓** healthy, **✗** unhealthy, or **-** for services not yet READY.
+
+<Callout type="info">
+Filter by group name: `list Lobby` shows only Lobby instances. When Bedrock support is enabled, proxy services show both TCP and UDP ports (e.g., `25565/19132`).
+</Callout>
+
+**Tab completion:** Group names.
+
+---
+
+### `start`
+
+Start a new instance of a server group.
+
+**Syntax:** `start <group>`
+
+```text title="Nimbus"
+nimbus » start BedWars
+ℹ Starting new instance for group 'BedWars'...
+✓ Service start initiated for group 'BedWars'.
+```
+
+<Callout type="warn">
+Fails if the group has reached its `max_instances` limit or the server JAR is unavailable.
+</Callout>
+
+**Tab completion:** Group names.
+
+---
+
+### `stop`
+
+Gracefully stop a running service. Sends the Minecraft `stop` command to the process.
+
+**Syntax:** `stop <service>`
+
+```text title="Nimbus"
+nimbus » stop BedWars-2
+ℹ Stopping service 'BedWars-2'...
+✓ Service 'BedWars-2' stop initiated.
+```
+
+**Tab completion:** Running service names.
+
+---
+
+### `restart`
+
+Stop a service and start a new instance in its place.
+
+**Syntax:** `restart <service>`
+
+```text title="Nimbus"
+nimbus » restart Lobby-1
+ℹ Restarting service 'Lobby-1'...
+✓ Service 'Lobby-1' restart initiated.
+```
+
+**Tab completion:** Running service names.
+
+---
+
+### `purge`
+
+Force-kill a service process, clean up crashed services, or kill a process by PID. Use this when a service is stuck and `stop` doesn't work.
+
+**Syntax:** `purge <service|crashed|pid:<pid>>`
+
+```text title="Nimbus"
+nimbus » purge crashed
+⚠ Purging 2 crashed service(s)...
+  Purged 'BedWars-3'
+  Purged 'BedWars-5'
+✓ Purged 2/2 crashed service(s).
+```
+
+| Argument | Description |
+|---|---|
+| `<service>` | Force-kill and remove a specific service |
+| `crashed` | Remove all services in CRASHED state |
+| `pid:<pid>` | Kill any process by its system PID |
+
+<Callout type="warn">
+`purge` force-kills processes immediately without graceful shutdown. Use `stop` first whenever possible.
+</Callout>
+
+**Tab completion:** Running service names.
+
+---
+
+### `screen`
+
+Attach to a service's live console output. You can type commands directly into the server.
+
+**Syntax:** `screen <service>`
+
+```text title="Nimbus"
+nimbus » screen Lobby-1
+ℹ Attached to Lobby-1 (ESC or Ctrl+Q to detach)
+────────────────────────────────────────────────────────
+[14:23:01 INFO]: Done (2.341s)! For help, type "help"
+[14:23:05 INFO]: Player Steve joined the game
+> say Hello from Nimbus!
+[14:23:12 INFO]: [Server] Hello from Nimbus!
+────────────────────────────────────────────────────────
+ℹ Detached from Lobby-1
+```
+
+Press **ESC** or **Ctrl+Q** to detach and return to the Nimbus console.
+
+<Callout type="warn">
+Cannot attach to services in `STOPPED` or `PREPARING` state.
+</Callout>
+
+**Tab completion:** Running service names.
+
+---
+
+### `exec`
+
+Execute a command on a service's stdin without attaching to its console.
+
+**Syntax:** `exec <service> <command...>`
+
+```text title="Nimbus"
+nimbus » exec Lobby-1 say Restarting in 5 minutes!
+✓ Sent to Lobby-1: say Restarting in 5 minutes!
+```
+
+**Tab completion:** Running service names (first argument).
+
+---
+
+### `logs`
+
+Show recent log output from a service's `logs/latest.log` file.
+
+**Syntax:** `logs <service> [lines]`
+
+```text title="Nimbus"
+nimbus » logs BedWars-1 20
+── Logs: BedWars-1 ────────────────────────────────
+Last 20 line(s) from services/BedWars-1/logs/latest.log
+────────────────────────────────────────────────────────
+[14:23:01 INFO]: Player Alex joined the game
+[14:23:05 INFO]: Player Steve joined the game
+...
+────────────────────────────────────────────────────────
+20 of 1482 line(s)
+```
+
+Defaults to **50 lines** if not specified. If the log file doesn't exist, Nimbus suggests using `screen` for live output.
+
+**Tab completion:** Running service names.
+
+---
+
+### `players`
+
+List all connected players across services. Queries each READY service via Server List Ping.
+
+**Syntax:** `players [service]`
+
+```text title="Nimbus"
+nimbus » players
+── Players ───────────────────────────────────────
+PLAYER      SERVICE       SERVER
+──────────────────────────────────────────────────
+Alex        BedWars-1     BedWars
+Notch       Lobby-1       Lobby
+Steve       BedWars-1     BedWars
+3 player(s) online
+```
+
+Pass a service name to filter: `players Lobby-1`.
+
+**Tab completion:** Running service names.
+
+---
+
+### `health`
+
+Show health metrics for running services: TPS, memory usage, health status, restart count, and uptime.
+
+**Syntax:** `health [service|group]`
+
+```text title="Nimbus"
+nimbus » health
+── Service Health ─────────────────────────────────
+NAME            STATE           TPS    MEMORY          HEALTH     RESTARTS  UPTIME
+──────────────────────────────────────────────────────────────────────────────────────
+Lobby-1         ● READY          19.9   412/1024MB      healthy    0         2h 15m
+Lobby-2         ● READY          16.2   890/1024MB      unhealthy  2         1h 42m
+BedWars-1       ● READY          20.0   256/1024MB      healthy    0         0h 55m
+3 service(s)
+! 1 service unhealthy
+```
+
+Pass a service name for a detailed view with memory progress bar and last SDK health report timestamp:
+
+```text title="Nimbus"
+nimbus » health Lobby-1
+```
+
+Also available in-game via `/cloud health` (permission: `nimbus.cloud.health`).
+
+**Tab completion:** Service names and group names.
+
+---
+
+## Group Management
+
+### `groups`
+
+List all configured server groups with software, version, and instance counts.
+
+**Syntax:** `groups`
+
+```text title="Nimbus"
+nimbus » groups
+── Groups ────────────────────────────────────────
+NAME        TYPE      SOFTWARE    VERSION    MEMORY  INSTANCES  MIN/MAX
+──────────────────────────────────────────────────────────────────────────
+Proxy       STATIC    VELOCITY    3.4.0      512M    1          1/1
+Lobby       DYNAMIC   PAPER       1.21.4     1G      2          2/4
+BedWars     DYNAMIC   PAPER       1.21.4     2G      2          1/8
+3 group(s)
+```
+
+---
+
+### `info`
+
+Show detailed configuration and runtime state for a group.
+
+**Syntax:** `info <group>`
+
+```text title="Nimbus"
+nimbus » info BedWars
+── Group: BedWars ─────────────────────────────────
+  Type                  DYNAMIC
+  Software              PAPER
+  Version               1.21.4
+  Template              default
+▸ Resources
+  Memory                2G
+  Max Players           16
+▸ Scaling
+  Min Instances         1
+  Max Instances         8
+  Players/Instance      16
+  Scale Threshold       80%
+  Idle Timeout          300000ms
+▸ Lifecycle
+  Stop on Empty         yes
+  Restart on Crash      yes
+  Max Restarts          5
+▸ JVM
+  Optimize              Aikar's Flags + Config Tuning
+▸ Runtime
+  Running Instances     2
+  Total Players         24
+```
+
+**Tab completion:** Group names.
+
+---
+
+### `create`
+
+Launch an interactive wizard to create a new server group. Clears the screen and walks through:
+
+1. Group name
+2. Server software (Paper, Pufferfish, Purpur, Leaf, Folia, Forge, NeoForge, Fabric, Custom, or Modpack import)
+3. Minecraft version (with tab completion from live version lists)
+4. Modloader version (for Forge/NeoForge/Fabric only)
+5. Static vs. dynamic mode
+6. Instance counts and memory
+7. Via plugins (ViaVersion/ViaBackwards/ViaRewind -- Paper/Purpur/Leaf/Folia only)
+8. Automatic JAR download and template setup
+9. Optional immediate instance start
+
+**Syntax:** `create`
+
+#### Example: Paper game server
+
+The most common case -- a Paper backend with Via plugin support.
+
+```text title="Nimbus — Create Wizard"
+Create New Group
+Group name: SkyWars
+Available server software:
+  paper       — Paper (optimized vanilla, plugins)
+  pufferfish  — Pufferfish (Paper fork, performance)
+  purpur      — Purpur (Paper fork, extra features)
+  leaf        — Leaf (Paper fork, performance + stability)
+  folia       — Folia (regionized multithreading, 1.19.4+)
+  forge       — Forge (mods, auto-installs)
+  neoforge    — NeoForge (modern Forge fork)
+  fabric      — Fabric (lightweight mods)
+  modpack     — Import a Modrinth modpack
+  custom      — Custom JAR (bring your own)
+Server software [paper]: paper
+Fetching available versions... ✓
+Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  1.20.2  1.20.1  1.19.4  ...
+Minecraft version [1.21.4]: 1.21.4
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [y/N]: n
+Min instances [1]: 1
+Max instances [4]: 8
+Memory per instance [1G]: 2G
+Protocol support:
+ViaVersion allows newer clients, ViaBackwards allows older clients.
+Install ViaVersion? [y/N]: n
+Install ViaBackwards? (older clients can join) [Y/n]: y
+Install ViaRewind? (1.7/1.8 clients) [y/N]: n
+✓ Via plugins: ViaBackwards
+Downloading files...
+↓ Paper 1.21.4 ✓
+↓ ViaBackwards ✓
+✓ config/groups/skywars.toml
+✓ Group configs reloaded
+Group 'SkyWars' created!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
+
+#### Example: Fabric modded server
+
+For Fabric, Forge, and NeoForge, the wizard adds a **modloader version** prompt after the Minecraft version. It also auto-downloads the appropriate proxy forwarding mod -- FabricProxy-Lite for Fabric, or a Forge/NeoForge forwarding mod for Forge-based servers. Via plugin prompts are skipped since modded servers don't use them.
+
+```text title="Nimbus — Create Wizard"
+Create New Group
+Group name: Survival
+Available server software:
+  paper       — Paper (optimized vanilla, plugins)
+  pufferfish  — Pufferfish (Paper fork, performance)
+  purpur      — Purpur (Paper fork, extra features)
+  leaf        — Leaf (Paper fork, performance + stability)
+  folia       — Folia (regionized multithreading, 1.19.4+)
+  forge       — Forge (mods, auto-installs)
+  neoforge    — NeoForge (modern Forge fork)
+  fabric      — Fabric (lightweight mods)
+  modpack     — Import a Modrinth modpack
+  custom      — Custom JAR (bring your own)
+Server software [paper]: fabric
+Fetching available versions... ✓
+Stable: 1.21.4  1.21.3  1.21.1  1.20.6  1.20.4  ...
+Minecraft version [1.21.4]: 1.21.4
+Fetching modloader versions... ✓
+Available: 0.16.9  0.16.8  0.16.7  0.16.6  0.16.5  ...
+Modloader version [0.16.9]: 0.16.9
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [y/N]: y
+Min instances [1]: 1
+Max instances [1]: 1
+Memory per instance [1G]: 4G
+Downloading files...
+↓ Fabric 0.16.9 for MC 1.21.4 ✓
+↓ FabricProxy-Lite ✓
+✓ config/groups/survival.toml
+✓ Group configs reloaded
+Group 'Survival' created!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
+
+<Callout type="info">
+Press **Ctrl+C** at any point to cancel the wizard. Selecting `modpack` as the software type redirects to the [`import`](#import) wizard instead.
+</Callout>
+
+---
+
+### `import`
+
+Import a Modrinth modpack as a new server group. Clears the screen and walks through resolving the modpack, displaying its info, downloading the modloader, mods, configs/overrides, and proxy forwarding mods.
+
+**Syntax:** `import <url|slug|path.mrpack>`
+
+Accepts:
+- Modrinth URLs: `import https://modrinth.com/modpack/adrenaserver`
+- Modrinth slugs: `import adrenaserver`
+- Local `.mrpack` files: `import /path/to/modpack.mrpack`
+
+```text title="Nimbus — Import Wizard"
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.2.0
+MC 1.21.4 · FABRIC 0.16.9
+42 server mods (18 client-only skipped)
+Group name [Adrenaserver]: Adrenaserver
+Static services keep their data (world, configs) across restarts.
+Dynamic services start fresh from the template every time.
+Static service [Y/n]: y
+Memory per instance [2G]: 4G
+Min instances [1]: 1
+Max instances [1]: 1
+Installing...
+↓ FABRIC 0.16.9 ✓
+↓ Mods 42/42 lithium-fabric-0.14.3-mc1.21.4.jar
+✓ 42 mods downloaded
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+✓ config/groups/adrenaserver.toml
+✓ Group configs reloaded
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+Start an instance now? [Y/n]: y
+✓ Service start initiated.
+```
+
+The wizard automatically handles proxy forwarding -- FabricProxy-Lite for Fabric modpacks, or the appropriate Forge/NeoForge forwarding mod. Client-only mods are detected from the modpack index and skipped during installation.
+
+---
+
+### `update`
+
+Update a group's server software or Minecraft version. Supports both direct and interactive modes. Includes compatibility checks that prevent incompatible switches (e.g., plugin servers to modded, Forge to Fabric).
+
+**Syntax:** `update <group> [version <ver>] [software <sw> [<ver>]]`
+
+#### Update Minecraft version
+
+```text title="Nimbus"
+nimbus » update Lobby version 1.21.5
+ℹ Updating Lobby: 1.21.4 -> 1.21.5
+Downloading paper 1.21.5... ok
+ok Configs reloaded
+Updated 'Lobby' to version 1.21.5.
+```
+
+#### Switch server software
+
+```text title="Nimbus"
+nimbus » update Lobby software purpur
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+Downloading purpur 1.21.4... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.4.
+```
+
+#### Switch software and version at once
+
+```text title="Nimbus"
+nimbus » update Lobby software purpur 1.21.5
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.5
+Downloading purpur 1.21.5... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.5.
+```
+
+#### Interactive mode
+
+Running `update <group>` without subcommands opens an interactive wizard:
+
+```text title="Nimbus — Update Wizard"
+nimbus » update Lobby
+Update Group: Lobby
+
+Current: PAPER 1.21.4
+
+What to update? [version]: software
+Compatible software for PAPER:
+  purpur
+Fetching available versions... ok
+Available: 1.21.4  1.21.3  1.21.1  1.20.6  ...
+Minecraft version [1.21.4]: 1.21.4
+
+ℹ Updating Lobby: PAPER 1.21.4 -> PURPUR 1.21.4
+Downloading purpur 1.21.4... ok
+ok Configs reloaded
+Updated 'Lobby' to PURPUR 1.21.4.
+```
+
+#### Compatibility rules
+
+The `update` command enforces compatibility between server software families to prevent broken servers:
+
+| Switch | Allowed | Reason |
+|--------|---------|--------|
+| Paper ↔ Pufferfish ↔ Purpur ↔ Leaf ↔ Folia | Yes | Same plugin API family (Paper forks). Note: most plugins won't work on Folia. |
+| Forge ↔ NeoForge | Yes (with warning) | Similar but diverging mod ecosystems |
+| Paper/Pufferfish/Purpur/Leaf → Forge/Fabric/NeoForge | **No** | Plugins and mods are incompatible |
+| Forge/NeoForge → Fabric | **No** | Completely different mod formats |
+| Fabric → Forge/NeoForge | **No** | Completely different mod formats |
+| Any ↔ Velocity | **No** | Proxy vs game server |
+| Any ↔ Custom | **No** | Cannot auto-resolve custom JARs |
+
+<Callout type="warn">
+Running services are **not** automatically restarted after an update. Restart them manually to apply the changes.
+</Callout>
+
+**Tab completion:** Group names → `version`/`software` → software names (for `software` subcommand).
+
+---
+
+### `static`
+
+Convert a group or individual service to static mode. Static services preserve their working directory across restarts.
+
+**Syntax:** `static group <name>` | `static service <name>`
+
+```text title="Nimbus"
+nimbus » static group BedWars
+✓ Group 'BedWars' is now STATIC.
+New services will preserve their working directory across restarts.
+⚠ 2 running service(s) are still dynamic. Use 'static service <name>' to convert them individually.
+```
+
+```text title="Nimbus"
+nimbus » static service BedWars-1
+ℹ Converting 'BedWars-1' to static (copying working directory)...
+✓ Service 'BedWars-1' is now static.
+Working directory will be preserved when the service stops.
+```
+
+**Tab completion:** `group`/`service` subcommands, then group or service names.
+
+---
+
+### `dynamic`
+
+Set a group back to dynamic mode. Dynamic services start fresh from the template each time.
+
+**Syntax:** `dynamic <group>`
+
+```text title="Nimbus"
+nimbus » dynamic BedWars
+✓ Group 'BedWars' is now DYNAMIC.
+New services will use temporary directories that are cleaned up on stop.
+```
+
+**Tab completion:** Group names.
+
+---
+
+## Permission Management
+
+The `perms` command manages Nimbus's built-in permission system. All subcommands support tab completion.
+
+**Syntax:** `perms <group|user|track|audit|reload> [subcommand] [args]`
+
+### Group Subcommands
+
+#### `perms group list`
+
+List all permission groups with their default status, priority, and parent groups.
+
+```text title="Nimbus"
+nimbus » perms group list
+── Permission Groups ─────────────────────────────
+NAME        DEFAULT    PRIORITY  PREFIX       PERMISSIONS  PARENTS
+──────────────────────────────────────────────────────────────────────
+Admin       no         100       [Admin]      12           Moderator
+Moderator   no         50        [Mod]        5            Default
+Default     yes        0         -            3            -
+3 group(s)
+```
+
+#### `perms group info <name>`
+
+Show full details of a permission group including all permissions.
+
+```text title="Nimbus"
+nimbus » perms group info Admin
+── Permission Group: Admin ──────────────────────
+  Default:   no
+  Priority:  100
+  Prefix:    [Admin]
+  Suffix:    -
+  Parents:   Moderator
+▸ Permissions (4)
+  nimbus.admin
+  nimbus.manage.*
+  nimbus.start
+  -nimbus.debug
+```
+
+#### Other group subcommands
+
+| Command | Description |
+|---|---|
+| `perms group create <name>` | Create a new permission group |
+| `perms group delete <name>` | Delete a permission group |
+| `perms group addperm <group> <permission>` | Add a permission to a group |
+| `perms group removeperm <group> <permission>` | Remove a permission from a group |
+| `perms group setdefault <group> [true/false]` | Set whether a group is the default |
+| `perms group addparent <group> <parent>` | Add permission inheritance |
+| `perms group removeparent <group> <parent>` | Remove permission inheritance |
+| `perms group setprefix <group> <prefix...>` | Set display prefix (MiniMessage format) |
+| `perms group setsuffix <group> <suffix...>` | Set display suffix |
+| `perms group setpriority <group> <number>` | Set display priority |
+| `perms group setweight <group> <number>` | Set conflict resolution weight |
+| `perms group meta <set\|remove\|list> <group> [key] [value]` | Manage custom metadata |
+
+### User Subcommands
+
+| Command | Description |
+|---|---|
+| `perms user list` | List all players with assigned groups |
+| `perms user info <name\|uuid>` | Show a player's groups, permissions, and display format |
+| `perms user addgroup <name\|uuid> <group>` | Add a player to a group |
+| `perms user removegroup <name\|uuid> <group>` | Remove a player from a group |
+| `perms user check <name\|uuid> <permission>` | Check if a player has a permission (shows resolution chain) |
+| `perms user promote <name\|uuid> <track>` | Promote to next group in a track |
+| `perms user demote <name\|uuid> <track>` | Demote to previous group in a track |
+| `perms user meta <set\|remove\|list> <name\|uuid> [key] [value]` | Manage custom metadata |
+
+### `perms reload`
+
+Reload permission data from files.
+
+### Track Subcommands
+
+| Command | Description |
+|---|---|
+| `perms track list` | List all permission tracks |
+| `perms track create <name> <group1,group2,...>` | Create a new track with ordered groups |
+| `perms track delete <name>` | Delete a permission track |
+
+### `perms audit [lines]`
+
+Show the permission audit log with recent changes. Defaults to 20 entries.
+
+---
+
+## Plugin Management
+
+### `plugins`
+
+Search, install, and manage third-party server plugins from [Hangar](https://hangar.papermc.io) and [Modrinth](https://modrinth.com).
+
+Running `plugins` with no arguments (or `plugins search`) opens the **interactive live search**:
+
+1. Select a target (global or a specific group)
+2. Type to search — results from Hangar + Modrinth appear live (version-aware)
+3. Use **↑↓** to navigate, **Space** to select multiple plugins, **Enter** to confirm
+4. Required dependencies are automatically downloaded
+
+```text title="Nimbus"
+plugins                        # Open interactive search
+plugins search global          # Search for plugins targeting all backends
+plugins search Lobby WorldEdit # Search "WorldEdit" for Lobby group's MC version
+plugins list                   # Show all installed plugins across all targets
+plugins list global            # Show plugins in global/plugins/
+plugins list Lobby             # Show plugins in Lobby template
+plugins remove WorldEdit.jar global  # Remove a specific plugin JAR
+```
+
+<Callout title="Multi-Select" type="info">
+Press **Space** on multiple search results before pressing **Enter** — all selected plugins (plus their dependencies) are installed in a single batch.
+</Callout>
+
+---
+
+## Network & System
+
+### `audit`
+
+Show the audit log of administrative actions (service starts/stops, config changes, scaling decisions, etc.).
+
+**Syntax:** `audit [limit] [--action <type>] [--actor <name>]`
+
+**Examples:**
+- `audit` — Show last 20 entries
+- `audit 50` — Show last 50 entries
+- `audit --action SERVICE_STARTING` — Filter by action type
+- `audit --actor console` — Filter by who triggered the action
+
+Each entry shows: timestamp, actor (console/api/system), action type, target, and details.
+
+### `status`
+
+Full cluster overview showing groups, instances, player counts, and capacity.
+
+**Syntax:** `status`
+
+```text title="Nimbus"
+nimbus » status
+── Network: MyNetwork ────────────────────────────
+Services: 5 ready / 5 total    Players: 36
+GROUP       TYPE      INSTANCES  MIN/MAX  PLAYERS  STATUS
+────────────────────────────────────────────────────────────────
+Proxy       STATIC    1          1/2      36       healthy
+Lobby       DYNAMIC   2          2/4      12       healthy
+BedWars     DYNAMIC   2          1/8      24       healthy
+Capacity: ████████░░░░░░░░░░░░░░░░░░░░░░ 5/20 services
+Bedrock:  enabled (Geyser + Floodgate, base port 19132)
+```
+
+The Bedrock line only appears when `[bedrock] enabled = true` is set in `nimbus.toml`.
+
+---
+
+### `send`
+
+Transfer a player to another service via the Velocity proxy.
+
+**Syntax:** `send <player> <service>`
+
+<Callout type="warn">
+Requires a running Velocity proxy instance.
+</Callout>
+
+---
+
+### `reload`
+
+Hot-reload all group configuration files and proxy sync settings. Running services are not affected.
+
+**Syntax:** `reload`
+
+<Callout type="info">
+If a group is removed from config but has running services, they will continue until manually stopped.
+</Callout>
+
+---
+
+### `api`
+
+Manage the REST API server.
+
+**Syntax:** `api <start|stop|status|token> [port]`
+
+| Subcommand | Description |
+|---|---|
+| `api` or `api status` | Show API status, endpoint, and auth info |
+| `api start [port]` | Start the API on the configured port or a custom one |
+| `api stop` | Stop the API |
+| `api token` | Show the configured API token (partially masked) |
+
+**Tab completion:** `start`, `stop`, `status`, `token`.
+
+---
+
+### `nodes`
+
+Show connected cluster nodes. Only available when cluster mode is enabled (`cluster.enabled = true`).
+
+**Syntax:** `nodes [node-name]`
+
+Without arguments, shows a summary table of all nodes. With a node name, shows detailed info including CPU, memory, running services, and agent version.
+
+<Callout type="info">
+If no nodes are connected, the command prints a warning. Use this to verify agents are properly connected to the controller.
+</Callout>
+
+**Tab completion:** Node names.
+
+---
+
+### `lb`
+
+Manage the TCP load balancer. This command works independently of cluster mode — you can use a load balancer with multiple local Velocity proxies without enabling cluster mode.
+
+**Syntax:** `lb [status|enable|disable|strategy <name>]`
+
+| Subcommand | Description |
+|---|---|
+| `lb enable` | Enable the load balancer (saves to config, restart required) |
+| `lb disable` | Disable the load balancer |
+| `lb strategy <name>` | Set strategy: `least-players` or `round-robin` |
+
+**Tab completion:** `status`, `enable`, `disable`, `strategy` → strategy names.
+
+---
+
+### `maintenance`
+
+Toggle maintenance mode for the entire network or individual server groups.
+
+**Syntax:** `maintenance [on|off | <group> on|off | list | add <player> | remove <player>]`
+
+| Command | Description |
+|---|---|
+| `maintenance` | Show current maintenance status |
+| `maintenance on` | Enable global maintenance (blocks new connections) |
+| `maintenance off` | Disable global maintenance |
+| `maintenance <group> on` | Put a specific group in maintenance |
+| `maintenance <group> off` | Remove maintenance from a group |
+| `maintenance list` | Show whitelisted players |
+| `maintenance add <player>` | Add player to maintenance whitelist |
+| `maintenance remove <player>` | Remove player from maintenance whitelist |
+
+**Tab completion:** `on`, `off`, `list`, `add`, `remove`, group names.
+
+---
+
+### `shutdown`
+
+Gracefully shut down all services in order: game servers first, then lobbies, then proxies.
+
+**Syntax:** `shutdown`
+
+<Callout type="warn">
+Shutdown requires confirmation. Run `shutdown` first, then `shutdown confirm` within 30 seconds.
+</Callout>
+
+---
+
+### `clear`
+
+Clear the terminal screen.
+
+**Syntax:** `clear`
+
+---
+
+### `help`
+
+Show all available commands or detailed help for a specific command.
+
+**Syntax:** `help [command]`
+
+<Callout type="info">
+You can also type `?` as a shorthand for `help`.
+</Callout>
+
+---
+
+## Cluster & Load Balancer
+
+These commands manage multi-node cluster mode. The `cluster` command works regardless of whether cluster mode is currently enabled — it's how you enable it. The `nodes` command is only available when cluster mode is active. The `lb` command is documented above under [Service Management](#lb) — it's independent of cluster mode.
+
+### `cluster`
+
+Manage cluster mode and load balancer settings from the console without editing config files. Changes are saved to `nimbus.toml` and take effect after restart.
+
+**Syntax:** `cluster <status|enable|disable|token> [subcommand] [args]`
+
+| Subcommand | Description |
+|---|---|
+| `cluster status` | Show cluster and load balancer status |
+| `cluster enable` | Enable cluster mode (generates auth token if none exists) |
+| `cluster disable` | Disable cluster mode |
+| `cluster token` | Show the current cluster auth token (partially masked) |
+| `cluster token regenerate` | Generate a new cluster token (update all agents!) |
+
+**Tab completion:** `status`, `enable`, `disable`, `token` → `regenerate`.

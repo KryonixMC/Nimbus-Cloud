@@ -1,0 +1,20 @@
+{
+  "root": true,
+  "title": "Developer",
+  "description": "Architecture & plugins",
+  "pages": [
+    "---Overview---",
+    "architecture",
+    "---Modules---",
+    "modules",
+    "scaling",
+    "---Plugins---",
+    "sdk",
+    "bridge",
+    "display",
+    "perms",
+    "---Internals---",
+    "agent",
+    "protocol"
+  ]
+}

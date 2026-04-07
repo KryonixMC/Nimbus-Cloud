@@ -1,0 +1,190 @@
+---
+title: Modpack Import
+description: Import Modrinth modpacks into Nimbus as fully managed, auto-scaling server groups with a single command.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Nimbus can import any **Modrinth modpack** and turn it into a fully managed, auto-scaling server group — with a single command.
+
+No manual downloading, no extracting ZIPs, no hunting for the right modloader version. Just point Nimbus at a modpack and it handles everything.
+
+## Supported Sources
+
+| Source | Example |
+|--------|---------|
+| Modrinth slug | `import adrenaserver` |
+| Modrinth URL | `import https://modrinth.com/modpack/adrenaserver` |
+| Local `.mrpack` file | `import /path/to/modpack.mrpack` |
+
+## Supported Modloaders
+
+| Modloader | Auto-configured | Proxy Forwarding |
+|-----------|----------------|-----------------|
+| Fabric | Yes | Fabric Proxy Mod |
+| Forge | Yes | Forge forwarding mod |
+| NeoForge | Yes | NeoForge forwarding mod |
+| Quilt | Yes (via Fabric) | Fabric Proxy Mod |
+
+## Quick Start
+
+Just run the `import` command with a Modrinth slug or URL:
+
+```text title="Nimbus — Import Wizard"
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.5.2
+MC 1.21.4 · Fabric 0.16.9
+47 server mods (12 client-only skipped)
+Group name: Adrenaserver
+Service type [DYNAMIC]: DYNAMIC
+Memory [2G]: 2G
+Min instances [1]: 1
+Max instances [4]: 4
+Installing...
+↓ Fabric 0.16.9 ✓
+↓ Mods 47/47 ✓
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+✓ groups/adrenaserver.toml
+✓ Group configs reloaded
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+
+  ↑↓ navigate  ·  enter select  ·  esc back
+    › ● Yes, start now
+      ○ No, start later
+✓ Service start initiated.
+```
+
+That's it. Your modded server is live and accepting players through the proxy.
+
+## How It Works
+
+Behind the scenes, the `import` command runs through six stages:
+
+1. **Resolve** — Downloads the `.mrpack` from Modrinth (or reads a local file). Modrinth slugs and URLs are both resolved via the Modrinth API.
+2. **Parse** — Reads `modrinth.index.json` inside the pack for the mod list, Minecraft version, and required modloader.
+3. **Configure** — Interactive prompts ask for group name, service type, memory allocation, and scaling limits. Sensible defaults are pre-filled based on the pack metadata.
+4. **Download** — Fetches the correct modloader server JAR and all server-side mods. Downloads run 8 at a time with SHA1 verification to ensure integrity. Client-only mods are automatically skipped.
+5. **Install** — Extracts config overrides from the pack, installs the appropriate proxy forwarding mod for Velocity, and auto-accepts the EULA.
+6. **Create** — Generates a group config file in `groups/<name>.toml` with all the settings you chose.
+
+## What Gets Installed
+
+After import, your template directory looks like this:
+
+```text title="Directory Structure"
+templates/Adrenaserver/
+├── fabric-server-launch.jar
+├── mods/
+│   ├── lithium-0.14.3.jar
+│   ├── fabric-api-0.100.1.jar
+│   └── ... (47 mods)
+├── config/
+│   └── ... (extracted from overrides)
+└── eula.txt (auto-accepted)
+```
+
+A matching group config is created at `groups/Adrenaserver.toml` with the modloader, memory, and scaling settings you selected.
+
+## Auto-Scaling Modded Servers
+
+Imported modpacks are configured as **DYNAMIC** groups by default. This means Nimbus will automatically spin up new instances when player demand increases and shut them down when they're empty — just like it does for vanilla server groups.
+
+The scaling engine monitors player counts across all instances and applies the same fill-rate rules described in the [Auto-Scaling Guide](/docs/guide/scaling). You get elastic modded infrastructure without lifting a finger.
+
+<Callout title="Memory Recommendation" type="info">
+Modded servers typically need **2-4G** per instance. Heavy modpacks (200+ mods) may need **4-6G**. Set this during import or adjust later in `groups/<name>.toml` under the `jvm_memory` key.
+</Callout>
+
+## Automatic Proxy Forwarding
+
+One of Nimbus's strongest features for modded servers: **proxy forwarding mods are installed and configured automatically**. You never need to manually download or set up forwarding mods.
+
+| Modloader | Auto-installed Mod | Dependencies |
+|---|---|---|
+| **Fabric / Quilt** | [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-lite) | Fabric API (also auto-installed) |
+| **Forge** | [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) | None |
+| **NeoForge** | [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) | None |
+
+When Nimbus starts a modded service, it:
+
+1. Checks the template's `mods/` directory for an existing forwarding mod
+2. If missing, downloads the correct mod from Modrinth (matched to your MC version)
+3. Configures the mod with the correct [forwarding mode](/docs/guide/proxy-setup#adaptive-forwarding) (modern or legacy)
+4. Copies the `forwarding.secret` for modern forwarding mode
+
+No manual configuration needed. Players connect to your Velocity proxy on port `25565` and get forwarded to modded servers as if they were vanilla.
+
+<Callout type="info">
+This works for both imported modpacks AND manually created modded groups. Any Forge, Fabric, or NeoForge group automatically gets proxy forwarding support.
+</Callout>
+
+## Updating a Modpack
+
+To update to a new modpack version, simply re-run the `import` command:
+
+```text title="Nimbus"
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.6.0
+MC 1.21.5 · Fabric 0.17.0
+49 server mods (+2 new, 3 updated)
+```
+
+Alternatively, you can manually update individual mods by replacing JAR files in the `templates/<name>/mods/` directory.
+
+<Callout type="warn">
+Re-importing will overwrite the existing template. For **STATIC** services, world data in `services/` is preserved since it lives outside the template. For **DYNAMIC** services, a fresh template copy is applied on every start, so changes to the template take effect immediately.
+</Callout>
+
+## Examples
+
+### Fabric Performance Pack
+
+A lightweight server optimization pack — perfect for high-player-count lobbies:
+
+```text title="Nimbus"
+nimbus » import adrenaserver
+Import Modpack
+Resolving modpack... ✓
+Adrenaserver v1.5.2
+MC 1.21.4 · Fabric 0.16.9
+47 server mods (12 client-only skipped)
+Modpack 'Adrenaserver' imported as group 'Adrenaserver'!
+```
+
+### Forge Modpack
+
+Import a heavyweight Forge kitchen-sink pack straight from a Modrinth URL:
+
+```text title="Nimbus"
+nimbus » import https://modrinth.com/modpack/all-the-mods-10
+Import Modpack
+Resolving modpack... ✓
+All the Mods 10 v2.40
+MC 1.21.1 · NeoForge 21.1.77
+341 server mods (89 client-only skipped)
+Installing...
+↓ NeoForge 21.1.77 ✓
+↓ Mods 341/341 ✓
+↓ Configs & overrides ✓
+↓ Proxy mods ✓
+Modpack 'All the Mods 10' imported as group 'AllTheMods10'!
+```
+
+### Local Modpack File
+
+Import a custom pack you built yourself or downloaded manually:
+
+```text title="Nimbus"
+nimbus » import ./my-custom-pack.mrpack
+Import Modpack
+Resolving modpack... ✓
+My Custom Pack v1.0.0
+MC 1.20.4 · Quilt 0.26.4 (via Fabric)
+23 server mods
+Modpack 'My Custom Pack' imported as group 'MyCustomPack'!
+```

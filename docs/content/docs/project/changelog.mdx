@@ -1,0 +1,239 @@
+---
+title: Changelog
+description: Detailed release history for every Nimbus version.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+All notable changes to Nimbus, organized by release. Each entry links to the corresponding GitHub Release where available.
+
+---
+
+## v0.2.0 (Unreleased)
+
+<Callout type="warn">
+  In development — see the [Roadmap](/docs/project/roadmap#v020--security--production-readiness) for planned features.
+</Callout>
+
+### Changed
+- **Org rename**: `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
+- **Docs migration**: VitePress replaced with Fumadocs (Next.js)
+- **Interactive pickers**: Arrow-key selection replacing Y/N prompts throughout console
+
+### Added
+- **Leaf server software**: Paper fork from `api.leafmc.one`, treated as Paper-based
+- **Migration self-repair**: Baseline detection fixes for upgrades from v0.1.x
+
+### Fixed
+- Migration bootstrap edge cases when upgrading from older versions
+
+---
+
+## v0.1.4 (April 5, 2026)
+
+API polish and health monitoring.
+
+### Added
+- **Machine-readable API errors** (`ApiErrors.kt`): Standardized error codes like `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`, `RATE_LIMITED` across all endpoints
+- **`health` console command**: Quick overview of service health across all groups
+- **`/api/services/health` endpoint**: Aggregated health summary (total, healthy, degraded, unhealthy counts per group)
+- **Bridge health integration**: Velocity plugin reports health status to controller
+- **`list` command improvements**: Health column, Unicode rendering fixes
+
+### Changed
+- Smart Scaling module set to `default=false` — opt-in during SetupWizard instead of pre-installed
+
+---
+
+## v0.1.3 (April 5, 2026)
+
+Java baseline bump and operational improvements.
+
+### Changed
+- **Java 16+ baseline**: Dropped Java 8/11 support, all plugins compiled to Java 16 bytecode
+- **Versioned JARs**: JAR filenames now include version number
+
+### Added
+- **`version` command**: Shows running version, checks for available updates
+- **JDK auto-download**: Multi-provider fallback (Adoptium, Azul, Oracle) with streaming progress bars
+- **Smart start scripts**: Auto-restart after update, configurable restart behavior
+- **Windows ZIP support**: JDK auto-download handles `.zip` archives on Windows
+
+### Fixed
+- Screen session prompt overlap in console
+- Log encoding crash on non-UTF-8 systems
+
+---
+
+## v0.1.2 (April 5, 2026)
+
+Smart scaling and module extraction.
+
+### Added
+- **Smart Scaling module** (`nimbus-module-scaling`):
+  - Time-based schedules (e.g., "scale up BedWars at 14:00 on weekends")
+  - Predictive warmup from 7-day rolling player count history
+  - Per-group configuration in `config/modules/scaling/*.toml`
+- **Phased startup**: Proxy services must reach READY state before any backend services start — prevents players connecting to proxies with no backends
+- **Dynamic Bridge commands**: Controller pushes command registry to Velocity plugin at runtime
+
+### Changed
+- **Module extraction complete**: All permissions and display logic moved from core into standalone module JARs
+- **Plugin search**: Unified Hangar + Modrinth search with multi-select UI and automatic dependency resolution
+
+### Fixed
+- Release workflow CRLF handling on Windows
+
+---
+
+## v0.1.1 (April 4, 2026)
+
+Module system architecture and security hardening.
+
+### Added
+- **Module system**: Dynamic loading via ServiceLoader + URLClassLoader
+  - `NimbusModule` interface with `init()` / `enable()` / `disable()` lifecycle
+  - `ModuleContext` providing EventBus, DatabaseManager, ServiceRegistry, GroupManager access
+  - Command registration, route registration, migration registration
+  - Dependency resolution with topological sort
+  - Version compatibility checks (minimum Nimbus version per module)
+  - Embedded modules auto-extracted from shadowJar during SetupWizard
+- **`modules` command**: `install`, `uninstall`, `list`, `info` subcommands
+- **`plugins` command**: Live search across Hangar + Modrinth with version matching
+- **`kick` / `broadcast` commands**: Player management from console
+- **Least-players lobby balancing**: New players routed to least-populated lobby
+- **Module API endpoints**: REST routes registered by modules
+- **Event-driven permission cache refresh**: Permissions update without restart
+
+### Changed
+- **Package rename**: `dev.nimbus` to `dev.kryonix.nimbus`
+- **ProtocolLib dependency removed**: All NMS interactions replaced with API-only approaches
+- **Interactive pickers**: Arrow-key selection for module install, group selection, etc.
+
+### Fixed
+- **Zip slip vulnerability** in agent template extraction (security)
+- **Scaling deadlock** when all instances of a group crash simultaneously
+- **Nametag rendering**: MiniMessage tags now parsed correctly in display names
+- **Graceful shutdown**: ScalingEngine properly stops before services are terminated
+
+### Security
+- Comprehensive security hardening audit across all input boundaries
+- Agent template extraction validates paths against directory traversal
+- API input sanitization for command injection prevention
+
+---
+
+## v0.1.0 (April 1, 2026)
+
+Initial public release. The complete Minecraft cloud system, built from scratch.
+
+### Core
+- Service lifecycle management: start, stop, restart, crash detection, auto-restart
+- Server groups with TOML configuration (`config/groups/*.toml`)
+- Port allocation: 25565+ for proxies, 30000+ for backends
+- Service naming: `<GroupName>-<N>` convention
+- Static services (persistent) and dynamic services (temporary)
+- Graceful shutdown order: game servers, then lobbies, then proxies
+- Shutdown confirmation: `shutdown` + `shutdown confirm` within 30 seconds
+
+### Scaling
+- Player-count-based auto-scaling with configurable thresholds
+- Scale-up cooldown: 30 seconds, scale-down cooldown: 120 seconds
+- Global service cap via `controller.max_services`
+- Paused during active stress tests
+
+### Server Software
+- **Paper-based**: Paper, Purpur, Pufferfish, Leaf, Folia
+- **Modded**: Forge, NeoForge, Fabric (+ optional Cardboard for Bukkit compat)
+- **Custom**: Any server JAR via direct URL
+- Auto-download from official sources
+- EULA auto-acceptance for supported software
+- Via plugin support: ViaVersion, ViaBackwards, ViaRewind with dependency enforcement
+
+### Proxy
+- Velocity auto-management: server list, forwarding secret, port config
+- Modern forwarding for 1.13+, legacy BungeeCord forwarding for older versions
+- Proxy sync: MOTD, tab list, chat formatting via separate TOML configs
+- Maintenance mode: global + per-group with whitelist and custom kick message
+- Nimbus Bridge: Velocity plugin with hub commands, cloud integration
+
+### API
+- REST API v0.2 with bearer token authentication
+- Auto-generated 64-char hex token, timing-safe comparison
+- Derived HMAC tokens for service-level access
+- Rate limiting: 120 req/min global, 5 req/min for stress endpoints
+- CORS with configurable origin whitelist
+- WebSocket live events stream (`/api/events`)
+- Bidirectional console per service (`/api/services/{name}/console`)
+- Endpoints: services, groups, status, players, maintenance, stress, reload, shutdown, load balancer, nodes, metrics, audit
+
+### Console
+- JLine3 interactive REPL with tab completion
+- 30+ commands: `list`, `start`, `stop`, `restart`, `info`, `groups`, `create`, `delete`, `exec`, `log`, `maintenance`, `stress`, `audit`, `reload`, `shutdown`, and more
+- ANSI-colored output via ConsoleFormatter
+- Banner display on startup
+
+### Database
+- SQLite (default), MySQL/MariaDB, PostgreSQL
+- Exposed ORM with versioned migrations (`MigrationManager`)
+- Core migrations: V1 (baseline tables), V2 (audit log)
+- Module migrations via `ModuleContext.registerMigrations()`
+- WAL mode + foreign keys for SQLite
+- SSL/TLS for MySQL/PostgreSQL connections
+
+### Multi-Node Cluster
+- Agent nodes connect via WebSocket (Ktor Netty with native TLS)
+- Self-signed keystore auto-generation
+- Configurable trust: `tls_verify`, custom truststore
+- Placement strategies: least-services, least-memory, round-robin
+- Agent state persistence: `AgentStateStore` with PID tracking and service recovery
+- Heartbeat monitoring with configurable interval and timeout
+- Node failure handling: affected services marked CRASHED, rescheduled
+
+### Load Balancer
+- Async TCP load balancer via Java NIO `AsynchronousServerSocketChannel`
+- Strategies: round-robin, least-players
+- PROXY protocol v2 for client IP passthrough
+- Backend health manager with failure tracking
+- Connection draining, idle timeout watchdog
+- Per-connection semaphore (configurable max connections)
+
+### Plugins & SDK
+- **Nimbus SDK**: Server-side API for backend Minecraft servers (Spigot 1.8.8+, Paper, Folia)
+- **Nimbus Perms**: Permission plugin with builtin or LuckPerms provider
+- **Nimbus Display**: Server selector signs (1.13+) + NPCs via FancyNpcs (Paper 1.20+)
+- **Nimbus Bridge**: Velocity plugin for hub commands and cloud integration
+- Cross-version compatibility: `VersionHelper`, `SchedulerCompat`, `TextCompat`
+- Auto-deployed to backend servers via module-registered `PluginDeployment`
+
+### Bedrock
+- Geyser + Floodgate auto-download from GeyserMC API
+- Centralized `key.pem` management
+- Separate UDP port allocation per proxy
+- Auto-generated Geyser config
+
+### Performance
+- Aikar's JVM flags (memory-aware tuning)
+- Paper/Purpur server config optimization
+- `jvm.optimize = true` by default
+
+### Stress Testing
+- `stress start <players> [group] [--ramp <seconds>]`
+- Distributes simulated players across backends respecting `max_players`
+- Scaling engine paused during active tests
+- Proxy MOTD + tab reflect simulated counts
+- REST API: start, stop, ramp, status
+
+### Monitoring
+- Metrics collection with 30-day auto-prune
+- Audit logging with 90-day retention (configurable)
+- Actor tracking: `system`, `console`, `api:admin`, `api:service`
+- `audit` command + `/api/audit` endpoint
+- Event bus: sealed event classes with `NimbusEvent.actor` field
+
+### Deployment
+- One-command installers: `curl | bash` (Linux/macOS), `irm | iex` (Windows)
+- Separate installer for controller and agent nodes
+- Java 21 auto-installed if missing
+- Auto-updater: GitHub Releases, semver comparison, backup + swap
+- Release workflow: GitHub Actions, manual trigger, draft releases

@@ -1,0 +1,159 @@
+---
+title: Smart Scaling Module
+description: Proactive time-based scaling with schedule rules, predictive warmup, and historical player count analysis.
+---
+
+The Smart Scaling module (`nimbus-module-scaling`) adds proactive, time-based scaling to the Nimbus cloud system. It works alongside the core reactive scaling engine, which handles real-time player demand.
+
+## Overview
+
+| Feature | Core ScalingEngine | Smart Scaling Module |
+|---|---|---|
+| Trigger | Player count fill rate | Time schedules + historical predictions |
+| Direction | Scale up + scale down | Scale up only (never stops servers) |
+| Data source | Live server pings | Database snapshots (7-day history) |
+| Config | `[group.scaling]` in group TOML | `config/modules/scaling/<Group>.toml` |
+
+## Architecture
+
+```text title="Directory Structure"
+nimbus-module-scaling/
+├── SmartScalingModule.kt          # NimbusModule: lifecycle, background loops
+├── SmartScalingManager.kt         # Core logic: schedules, predictions, warmup
+├── SmartScalingConfig.kt          # TOML config parsing per group
+├── SmartScalingTables.kt          # DB tables: snapshots + decisions
+├── commands/
+│   └── ScalingCommand.kt          # Console + Bridge command
+└── routes/
+    └── ScalingRoutes.kt           # REST API endpoints
+```
+
+## Database tables
+
+### `smart_scaling_snapshots`
+
+Recorded every 60 seconds per dynamic group.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INT (PK) | Auto-increment |
+| `timestamp` | VARCHAR(30) | ISO-8601 instant |
+| `group_name` | VARCHAR(64) | Group name |
+| `player_count` | INT | Total players across ready services |
+| `service_count` | INT | Number of ready services |
+
+### `smart_scaling_decisions`
+
+Logged whenever the module starts services.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | INT (PK) | Auto-increment |
+| `timestamp` | VARCHAR(30) | ISO-8601 instant |
+| `group_name` | VARCHAR(64) | Group name |
+| `action` | VARCHAR(32) | `smart_schedule`, `smart_warmup`, `smart_prediction` |
+| `reason` | VARCHAR(512) | Human-readable reason |
+| `source` | VARCHAR(32) | `schedule` or `prediction` |
+| `services_started` | INT | Number of services started |
+
+Both tables are auto-pruned after 90 days.
+
+## Configuration format
+
+Each group gets a TOML file at `config/modules/scaling/<GroupName>.toml`:
+
+```toml title="config/groups/*.toml"
+[schedule]
+enabled = true
+timezone = "Europe/Berlin"
+
+[[schedule.rules]]
+name = "evening-peak"
+days = ["MON", "TUE", "WED", "THU", "FRI"]
+from = "17:00"
+to = "23:00"
+min_instances = 3
+# max_instances = 6    # Optional: cap during this period
+
+[warmup]
+enabled = true
+lead_time_minutes = 10
+```
+
+### Schedule rules
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | Rule identifier (shown in console/API) |
+| `days` | Yes | Weekdays: `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN` |
+| `from` | Yes | Start time (HH:MM, 24h) |
+| `to` | Yes | End time (HH:MM, 24h, overnight ranges like `22:00`-`02:00` supported) |
+| `min_instances` | Yes | Minimum services during this window |
+| `max_instances` | No | Optional cap (defaults to group's `max_instances`) |
+
+When multiple rules overlap, the one with the highest `min_instances` wins.
+
+### Warmup config
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Enable predictive warmup |
+| `lead_time_minutes` | `10` | Start servers this many minutes before a schedule activates |
+
+## Prediction algorithm
+
+The prediction uses a simple historical average:
+
+1. Load snapshots from the past 7 days
+2. Filter for matching weekday + hour
+3. Calculate average player count
+4. If predicted players exceed current capacity (considering fill threshold), pre-start servers
+
+No machine learning — just a rolling average over same-weekday, same-hour windows.
+
+## Events
+
+The module emits `ModuleEvent` with these types:
+
+| Event type | Meaning |
+|---|---|
+| `SMART_SCHEDULE` | Services started due to an active schedule rule |
+| `SMART_WARMUP` | Services pre-started for an upcoming schedule |
+| `SMART_PREDICTION` | Services started based on historical prediction |
+
+Console formatters display these with colored output.
+
+## ServiceManager access
+
+The module needs `ServiceManager` to start services, but `ServiceManager` is created after modules are loaded. The solution uses `ModuleContext.registerService()`:
+
+1. Core registers `ServiceManager` after creation: `moduleContext.registerService(ServiceManager::class.java, serviceManager)`
+2. Module resolves it lazily in its background loop (15s delay): `context.service<ServiceManager>()`
+
+This pattern is available to any module that needs late-initialized services.
+
+## REST API
+
+All endpoints require service-level authentication (default).
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/scaling/status` | Overview: active schedules, recent decisions |
+| `GET` | `/api/scaling/schedules` | All schedule rules for all groups |
+| `GET` | `/api/scaling/schedules/{group}` | Rules for a specific group |
+| `GET` | `/api/scaling/history/{group}?hours=24` | Player count history |
+| `GET` | `/api/scaling/predictions/{group}` | Predictions for next 6 hours |
+| `GET` | `/api/scaling/decisions?limit=50` | Recent scaling decisions |
+
+## Console commands
+
+```text title="Output"
+scaling status                    # Active schedules + recent decisions
+scaling schedule list             # All rules
+scaling schedule info <group>     # Rules for a group
+scaling history <group> [hours]   # Player history (default 24h)
+scaling predict <group>           # Predictions next 6h
+scaling reload                    # Reload configs from disk
+```
+
+All commands are also available via the Bridge plugin (`/cloud scaling ...`).

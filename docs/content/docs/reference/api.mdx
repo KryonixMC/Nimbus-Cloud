@@ -1,0 +1,2068 @@
+---
+title: REST API Reference
+description: Complete reference for the Nimbus REST API v0.2, including authentication, endpoints for services, groups, permissions, maintenance, and more.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Nimbus exposes a REST API (v0.2) built on Ktor. The API is optional and can be enabled in `config/nimbus.toml` or started at runtime with the `api start` console command.
+
+## Authentication
+
+All endpoints except `/api/health` require a Bearer token:
+
+```http title="Request"
+Authorization: Bearer <your-token>
+```
+
+Configure the token in `config/nimbus.toml`:
+
+```toml title="config/nimbus.toml"
+[api]
+enabled = true
+bind = "0.0.0.0"
+port = 8080
+token = "your-secret-token"
+```
+
+<Callout title="Auto-generated token" type="info">
+If no token is configured in `nimbus.toml`, Nimbus **auto-generates** a random token on each start and logs the first 8 characters to the console. The API is never unauthenticated. Set a permanent token in the config for production use.
+</Callout>
+
+### Token Scopes
+
+Nimbus uses two token levels:
+
+| Token | Scope | Recipients |
+|---|---|---|
+| **Admin token** | Full API access (all endpoints) | Proxy/Bridge plugin, manual API calls |
+| **Service token** | Service-level endpoints only (services, permissions, groups, displays, proxy sync, maintenance, metrics, network) | Game servers (SDK, Perms plugin) |
+
+The service token is automatically derived from the admin token using HMAC-SHA256. Game servers receive the restricted service token via the `NIMBUS_API_TOKEN` environment variable, while the Velocity proxy receives the full admin token.
+
+Admin-only endpoints (require the admin token): `/api/reload`, `/api/stress/*`, `/api/files/*`, `/api/config`, `/api/loadbalancer`, `/api/nodes`.
+
+<Callout title="Rate limiting" type="info">
+The API enforces **per-IP** rate limits: **120 requests/minute** globally and **5 requests/minute** for stress test endpoints. Exceeding the limit returns HTTP 429 (Too Many Requests).
+</Callout>
+
+## Response Format
+
+All responses use JSON. Error responses follow a consistent format:
+
+```json title="Error Response"
+{
+  "success": false,
+  "message": "Description of what went wrong",
+  "error": "ERROR_CODE"
+}
+```
+
+The `error` field contains a machine-readable error code that clients can switch on instead of parsing messages. For successful responses, the `error` field is `null`.
+
+**Common error codes:**
+
+| Error Code | Description |
+|------------|-------------|
+| `SERVICE_NOT_FOUND` | The requested service does not exist |
+| `SERVICE_NOT_READY` | Service exists but is not in READY state |
+| `SERVICE_START_FAILED` | Failed to start service (max instances or JAR unavailable) |
+| `GROUP_NOT_FOUND` | The requested group does not exist |
+| `GROUP_ALREADY_EXISTS` | A group with that name already exists |
+| `GROUP_HAS_RUNNING_INSTANCES` | Cannot delete group with running services |
+| `VALIDATION_FAILED` | Request failed input validation |
+| `INVALID_INPUT` | Invalid parameter value |
+| `NOT_FOUND` | Generic resource not found |
+| `FORBIDDEN` | Action not allowed |
+| `READ_ONLY` | Scope is read-only |
+| `PATH_TRAVERSAL` | Path traversal attempt blocked |
+| `INTERNAL_ERROR` | Unexpected server error |
+| `STRESS_ALREADY_RUNNING` | A stress test is already active |
+| `STRESS_NOT_RUNNING` | No stress test is currently active |
+| `CLUSTER_NOT_ENABLED` | Cluster mode is not enabled |
+| `LOAD_BALANCER_NOT_ENABLED` | Load balancer is not enabled |
+| `PROXY_NOT_AVAILABLE` | No Velocity proxy available |
+| `COMMAND_NOT_FOUND` | Command does not exist |
+| `COMMAND_NOT_REMOTE` | Command does not support remote execution |
+
+---
+
+## Health
+
+### GET /api/health
+
+Public endpoint (no authentication required). Use for monitoring and health checks.
+
+**Response:**
+
+```json title="Response"
+{
+  "status": "ok",
+  "version": "0.2.0",
+  "uptimeSeconds": 3600,
+  "services": 5,
+  "apiEnabled": true
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | API is healthy |
+
+---
+
+## Services
+
+### GET /api/services
+
+List all services. Supports filtering by group, state, and custom state.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `group` | string | Filter by group name |
+| `state` | string | Filter by state: `PREPARING`, `STARTING`, `READY`, `STOPPING`, `STOPPED`, `CRASHED` |
+| `customState` | string | Filter by custom state (case-insensitive) |
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/services?group=Lobby&state=READY"
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "services": [
+    {
+      "name": "Lobby-1",
+      "groupName": "Lobby",
+      "port": 30001,
+      "host": "127.0.0.1",
+      "nodeId": "local",
+      "state": "READY",
+      "customState": null,
+      "pid": 48201,
+      "playerCount": 12,
+      "startedAt": "2025-01-15T10:30:00Z",
+      "restartCount": 0,
+      "uptime": "2h 15m 30s",
+      "isStatic": false,
+      "bedrockPort": null
+    }
+  ],
+  "total": 1
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 400 | Invalid state filter value |
+
+---
+
+### GET /api/services/health
+
+Aggregated health summary across all services. Useful for monitoring dashboards.
+
+**Response:**
+
+```json title="Response"
+{
+  "totalServices": 5,
+  "readyServices": 4,
+  "healthyServices": 4,
+  "unhealthyServices": 0,
+  "averageTps": 19.85,
+  "totalMemoryUsedMb": 2048,
+  "totalMemoryMaxMb": 4096,
+  "memoryUsagePercent": 50.0,
+  "services": [
+    {
+      "name": "Lobby-1",
+      "groupName": "Lobby",
+      "state": "READY",
+      "tps": 19.9,
+      "memoryUsedMb": 512,
+      "memoryMaxMb": 1024,
+      "healthy": true,
+      "restartCount": 0,
+      "uptimeSeconds": 7200
+    }
+  ]
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+
+---
+
+### GET /api/services/{'{'}name{'}'}
+
+Get details for a specific service.
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/services/Lobby-1
+```
+
+**Response:** Same as single entry in the services list above.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Service not found |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/start
+
+Start a new instance of a group. The `{name}` parameter is the **group name**, not a service name.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/services/BedWars/start
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Service 'BedWars-3' starting on port 30005"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 201 | Service starting |
+| 404 | Group not found |
+| 409 | Max instances reached or JAR unavailable |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/stop
+
+Gracefully stop a running service.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/services/BedWars-3/stop
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Service 'BedWars-3' stopped"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Service stopped |
+| 404 | Service not found |
+| 500 | Failed to stop |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/restart
+
+Stop and restart a service. Returns a new service instance.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/services/Lobby-1/restart
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Service restarted as 'Lobby-1' on port 30001"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Service restarted |
+| 404 | Service not found |
+| 500 | Restart failed |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/exec
+
+Execute a command on a service's stdin.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "command": "say Hello from the API!"
+}
+```
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "say Hello!"}' \
+  http://localhost:8080/api/services/Lobby-1/exec
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "service": "Lobby-1",
+  "command": "say Hello!"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Command sent |
+| 404 | Service not found |
+
+---
+
+### PUT /api/services/{'{'}name{'}'}/state
+
+Set a custom state on a service. Used by game plugins via the SDK to signal state changes (e.g., `WAITING`, `INGAME`, `ENDING`).
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "customState": "INGAME"
+}
+```
+
+Set to `null` to clear the custom state:
+
+```json title="Request Body"
+{
+  "customState": null
+}
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "service": "BedWars-1",
+  "customState": "INGAME"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | State updated |
+| 404 | Service not found |
+| 409 | Service is not in READY state |
+
+---
+
+### GET /api/services/{'{'}name{'}'}/state
+
+Get the current custom state of a service.
+
+**Response:**
+
+```json title="Response"
+{
+  "service": "BedWars-1",
+  "customState": "INGAME"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Service not found |
+
+---
+
+### GET /api/services/{'{'}name{'}'}/logs
+
+Get recent log lines from the service's `logs/latest.log`.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `lines` | int | 100 | Number of lines to return (1-1000) |
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/services/Lobby-1/logs?lines=50"
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "service": "Lobby-1",
+  "lines": [
+    "[14:23:01 INFO]: Player Alex joined the game",
+    "[14:23:05 INFO]: Player Steve joined the game"
+  ],
+  "total": 2
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success (empty lines array if no log file) |
+| 404 | Service not found |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/message
+
+Send a message to a service (service-to-service messaging via the event bus).
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "from": "BedWars-1",
+  "channel": "game_end",
+  "data": {
+    "winner": "Red",
+    "duration": "320"
+  }
+}
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Message sent to 'Lobby-1' on channel 'game_end'"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Message sent |
+| 404 | Target service not found |
+
+---
+
+### PUT /api/services/{'{'}name{'}'}/players
+
+Report the current player count for a service. Used internally by the SDK on backend servers to keep the controller's player counts accurate.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "playerCount": 12
+}
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "service": "Lobby-1",
+  "playerCount": 12
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Player count updated |
+| 404 | Service not found |
+
+---
+
+## Groups
+
+### GET /api/groups
+
+List all configured server groups.
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/groups
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "groups": [
+    {
+      "name": "Lobby",
+      "type": "DYNAMIC",
+      "software": "PAPER",
+      "version": "1.21.4",
+      "template": "lobby",
+      "resources": {
+        "memory": "1G",
+        "maxPlayers": 50
+      },
+      "scaling": {
+        "minInstances": 2,
+        "maxInstances": 4,
+        "playersPerInstance": 40,
+        "scaleThreshold": 0.8,
+        "idleTimeout": 0
+      },
+      "lifecycle": {
+        "stopOnEmpty": false,
+        "restartOnCrash": true,
+        "maxRestarts": 5
+      },
+      "jvmArgs": ["-XX:+UseG1GC"],
+      "activeInstances": 2
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### GET /api/groups/{'{'}name{'}'}
+
+Get details for a specific group. Same response format as a single entry in the groups list.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Group not found |
+
+---
+
+### POST /api/groups
+
+Create a new server group. Writes a TOML config file and reloads.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "name": "SkyWars",
+  "type": "DYNAMIC",
+  "template": "skywars",
+  "software": "PAPER",
+  "version": "1.21.4",
+  "memory": "2G",
+  "maxPlayers": 16,
+  "minInstances": 1,
+  "maxInstances": 8,
+  "playersPerInstance": 16,
+  "scaleThreshold": 0.8,
+  "idleTimeout": 300,
+  "stopOnEmpty": true,
+  "restartOnCrash": true,
+  "maxRestarts": 5,
+  "jvmArgs": ["-XX:+UseG1GC"]
+}
+```
+
+All fields except `name` and `template` have defaults. Optional fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `type` | `DYNAMIC` | `DYNAMIC` or `STATIC` |
+| `software` | `PAPER` | `PAPER`, `PURPUR`, `VELOCITY`, `FORGE`, `NEOFORGE`, `FABRIC`, `CUSTOM` |
+| `version` | `1.21.4` | Minecraft version |
+| `modloaderVersion` | `""` | Modloader version (Forge/NeoForge/Fabric) |
+| `jarName` | `""` | Custom JAR filename |
+| `readyPattern` | `""` | Custom regex for ready detection |
+| `memory` | `1G` | Memory per instance |
+| `maxPlayers` | `50` | Max players per instance |
+| `minInstances` | `1` | Minimum running instances |
+| `maxInstances` | `4` | Maximum running instances |
+| `playersPerInstance` | `40` | Players per instance (for scaling) |
+| `scaleThreshold` | `0.8` | Scale up when this % full (0.0-1.0) |
+| `idleTimeout` | `0` | Stop idle instances after this many seconds (0 = never) |
+| `stopOnEmpty` | `false` | Stop when no players |
+| `restartOnCrash` | `true` | Auto-restart on crash |
+| `maxRestarts` | `5` | Max restart attempts |
+| `jvmArgs` | `["-XX:+UseG1GC"]` | JVM arguments |
+
+**Validation Rules:**
+- Names must match `^[a-zA-Z0-9_-]{1,64}$`
+- Memory format: `512M` or `2G`
+- Version format: `1.21.4` or `1.21.4-pre1`
+- `minInstances <= maxInstances`
+- `scaleThreshold` between 0.0 and 1.0
+
+| Status Code | Description |
+|-------------|-------------|
+| 201 | Group created |
+| 400 | Validation error |
+| 409 | Group already exists |
+
+---
+
+### PUT /api/groups/{'{'}name{'}'}
+
+Update a group's configuration. Same request body as POST.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group updated |
+| 400 | Validation error |
+| 404 | Group not found |
+
+---
+
+### DELETE /api/groups/{'{'}name{'}'}
+
+Delete a group. Fails if the group has running instances.
+
+```bash title="Terminal"
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/groups/SkyWars
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group deleted |
+| 404 | Group not found |
+| 409 | Group has running instances |
+
+---
+
+## Network
+
+### GET /api/status
+
+Full cluster overview.
+
+**Response:**
+
+```json title="Response"
+{
+  "networkName": "MyNetwork",
+  "online": true,
+  "uptimeSeconds": 7200,
+  "totalServices": 5,
+  "totalPlayers": 36,
+  "groups": [
+    {
+      "name": "Lobby",
+      "instances": 2,
+      "maxInstances": 4,
+      "players": 12,
+      "maxPlayers": 100,
+      "software": "PAPER",
+      "version": "1.21.4"
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/players
+
+List all connected players. Pings each READY service in parallel via Server List Ping.
+
+**Response:**
+
+```json title="Response"
+{
+  "players": [
+    {
+      "name": "Steve",
+      "service": "Lobby-1"
+    },
+    {
+      "name": "Alex",
+      "service": "BedWars-1"
+    }
+  ],
+  "total": 2
+}
+```
+
+---
+
+### POST /api/players/{'{'}name{'}'}/send
+
+Transfer a player to another service via the Velocity proxy.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "targetService": "Lobby-1"
+}
+```
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"targetService": "Lobby-1"}' \
+  http://localhost:8080/api/players/Steve/send
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Transfer command sent |
+| 503 | No Velocity proxy available |
+| 500 | Failed to send command |
+
+---
+
+### POST /api/players/{'{'}name{'}'}/kick
+
+Kick a player from the network via the Velocity proxy.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "reason": "You have been kicked from the network."
+}
+```
+
+The `reason` field is optional and defaults to `"You have been kicked from the network."`.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Breaking the rules."}' \
+  http://localhost:8080/api/players/Steve/kick
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Kick command sent |
+| 503 | No Velocity proxy available |
+| 500 | Failed to execute kick command |
+
+---
+
+### POST /api/broadcast
+
+Broadcast a message to all running services, or to a specific group.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "message": "Server restarting in 5 minutes!",
+  "group": "Lobby"
+}
+```
+
+The `group` field is optional. When omitted, the message is sent to all READY services.
+
+Backend servers receive the message via `/say`, proxy servers via `velocity broadcast`.
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Broadcast sent to 4/4 services in network",
+  "services": 4
+}
+```
+
+**Example:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Maintenance in 10 minutes!"}' \
+  http://localhost:8080/api/broadcast
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Broadcast sent (check `services` count in response) |
+| 404 | No ready services found in the target scope |
+
+---
+
+## Audit
+
+### GET /api/audit
+
+Returns paginated audit log entries. Admin-only.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | Int | `50` | Max entries to return (1–500) |
+| `offset` | Long | `0` | Skip first N entries (for pagination) |
+| `action` | String | — | Filter by action type (e.g. `SERVICE_STARTING`, `CONFIG_RELOADED`) |
+| `actor` | String | — | Filter by actor (e.g. `console`, `api:admin`, `system`) |
+
+**Response:**
+
+```json title="Response"
+{
+  "entries": [
+    {
+      "timestamp": "2025-01-15T10:30:15.123Z",
+      "actor": "console",
+      "action": "SERVICE_STARTING",
+      "target": "Lobby-1",
+      "details": "group=Lobby, port=30001, node=local"
+    }
+  ],
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+## Permissions
+
+### GET /api/permissions/groups
+
+List all permission groups.
+
+**Response:**
+
+```json title="Response"
+{
+  "groups": [
+    {
+      "name": "admin",
+      "default": false,
+      "prefix": "&c[Admin] ",
+      "suffix": "",
+      "priority": 100,
+      "permissions": ["nimbus.admin", "nimbus.command.*"],
+      "parents": ["mod"]
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### GET /api/permissions/groups/{'{'}name{'}'}
+
+Get a specific permission group. Same format as single entry above.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Group not found |
+
+---
+
+### POST /api/permissions/groups
+
+Create a new permission group.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "name": "vip",
+  "default": false
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 201 | Group created |
+| 400 | Invalid name |
+| 409 | Group already exists |
+
+---
+
+### PUT /api/permissions/groups/{'{'}name{'}'}
+
+Update a permission group. All fields are optional -- only provided fields are changed.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "default": false,
+  "prefix": "&a[VIP] ",
+  "suffix": "",
+  "priority": 50,
+  "permissions": ["nimbus.join.full", "nimbus.chat.color"],
+  "parents": ["default"]
+}
+```
+
+<Callout type="warn">
+Setting `permissions` or `parents` **replaces** the entire list, not appends to it. Use the individual add/remove endpoints for incremental changes.
+</Callout>
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group updated |
+| 404 | Group not found |
+
+---
+
+### DELETE /api/permissions/groups/{'{'}name{'}'}
+
+Delete a permission group.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group deleted |
+| 404 | Group not found |
+
+---
+
+### POST /api/permissions/groups/{'{'}name{'}'}/permissions
+
+Add a single permission to a group.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "permission": "nimbus.join.full"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Permission added |
+| 404 | Group not found |
+
+---
+
+### DELETE /api/permissions/groups/{'{'}name{'}'}/permissions
+
+Remove a single permission from a group.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "permission": "nimbus.join.full"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Permission removed |
+| 404 | Group not found |
+
+---
+
+### GET /api/permissions/groups/{'{'}name{'}'}/meta
+
+Get all metadata key-value pairs for a permission group.
+
+**Response:**
+
+```json title="Response"
+{
+  "meta": {
+    "chat-color": "gold",
+    "max-homes": "5"
+  }
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | Group not found |
+
+---
+
+### PUT /api/permissions/groups/{'{'}name{'}'}/meta
+
+Set a metadata key-value pair on a permission group.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "key": "chat-color",
+  "value": "gold"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key set |
+| 404 | Group not found |
+
+---
+
+### DELETE /api/permissions/groups/{'{'}name{'}'}/meta/{'{'}key{'}'}
+
+Remove a metadata key from a permission group.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/permissions/groups/vip/meta/chat-color
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key removed |
+| 404 | Group not found |
+
+---
+
+### GET /api/permissions/players/{'{'}uuid{'}'}
+
+Get a player's permission data, including effective permissions resolved from all groups.
+
+**Response:**
+
+```json title="Response"
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "Steve",
+  "groups": ["admin", "vip"],
+  "effectivePermissions": [
+    "minecraft.command.gamemode",
+    "nimbus.admin",
+    "nimbus.command.*",
+    "nimbus.join.full"
+  ],
+  "prefix": "&c[Admin] ",
+  "suffix": "",
+  "displayGroup": "admin"
+}
+```
+
+---
+
+### PUT /api/permissions/players/{'{'}uuid{'}'}
+
+Register or update a player. Typically called on player join.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "name": "Steve"
+}
+```
+
+**Response:** Same format as GET player response, with resolved permissions.
+
+---
+
+### POST /api/permissions/players/{'{'}uuid{'}'}/groups
+
+Add a permission group to a player.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "group": "vip",
+  "name": "Steve"
+}
+```
+
+The `name` field is optional if the player is already registered.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group added |
+| 400 | Invalid group |
+
+---
+
+### DELETE /api/permissions/players/{'{'}uuid{'}'}/groups
+
+Remove a permission group from a player.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "group": "vip"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Group removed |
+| 400 | Invalid group |
+
+---
+
+### GET /api/permissions/players/{'{'}uuid{'}'}/meta
+
+Get all metadata key-value pairs for a player.
+
+**Response:**
+
+```json title="Response"
+{
+  "meta": {
+    "nickname": "Steve the Builder",
+    "home-limit": "10"
+  }
+}
+```
+
+---
+
+### PUT /api/permissions/players/{'{'}uuid{'}'}/meta
+
+Set a metadata key-value pair on a player.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "key": "nickname",
+  "value": "Steve the Builder"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key set |
+| 404 | Player not found |
+
+---
+
+### DELETE /api/permissions/players/{'{'}uuid{'}'}/meta/{'{'}key{'}'}
+
+Remove a metadata key from a player.
+
+**Example:**
+
+```bash title="Terminal"
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/permissions/players/550e8400-e29b-41d4-a716-446655440000/meta/nickname
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Meta key removed |
+| 404 | Player not found |
+
+---
+
+### GET /api/permissions/check/{'{'}uuid{'}'}/{'{'}permission{'}'}
+
+Check if a player has a specific permission.
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/permissions/check/550e8400-e29b-41d4-a716-446655440000/nimbus.admin
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",
+  "permission": "nimbus.admin",
+  "allowed": true
+}
+```
+
+---
+
+### GET /api/permissions/audit
+
+Get the permission audit log. Records all permission changes made via the API or console.
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 50 | Number of entries to return |
+| `offset` | int | 0 | Offset for pagination |
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/permissions/audit?limit=20&offset=0"
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "entries": [
+    {
+      "timestamp": "2025-01-15T14:30:00Z",
+      "actor": "api",
+      "action": "user.addgroup",
+      "target": "550e8400-e29b-41d4-a716-446655440000",
+      "details": "Added group 'vip' to 'Steve'"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+## Displays
+
+### GET /api/displays
+
+List all display configurations (signs, NPCs).
+
+**Response:**
+
+```json title="Response"
+{
+  "displays": [
+    {
+      "name": "BedWars",
+      "sign": {
+        "line1": "&lBedWars",
+        "line2": "&7Click to play",
+        "line3": "",
+        "line4Online": "&a%players% playing",
+        "line4Offline": "&cOffline"
+      },
+      "npc": {
+        "displayName": "&eBedWars",
+        "item": "RED_BED",
+        "subtitle": "&7%players% playing",
+        "subtitleOffline": "&cOffline"
+      },
+      "states": {
+        "WAITING": "&aWaiting",
+        "INGAME": "&cIn Game",
+        "ENDING": "&6Ending"
+      }
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### GET /api/displays/{'{'}name{'}'}
+
+Get display config for a specific group. Same format as single entry above.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 404 | No display config for this group |
+
+---
+
+### GET /api/displays/{'{'}name{'}'}/state/{'{'}state{'}'}
+
+Resolve a raw custom state to its display label.
+
+**Example:**
+
+```bash title="Terminal"
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/api/displays/BedWars/state/INGAME
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "raw": "INGAME",
+  "label": "&cIn Game"
+}
+```
+
+---
+
+## Proxy Sync
+
+Manage tab list, MOTD, and chat formatting for Velocity proxies.
+
+### GET /api/proxy/config
+
+Get the full proxy sync configuration.
+
+**Response:**
+
+```json title="Response"
+{
+  "tablist": {
+    "header": "&b&lMyNetwork\n&7Online: %online%",
+    "footer": "&7play.mynetwork.com",
+    "playerFormat": "%prefix%%player%%suffix%",
+    "updateInterval": 5
+  },
+  "motd": {
+    "line1": "&b&lMyNetwork",
+    "line2": "&7A Minecraft Network",
+    "maxPlayers": 500,
+    "playerCountOffset": 10
+  },
+  "chat": {
+    "format": "%prefix%%player%%suffix% &7>> &f%message%",
+    "enabled": true
+  },
+  "maintenance": {
+    "globalEnabled": false,
+    "motdLine1": "  <gradient:#ff6b6b:#ee5a24><bold>MAINTENANCE</bold></gradient>",
+    "motdLine2": "  <gray>We are currently performing maintenance.</gray>",
+    "protocolText": "Maintenance",
+    "kickMessage": "<red><bold>Maintenance</bold></red>...",
+    "whitelist": [],
+    "groups": {}
+  }
+}
+```
+
+---
+
+### GET /api/proxy/tablist
+
+Get tab list configuration.
+
+### PUT /api/proxy/tablist
+
+Update tab list settings. All fields are optional.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "header": "&b&lMyNetwork\n&7%online% players online",
+  "footer": "&7play.mynetwork.com",
+  "playerFormat": "%prefix%%player%%suffix%",
+  "updateInterval": 10
+}
+```
+
+---
+
+### GET /api/proxy/motd
+
+Get MOTD configuration.
+
+### PUT /api/proxy/motd
+
+Update MOTD settings. All fields are optional.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "line1": "&b&lMyNetwork",
+  "line2": "&aSeason 3 is live!",
+  "maxPlayers": 1000,
+  "playerCountOffset": 0
+}
+```
+
+---
+
+### GET /api/proxy/chat
+
+Get chat format configuration.
+
+### PUT /api/proxy/chat
+
+Update chat settings. All fields are optional.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "format": "%prefix%%player%%suffix% &8>> &f%message%",
+  "enabled": true
+}
+```
+
+---
+
+### PUT /api/proxy/tablist/players/{'{'}uuid{'}'}
+
+Set a per-player tab list format override.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "format": "&c[Owner] &f%player%"
+}
+```
+
+---
+
+### DELETE /api/proxy/tablist/players/{'{'}uuid{'}'}
+
+Clear a player's tab list format override.
+
+---
+
+### GET /api/proxy/tablist/players
+
+Get all player tab list overrides.
+
+**Response:**
+
+```json title="Response"
+{
+  "overrides": {
+    "550e8400-e29b-41d4-a716-446655440000": "&c[Owner] &f%player%"
+  },
+  "total": 1
+}
+```
+
+---
+
+## Maintenance
+
+Toggle maintenance mode for the entire network or individual server groups.
+
+### GET /api/maintenance
+
+Get full maintenance status (global state + all groups).
+
+**Response:**
+
+```json title="Response"
+{
+  "global": {
+    "enabled": true,
+    "motdLine1": "  <gradient:#ff6b6b:#ee5a24><bold>MAINTENANCE</bold></gradient>",
+    "motdLine2": "  <gray>We are currently performing maintenance.</gray>",
+    "protocolText": "Maintenance",
+    "kickMessage": "<red><bold>Maintenance</bold></red>\n<gray>Please try again later.</gray>",
+    "whitelist": ["jonas", "admin"]
+  },
+  "groups": {
+    "BedWars": {
+      "enabled": true,
+      "kickMessage": "<red>BedWars is under maintenance.</red>"
+    }
+  }
+}
+```
+
+---
+
+### POST /api/maintenance/global
+
+Toggle global maintenance mode. When enabled, the proxy shows a maintenance MOTD, overrides the version protocol, and blocks new connections for non-whitelisted players.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "enabled": true,
+  "reason": "Server update"
+}
+```
+
+---
+
+### PUT /api/maintenance/global
+
+Update global maintenance configuration (MOTD, protocol text, kick message). All fields are optional.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "motdLine1": "<red><bold>DOWN FOR MAINTENANCE</bold></red>",
+  "motdLine2": "<gray>Back soon!</gray>",
+  "protocolText": "Maintenance",
+  "kickMessage": "<red>Server is under maintenance.</red>"
+}
+```
+
+---
+
+### POST /api/maintenance/groups/{'{'}name{'}'}
+
+Toggle maintenance mode for a specific server group. Players cannot join servers of groups in maintenance.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "enabled": true,
+  "reason": "Template update"
+}
+```
+
+---
+
+### PUT /api/maintenance/groups/{'{'}name{'}'}
+
+Update group maintenance configuration. All fields are optional.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "kickMessage": "<red>This game mode is being updated.</red>"
+}
+```
+
+---
+
+### POST /api/maintenance/whitelist
+
+Add a player to the maintenance whitelist. Whitelisted players can join during global maintenance.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "entry": "jonas"
+}
+```
+
+---
+
+### DELETE /api/maintenance/whitelist
+
+Remove a player from the maintenance whitelist.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "entry": "jonas"
+}
+```
+
+---
+
+## Files
+
+Manage files in template, service, and group directories.
+
+**Scopes:**
+
+| Scope | Path | Access |
+|-------|------|--------|
+| `templates` | Templates directory | Read/Write |
+| `services` | Running/static services | Read/Write |
+| `groups` | Group TOML configs | Read-only |
+
+<Callout type="warn">
+Path traversal (`..`) is blocked. All resolved paths must stay within their scope root. Max upload size: **100 MB**.
+</Callout>
+
+### GET /api/files/{'{'}scope{'}'}
+
+List the root directory of a scope.
+
+**Response:**
+
+```json title="Response"
+{
+  "scope": "templates",
+  "path": "/",
+  "entries": [
+    {
+      "name": "lobby",
+      "path": "lobby",
+      "isDirectory": true,
+      "size": 0,
+      "lastModified": "2025-01-15T10:00:00Z"
+    },
+    {
+      "name": "bedwars",
+      "path": "bedwars",
+      "isDirectory": true,
+      "size": 0,
+      "lastModified": "2025-01-15T09:00:00Z"
+    }
+  ],
+  "total": 2
+}
+```
+
+### GET /api/files/{'{'}scope{'}'}/{'{'}path...{'}'}
+
+List a directory or read a file. Directories return a file listing. Text files return content as JSON. Binary files (`.jar`, `.zip`, `.png`, etc.) are served as downloads.
+
+**Text file response:**
+
+```json title="Response"
+{
+  "scope": "templates",
+  "path": "lobby/server.properties",
+  "content": "server-port=25565\nmax-players=50\n...",
+  "size": 1234
+}
+```
+
+### PUT /api/files/{'{'}scope{'}'}/{'{'}path...{'}'}
+
+Write text content to a file. Creates parent directories if needed.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "content": "server-port=25565\nmax-players=50"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | File written |
+| 403 | Scope is read-only or path traversal |
+
+### POST /api/files/{'{'}scope{'}'}/{'{'}path...{'}'}
+
+Create a directory (with `?mkdir` query parameter) or upload a file via multipart form data.
+
+**Create directory:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/files/templates/skywars/plugins?mkdir"
+```
+
+**Upload file:**
+
+```bash title="Terminal"
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -F "file=@my-plugin.jar" \
+  http://localhost:8080/api/files/templates/lobby/plugins/my-plugin.jar
+```
+
+**Upload response:**
+
+```json title="Response"
+{
+  "success": true,
+  "path": "lobby/plugins/my-plugin.jar",
+  "size": 1048576
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 201 | Created |
+| 403 | Read-only scope |
+| 413 | File exceeds 100 MB limit |
+
+### DELETE /api/files/{'{'}scope{'}'}/{'{'}path...{'}'}
+
+Delete a file or directory (recursive for directories).
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Deleted |
+| 403 | Read-only scope or trying to delete scope root |
+| 404 | Path not found |
+
+---
+
+## Config
+
+### GET /api/config
+
+Read the current Nimbus configuration. The API token is never exposed.
+
+**Response:**
+
+```json title="Response"
+{
+  "network": {
+    "name": "MyNetwork",
+    "bind": "0.0.0.0"
+  },
+  "controller": {
+    "maxMemory": "8G",
+    "maxServices": 20,
+    "heartbeatInterval": 5
+  },
+  "console": {
+    "colored": true,
+    "logEvents": true
+  },
+  "paths": {
+    "templates": "templates",
+    "services": "services",
+    "logs": "logs"
+  },
+  "api": {
+    "enabled": true,
+    "bind": "0.0.0.0",
+    "port": 8080,
+    "hasToken": true,
+    "allowedOrigins": ["*"]
+  }
+}
+```
+
+---
+
+### PATCH /api/config
+
+Update non-critical configuration fields. Only `networkName`, `consoleColored`, and `consoleLogEvents` are editable. Changes are written to `config/nimbus.toml`.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "networkName": "MyNewNetwork",
+  "consoleColored": true,
+  "consoleLogEvents": false
+}
+```
+
+All fields are optional. At least one must be provided.
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Config updated: network.name = 'MyNewNetwork', console.log_events = false. Restart Nimbus for full effect."
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Config updated |
+| 400 | No fields provided or invalid value |
+
+---
+
+## System
+
+### POST /api/reload
+
+Hot-reload all group configuration files.
+
+**Response:**
+
+```json title="Response"
+{
+  "success": true,
+  "groupsLoaded": 3,
+  "message": "Reloaded 3 group config(s)"
+}
+```
+
+---
+
+### GET /api/metrics
+
+Public endpoint (no authentication required). Exports metrics in Prometheus text exposition format for scraping.
+
+Includes: service counts, player counts (total, by group, by service), group scaling config, cluster node stats, load balancer counters, and maintenance status.
+
+**Example:**
+
+```bash title="Terminal"
+curl http://localhost:8080/api/metrics
+```
+
+**Response:** `text/plain; version=0.0.4`
+
+```text title="Prometheus Metrics"
+# HELP nimbus_info Nimbus instance information
+# TYPE nimbus_info gauge
+nimbus_info{version="0.2.0"} 1
+# HELP nimbus_uptime_seconds Seconds since Nimbus started
+# TYPE nimbus_uptime_seconds gauge
+nimbus_uptime_seconds 7200
+# HELP nimbus_services_total Total number of services
+# TYPE nimbus_services_total gauge
+nimbus_services_total 5
+# HELP nimbus_players_total Total players across all services
+# TYPE nimbus_players_total gauge
+nimbus_players_total 36
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Metrics returned |
+
+---
+
+## Stress Testing
+
+Simulates player load across backend servers without real Minecraft clients. Only backend groups receive simulated players (proxy groups are excluded). Each service is capped at its `max_players` config value.
+
+### GET /api/stress
+
+Get the current stress test status.
+
+**Response (inactive):**
+
+```json title="Response (inactive)"
+{
+  "active": false
+}
+```
+
+**Response (active):**
+
+```json title="Response (active)"
+{
+  "active": true,
+  "group": "Lobby",
+  "currentPlayers": 80,
+  "targetPlayers": 100,
+  "totalCapacity": 200,
+  "overflow": 0,
+  "elapsedSeconds": 45,
+  "services": {
+    "Lobby-1": 40,
+    "Lobby-2": 40
+  },
+  "proxyServices": {
+    "Proxy-1": 80
+  }
+}
+```
+
+---
+
+### POST /api/stress/start
+
+Start a new stress test. Fails if a test is already running or the target group is a proxy.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "players": 100,
+  "group": "Lobby",
+  "rampSeconds": 30
+}
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `players` | Yes | | Number of simulated players (must be > 0) |
+| `group` | No | all backend groups | Target group name |
+| `rampSeconds` | No | `0` | Ramp-up duration in seconds |
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Stress test started |
+| 400 | Invalid player count |
+
+---
+
+### POST /api/stress/stop
+
+Stop the currently running stress test and clean up simulated players.
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Stress test stopped |
+| 400 | No stress test is running |
+
+---
+
+### POST /api/stress/ramp
+
+Adjust the target player count of a running stress test.
+
+**Request Body:**
+
+```json title="Request Body"
+{
+  "players": 200,
+  "durationSeconds": 60
+}
+```
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `players` | Yes | | New target player count (≥ 0) |
+| `durationSeconds` | No | `30` | Duration to ramp over |
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Ramp adjustment started |
+| 400 | Invalid player count or no test running |
+
+---
+
+## Cluster & Load Balancer
+
+These endpoints are only available when their respective features are enabled in `nimbus.toml`.
+
+### GET /api/nodes
+
+List all connected cluster nodes. Returns `404` if cluster mode is not enabled.
+
+**Response:**
+
+```json title="Response"
+{
+  "nodes": [
+    {
+      "nodeId": "worker-1",
+      "host": "10.0.1.10",
+      "maxMemory": "8G",
+      "maxServices": 10,
+      "currentServices": 3,
+      "cpuUsage": 0.42,
+      "memoryUsedMb": 3200,
+      "memoryTotalMb": 8192,
+      "isConnected": true,
+      "agentVersion": "0.1.0",
+      "os": "Linux",
+      "arch": "amd64",
+      "services": ["Lobby-2", "BedWars-1", "BedWars-2"]
+    }
+  ],
+  "total": 1
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Node list returned |
+| 404 | Cluster mode not enabled |
+
+---
+
+### GET /api/loadbalancer
+
+Get load balancer status including backend proxy list with health information. Returns `404` if the load balancer is not enabled.
+
+**Response:**
+
+```json title="Response"
+{
+  "enabled": true,
+  "bind": "0.0.0.0",
+  "port": 25565,
+  "strategy": "least-players",
+  "proxyProtocol": true,
+  "totalConnections": 1247,
+  "activeConnections": 36,
+  "rejectedConnections": 3,
+  "backends": [
+    {
+      "name": "Proxy-1",
+      "host": "127.0.0.1",
+      "port": 30010,
+      "playerCount": 18,
+      "health": "HEALTHY",
+      "connectionCount": 12
+    },
+    {
+      "name": "Proxy-2",
+      "host": "127.0.0.1",
+      "port": 30011,
+      "playerCount": 14,
+      "health": "UNHEALTHY",
+      "connectionCount": 0
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `rejectedConnections` | Long | Total connections rejected because `max_connections` limit was reached |
+| `backends[].health` | String | Health status: `HEALTHY`, `UNHEALTHY`, or `UNKNOWN` |
+| `backends[].connectionCount` | Int | Number of active connections currently routed to this backend |
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Load balancer status returned |
+| 404 | Load balancer not enabled |
+
+---
+
+### GET /api/templates/{'{'}name{'}'}/download
+
+Download a template as a ZIP archive. Used internally by agent nodes for template distribution. Authenticated via a `token` query parameter matching the cluster token.
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `token` | Yes | Cluster authentication token |
+
+**Example:**
+
+```bash title="Terminal"
+curl -o template.zip \
+  "http://controller:8080/api/templates/lobby/download?token=my-cluster-secret"
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Template archive returned (`application/zip`) |
+| 401 | Invalid token |
+| 404 | Template not found |
+
+---
+
+### GET /api/templates/{'{'}name{'}'}/hash
+
+Get the SHA-256 hash of a template's contents. Used by agents to check if their local template copy is up to date before downloading. Authenticated via a `token` query parameter.
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `token` | Yes | Cluster authentication token |
+
+**Example:**
+
+```bash title="Terminal"
+curl "http://controller:8080/api/templates/lobby/hash?token=my-cluster-secret"
+```
+
+**Response:** Plain text SHA-256 hash string.
+
+```text title="Response"
+a1b2c3d4e5f6...
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Hash returned (plain text) |
+| 401 | Invalid token |
+| 404 | Template not found |
