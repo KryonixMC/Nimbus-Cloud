@@ -103,6 +103,19 @@ object OutputRenderer {
             type == "GROUP_DELETED" -> {
                 "${RED}-${RESET} Group ${BOLD}${data["group"]}${RESET} deleted"
             }
+            type == "CLI_SESSION_CONNECTED" -> {
+                val user = data["user"] ?: "?"
+                val ip = data["remoteIp"] ?: "?"
+                val sid = data["sessionId"] ?: "?"
+                "${BRIGHT_CYAN}◆${RESET} CLI ${BOLD}$user${RESET} connected from ${CYAN}$ip${RESET} ${DIM}(#$sid)${RESET}"
+            }
+            type == "CLI_SESSION_DISCONNECTED" -> {
+                val user = data["user"] ?: "?"
+                val ip = data["remoteIp"] ?: "?"
+                val dur = data["durationSeconds"]?.toLongOrNull()?.let { formatDuration(it) } ?: "?"
+                val cmds = data["commandCount"] ?: "0"
+                "${CYAN}◇${RESET} CLI ${BOLD}$user${RESET} disconnected ${DIM}($ip, $dur, $cmds cmds)${RESET}"
+            }
             type == "MODULE_LOADED" -> {
                 val name = data["moduleName"] ?: "?"
                 "${CYAN}◆${RESET} Module ${BOLD}$name${RESET} loaded"
@@ -113,5 +126,14 @@ object OutputRenderer {
             }
         }
         return "${DIM}[$time]${RESET} $formatted"
+    }
+
+    private fun formatDuration(seconds: Long): String {
+        return when {
+            seconds < 60 -> "${seconds}s"
+            seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+            seconds < 86400 -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+            else -> "${seconds / 86400}d ${(seconds % 86400) / 3600}h"
+        }
     }
 }

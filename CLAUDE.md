@@ -154,6 +154,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 - LuckPerms support: optional provider in NimbusPerms, syncs display data to controller for proxy features
 - Database migrations: `MigrationManager` auto-applies versioned schema changes on startup; core uses V1 (baseline) + V2 (audit); modules register migrations via `ModuleContext.registerMigrations()`
 - Audit logging: `AuditCollector` subscribes to EventBus, batch-writes to `audit_log` table; `audit` console command + `GET /api/audit` endpoint
+- CLI session tracking: `CliSessionTracker` records Remote CLI connections in `cli_sessions` table; `sessions` console command (active/history); `CliSessionConnected`/`CliSessionDisconnected` events displayed in local console
 - Event actor tracking: `NimbusEvent.actor` field identifies trigger source (`system`, `console`, `api:admin`, `api:service`)
 - Cluster TLS: Netty engine with native `sslConnector`; auto-generates self-signed keystore at `config/cluster.jks` if none configured; agents connect via `wss://` with configurable trust (`tls_verify`, `truststore_path`)
 - Modules loaded from `modules/*.jar` via ServiceLoader + URLClassLoader

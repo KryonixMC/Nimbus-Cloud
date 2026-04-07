@@ -155,6 +155,9 @@ class CommandDispatcher {
                     val groups = groupManager?.getAllGroups()?.map { it.name } ?: emptyList()
                     groups.filter { it.startsWith(argPrefix, ignoreCase = true) }
                 }
+                "sessions" -> {
+                    listOf("active", "history").filter { it.startsWith(argPrefix, ignoreCase = true) }
+                }
                 "health" -> {
                     val services = registry?.getAll()?.map { it.name } ?: emptyList()
                     val groups = groupManager?.getAllGroups()?.map { it.name } ?: emptyList()

@@ -268,6 +268,12 @@ object ConsoleFormatter {
                 else
                     "${colorize("⚡ STRESS", MAGENTA)} test stopped"
             }
+            is NimbusEvent.CliSessionConnected ->
+                "${colorize("◆ CLI", BRIGHT_CYAN)} ${BOLD}${event.user}${RESET} connected from ${CYAN}${event.remoteIp}${RESET} ${DIM}(session #${event.sessionId})${RESET}"
+            is NimbusEvent.CliSessionDisconnected -> {
+                val dur = formatSessionDuration(event.durationSeconds)
+                "${colorize("◇ CLI", CYAN)} ${BOLD}${event.user}${RESET} disconnected ${DIM}(${event.remoteIp}, $dur, ${event.commandCount} cmds)${RESET}"
+            }
             is NimbusEvent.MaintenanceEnabled -> {
                 val scope = if (event.scope == "global") "GLOBAL" else "group ${BOLD}${event.scope}${RESET}"
                 val reason = if (event.reason.isNotEmpty()) " ${DIM}(${event.reason})${RESET}" else ""
@@ -296,6 +302,15 @@ object ConsoleFormatter {
             seconds < 60 -> "${seconds}s"
             seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
             else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+        }
+    }
+
+    fun formatSessionDuration(seconds: Long): String {
+        return when {
+            seconds < 60 -> "${seconds}s"
+            seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+            seconds < 86400 -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+            else -> "${seconds / 86400}d ${(seconds % 86400) / 3600}h"
         }
     }
 

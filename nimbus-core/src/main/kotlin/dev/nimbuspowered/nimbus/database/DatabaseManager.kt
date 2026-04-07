@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.database
 import dev.nimbuspowered.nimbus.config.DatabaseConfig
 import dev.nimbuspowered.nimbus.database.migrations.V1_Baseline
 import dev.nimbuspowered.nimbus.database.migrations.V2_AuditLog
+import dev.nimbuspowered.nimbus.database.migrations.V3_CliSessions
 import dev.nimbuspowered.nimbus.module.Migration
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
@@ -24,7 +25,7 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
     private val migrationManager by lazy { MigrationManager(database) }
 
     /** Core migrations bundled with nimbus-core. */
-    private val coreMigrations: List<Migration> = listOf(V1_Baseline, V2_AuditLog)
+    private val coreMigrations: List<Migration> = listOf(V1_Baseline, V2_AuditLog, V3_CliSessions)
 
     fun init() {
         database = when (config.type.lowercase()) {

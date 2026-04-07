@@ -16,7 +16,9 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CoroutineScope
 import org.slf4j.LoggerFactory
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
@@ -29,7 +31,8 @@ fun Route.consoleRoutes(
     registry: ServiceRegistry,
     serviceManager: ServiceManager,
     token: String,
-    serviceToken: String = ""
+    serviceToken: String = "",
+    scope: CoroutineScope? = null
 ) {
     route("/api/console") {
 
@@ -51,7 +54,17 @@ fun Route.consoleRoutes(
         if (!authenticateConsoleWebSocket(token)) return@webSocket
 
         val sessionId = sessionCounter.incrementAndGet()
-        logger.info("Remote CLI session #{} connected", sessionId)
+        val connectedAt = Instant.now()
+        val remoteIp = call.request.local.remoteAddress
+        val user = "api-token"
+        var commandCount = 0
+
+        logger.info("Remote CLI session #{} connected from {}", sessionId, remoteIp)
+
+        // Emit CLI connected event
+        scope?.launch {
+            eventBus.emit(NimbusEvent.CliSessionConnected(sessionId, remoteIp, user))
+        }
 
         // Subscribe to event bus for live events
         val eventSubscription = eventBus.subscribe()
@@ -93,6 +106,7 @@ fun Route.consoleRoutes(
 
                 when (msg.type) {
                     "execute" -> {
+                        commandCount++
                         val output = WebSocketCommandOutput(this, msg.id, json)
                         dispatcher.dispatch(msg.input, output)
                         // Signal command completion
@@ -168,7 +182,13 @@ fun Route.consoleRoutes(
         } finally {
             eventJob.cancel()
             screenJob?.cancel()
-            logger.info("Remote CLI session #{} disconnected", sessionId)
+            val durationSeconds = java.time.Duration.between(connectedAt, Instant.now()).seconds
+            logger.info("Remote CLI session #{} disconnected ({}s, {} cmds)", sessionId, durationSeconds, commandCount)
+
+            // Emit CLI disconnected event
+            scope?.launch {
+                eventBus.emit(NimbusEvent.CliSessionDisconnected(sessionId, remoteIp, user, durationSeconds, commandCount))
+            }
         }
     }
 }
@@ -315,6 +335,13 @@ private fun NimbusEvent.toConsoleEventMessage(): EventMessage {
             }
             is NimbusEvent.ModuleDisabled -> {
                 put("moduleId", event.moduleId); put("moduleName", event.moduleName)
+            }
+            is NimbusEvent.CliSessionConnected -> {
+                put("sessionId", event.sessionId.toString()); put("remoteIp", event.remoteIp); put("user", event.user)
+            }
+            is NimbusEvent.CliSessionDisconnected -> {
+                put("sessionId", event.sessionId.toString()); put("remoteIp", event.remoteIp); put("user", event.user)
+                put("durationSeconds", event.durationSeconds.toString()); put("commandCount", event.commandCount.toString())
             }
             else -> {} // Other events handled by type name only
         }

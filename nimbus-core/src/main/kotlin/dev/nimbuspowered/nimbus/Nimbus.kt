@@ -221,6 +221,10 @@ fun nimbusMain() = runBlocking {
         collector
     } else null
 
+    // Start CLI session tracker
+    val cliSessionTracker = dev.nimbuspowered.nimbus.database.CliSessionTracker(databaseManager, eventBus, scope)
+    cliSessionTracker.start()
+
     val proxySyncManager = dev.nimbuspowered.nimbus.proxy.ProxySyncManager(proxyDir)
     proxySyncManager.init()
 
@@ -265,6 +269,9 @@ fun nimbusMain() = runBlocking {
     if (config.audit.enabled) {
         dispatcher.register(dev.nimbuspowered.nimbus.console.commands.AuditCommand(databaseManager))
     }
+
+    // Register sessions command for CLI session tracking
+    dispatcher.register(dev.nimbuspowered.nimbus.console.commands.SessionsCommand(cliSessionTracker))
 
     // ── Cluster mode ───────────────────────────────────
     val nodeManager: NodeManager? = if (config.cluster.enabled) {

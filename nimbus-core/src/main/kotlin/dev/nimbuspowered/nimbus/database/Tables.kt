@@ -41,6 +41,28 @@ object ServiceEvents : Table("service_events") {
     }
 }
 
+// ── CLI Sessions ───────────────────────────────────────────
+
+object CliSessions : Table("cli_sessions") {
+    val id = integer("id").autoIncrement()
+    val sessionId = integer("session_id")
+    val remoteIp = varchar("remote_ip", 45)
+    val authenticatedAs = varchar("authenticated_as", 128)
+    val connectedAt = varchar("connected_at", 30)
+    val disconnectedAt = varchar("disconnected_at", 30).nullable()
+    val durationSeconds = long("duration_seconds").nullable()
+    val commandCount = integer("command_count").default(0)
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        index(false, connectedAt)
+        index(false, remoteIp)
+    }
+}
+
+// ── Scaling Events ─────────────────────────────────────────
+
 object ScalingEvents : Table("scaling_events") {
     val id = integer("id").autoIncrement()
     val timestamp = varchar("timestamp", 30)
