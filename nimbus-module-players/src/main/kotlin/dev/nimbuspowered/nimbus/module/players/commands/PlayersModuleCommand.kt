@@ -10,6 +10,8 @@ import dev.nimbuspowered.nimbus.module.ModuleCommand
 import dev.nimbuspowered.nimbus.module.players.PlayerTracker
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class PlayersModuleCommand(private val tracker: PlayerTracker) : ModuleCommand {
     override val name = "players"
@@ -58,15 +60,15 @@ class PlayersModuleCommand(private val tracker: PlayerTracker) : ModuleCommand {
                     val duration = formatDuration(Duration.between(online.connectedAt, Instant.now()))
                     println("  Session: $duration")
                     if (meta != null) {
-                        println("  First seen: ${meta["firstSeen"]}")
+                        println("  First seen: ${formatTimestamp(meta["firstSeen"]!!)}")
                         println("  Total playtime: ${formatDuration(Duration.ofSeconds(meta["totalPlaytimeSeconds"]!!.toLong()))}")
                     }
                 } else if (meta != null) {
                     println(ConsoleFormatter.header("Player: ${meta["name"]}"))
                     println("  UUID: $BOLD${meta["uuid"]}$RESET")
                     println("  Status: ${DIM}Offline$RESET")
-                    println("  First seen: ${meta["firstSeen"]}")
-                    println("  Last seen: ${meta["lastSeen"]}")
+                    println("  First seen: ${formatTimestamp(meta["firstSeen"]!!)}")
+                    println("  Last seen: ${formatTimestamp(meta["lastSeen"]!!)}")
                     println("  Total playtime: ${formatDuration(Duration.ofSeconds(meta["totalPlaytimeSeconds"]!!.toLong()))}")
                 } else {
                     println(ConsoleFormatter.warn("Player '$name' not found"))
@@ -89,8 +91,8 @@ class PlayersModuleCommand(private val tracker: PlayerTracker) : ModuleCommand {
                 }
                 println(ConsoleFormatter.header("Session History: $name (last 10)"))
                 for (entry in history) {
-                    val disconnected = entry["disconnectedAt"] ?: "${GREEN}active$RESET"
-                    println("  ${entry["service"]} ${DIM}(${entry["group"]})$RESET  ${entry["connectedAt"]} → $disconnected")
+                    val disconnected = entry["disconnectedAt"]?.let { formatTimestamp(it) } ?: "${GREEN}active$RESET"
+                    println("  ${entry["service"]} ${DIM}(${entry["group"]})$RESET  ${formatTimestamp(entry["connectedAt"]!!)} → $disconnected")
                 }
             }
 
@@ -116,13 +118,26 @@ class PlayersModuleCommand(private val tracker: PlayerTracker) : ModuleCommand {
         }
     }
 
+    private val timestampFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault())
+
     private fun formatDuration(d: Duration): String {
-        val hours = d.toHours()
+        val days = d.toDays()
+        val hours = d.toHoursPart()
         val minutes = d.toMinutesPart()
         return when {
+            days > 0 -> "${days}d ${hours}h ${minutes}m"
             hours > 0 -> "${hours}h ${minutes}m"
             minutes > 0 -> "${minutes}m"
             else -> "${d.seconds}s"
+        }
+    }
+
+    private fun formatTimestamp(iso: String): String {
+        return try {
+            val instant = Instant.parse(iso)
+            timestampFormat.format(instant)
+        } catch (_: Exception) {
+            iso
         }
     }
 }
