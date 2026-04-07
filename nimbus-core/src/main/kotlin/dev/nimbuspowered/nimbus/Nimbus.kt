@@ -1,6 +1,7 @@
 package dev.nimbuspowered.nimbus
 
 import dev.nimbuspowered.nimbus.api.NimbusApi
+import dev.nimbuspowered.nimbus.api.auth.JwtTokenManager
 import dev.nimbuspowered.nimbus.cluster.ClusterWebSocketHandler
 import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.config.ConfigLoader
@@ -23,6 +24,7 @@ import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
+import dev.nimbuspowered.nimbus.service.ControllerStateStore
 import dev.nimbuspowered.nimbus.service.PortAllocator
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -182,12 +184,8 @@ fun nimbusMain() = runBlocking {
         if (!dir.exists()) dir.createDirectories()
     }
 
-    // Clean temp directory from previous session
-    if (tempDir.exists()) {
-        tempDir.toFile().deleteRecursively()
-        tempDir.createDirectories()
-        logger.info("Cleared temp directory: {}", tempDir)
-    }
+    // Local service state store for crash recovery
+    val controllerStateStore = ControllerStateStore(baseDir)
 
     // Deploy and update all Nimbus plugins
     PluginDeployer(baseDir).deployAll(templatesDir, staticDir, globalTemplateDir, globalProxyTemplateDir, config, softwareResolver)
@@ -283,6 +281,11 @@ fun nimbusMain() = runBlocking {
         logger.info("TCP Load Balancer started on {}:{}", config.loadbalancer.bind, config.loadbalancer.port)
     }
 
+    // Create JWT token manager (if enabled)
+    val jwtTokenManager: JwtTokenManager? = if (config.api.jwtEnabled && config.api.token.isNotBlank()) {
+        JwtTokenManager(config.api.token)
+    } else null
+
     // Create service manager
     val serviceManager = ServiceManager(
         config = config,
@@ -294,8 +297,22 @@ fun nimbusMain() = runBlocking {
         scope = scope,
         softwareResolver = softwareResolver,
         nodeManager = nodeManager,
-        moduleContext = moduleContext
+        moduleContext = moduleContext,
+        stateStore = controllerStateStore,
+        jwtTokenManager = jwtTokenManager
     )
+
+    // Recover local services from previous session
+    val (recoveredServices, protectedDirs) = serviceManager.recoverLocalServices()
+
+    if (tempDir.exists()) {
+        tempDir.toFile().listFiles()?.forEach { dir ->
+            if (dir.isDirectory && dir.toPath().toAbsolutePath() !in protectedDirs) {
+                dir.deleteRecursively()
+            }
+        }
+        logger.info("Cleared temp directory (preserved {} recovered service(s))", recoveredServices.size)
+    }
 
     // Expose ServiceManager to modules (created after module loading, accessed lazily)
     moduleContext.registerService(ServiceManager::class.java, serviceManager)
@@ -323,7 +340,7 @@ fun nimbusMain() = runBlocking {
 
     // Create cluster WebSocket handler and dedicated server (if cluster enabled)
     val clusterWsHandler: ClusterWebSocketHandler? = if (nodeManager != null) {
-        ClusterWebSocketHandler(config.cluster, nodeManager, registry, eventBus)
+        ClusterWebSocketHandler(config.cluster, nodeManager, registry, eventBus, portAllocator, groupManager)
     } else null
 
     val clusterServer: dev.nimbuspowered.nimbus.cluster.ClusterServer? = if (clusterWsHandler != null) {
@@ -408,6 +425,15 @@ fun nimbusMain() = runBlocking {
     )
     console.init()
 
+    // Emit recovery events AFTER console is initialized (so they appear in the CLI)
+    if (recoveredServices.isNotEmpty()) {
+        scope.launch {
+            for (svc in recoveredServices) {
+                eventBus.emit(NimbusEvent.ServiceRecovered(svc.serviceName, svc.groupName, svc.pid, svc.port))
+            }
+        }
+    }
+
     // Start REST API after console init so the event is visible
     api.start()
 
@@ -438,6 +464,17 @@ fun nimbusMain() = runBlocking {
         groupsDir = groupsDir
     )
     val updaterJob = velocityUpdater.start()
+
+    // Wait for agent reconnections before starting services (cluster mode)
+    if (config.cluster.enabled && clusterServer != null) {
+        val delayMs = config.cluster.reconciliationDelay
+        logger.info("Waiting {}ms for agent reconnections before starting services...", delayMs)
+        delay(delayMs)
+        val remoteCount = registry.getAll().count { it.nodeId != "local" }
+        if (remoteCount > 0) {
+            logger.info("Reconciliation complete: {} remote service(s) recovered from agents", remoteCount)
+        }
+    }
 
     // Start minimum instances for all groups (auto-downloads JARs if missing)
     // This runs phased: proxy first (waits for READY), then backends.

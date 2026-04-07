@@ -57,7 +57,11 @@ class TemplateManager {
                     // Static services: don't overwrite existing files (world data, configs, etc.)
                     return@forEach
                 } else {
-                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                    try {
+                        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                    } catch (e: java.nio.file.FileSystemException) {
+                        logger.debug("Skipping locked file: {} ({})", destination, e.message)
+                    }
                 }
             }
         }
@@ -82,7 +86,11 @@ class TemplateManager {
                 if (Files.isDirectory(source)) {
                     Files.createDirectories(destination)
                 } else {
-                    Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                    try {
+                        Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
+                    } catch (e: java.nio.file.FileSystemException) {
+                        logger.debug("Skipping locked file: {} ({})", destination, e.message)
+                    }
                 }
             }
         }

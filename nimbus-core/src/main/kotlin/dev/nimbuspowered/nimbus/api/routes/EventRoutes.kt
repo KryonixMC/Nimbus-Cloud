@@ -151,6 +151,11 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("service" to serviceName, "exitCode" to exitCode.toString(), "restartAttempt" to restartAttempt.toString())
         )
+        is NimbusEvent.ServiceRecovered -> EventMessage(
+            type = "SERVICE_RECOVERED",
+            timestamp = timestamp.toString(),
+            data = mapOf("service" to serviceName, "group" to groupName, "pid" to pid.toString(), "port" to port.toString())
+        )
         is NimbusEvent.ServiceCustomStateChanged -> EventMessage(
             type = "SERVICE_CUSTOM_STATE_CHANGED",
             timestamp = timestamp.toString(),

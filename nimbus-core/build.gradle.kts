@@ -56,6 +56,7 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:3.1.1")
     implementation("io.ktor:ktor-server-status-pages:3.1.1")
     implementation("io.ktor:ktor-server-rate-limit:3.1.1")
+    implementation("io.ktor:ktor-server-auth-jwt:3.1.1")
 
     // Netty engine for cluster server (native TLS/SSL support via sslConnector)
     implementation("io.ktor:ktor-server-netty:3.1.1")

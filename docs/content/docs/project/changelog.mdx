@@ -11,8 +11,8 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ## v0.2.0 (Unreleased)
 
-<Callout type="warn">
-  In development — see the [Roadmap](/docs/project/roadmap#v020--security--production-readiness) for planned features.
+<Callout type="info">
+  Implemented on `feat/v0.2.0-pid-recovery-jwt-auth` — see the [Roadmap](/docs/project/roadmap#v020--security--production-readiness) for details.
 </Callout>
 
 ### Changed
@@ -23,9 +23,19 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 ### Added
 - **Leaf server software**: Paper fork from `api.leafmc.one`, treated as Paper-based
 - **Migration self-repair**: Baseline detection fixes for upgrades from v0.1.x
+- **Local PID persistence**: `ControllerStateStore` persists service PIDs to `state/services.json`, survives controller restarts
+- **Process adoption**: `ProcessHandle.adopt()` re-attaches to running OS processes by PID with Windows-compatible fallback
+- **State reconciliation**: Grace period (`reconciliation_delay`, default 10s) before starting minimum instances, allows agents to report recovered services
+- **Remote service recovery**: `ClusterWebSocketHandler` accepts recovered service reports from reconnecting agents
+- **JWT scoped API auth** (opt-in via `jwt_enabled = true`): JwtTokenManager with HMAC-SHA256, 13 permission scopes, `POST /api/tokens` to generate, `GET /api/tokens/scopes` to list, legacy bearer tokens still work
+- **`ServiceRecovered` event** with CLI display (`RECOVERED`)
+- **`AUTH_FAILED` and `INSUFFICIENT_SCOPE` API error codes**
+- **`PortAllocator.reserve()`** for recovered service ports
 
 ### Fixed
 - Migration bootstrap edge cases when upgrading from older versions
+- **Windows file-lock tolerance**: `TemplateManager` skips locked files instead of crashing
+- **mainClass reference**: Fixed `dev.kryonix.nimbus.NimbusKt` to `dev.nimbuspowered.nimbus.NimbusKt`
 
 ---
 

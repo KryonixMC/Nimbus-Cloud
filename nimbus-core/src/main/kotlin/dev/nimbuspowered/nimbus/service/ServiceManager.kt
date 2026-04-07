@@ -1,5 +1,6 @@
 package dev.nimbuspowered.nimbus.service
 
+import dev.nimbuspowered.nimbus.api.auth.JwtTokenManager
 import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.cluster.RemoteServiceHandle
 import dev.nimbuspowered.nimbus.config.GroupDefinition
@@ -42,7 +43,9 @@ class ServiceManager(
     private val scope: CoroutineScope,
     private val softwareResolver: SoftwareResolver,
     private val nodeManager: NodeManager? = null,
-    private val moduleContext: ModuleContextImpl? = null
+    private val moduleContext: ModuleContextImpl? = null,
+    private val stateStore: ControllerStateStore? = null,
+    private val jwtTokenManager: JwtTokenManager? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceManager::class.java)
@@ -63,7 +66,8 @@ class ServiceManager(
         compatibilityChecker = compatibilityChecker,
         eventBus = eventBus,
         velocityConfigGen = velocityConfigGen,
-        moduleContext = moduleContext
+        moduleContext = moduleContext,
+        jwtTokenManager = jwtTokenManager
     )
 
     suspend fun startService(groupName: String): Service? {
@@ -98,6 +102,18 @@ class ServiceManager(
             processHandle.start(workDir, command, env)
             // Store handle immediately after start so cleanupFailedStart can find it
             processHandles[serviceName] = processHandle
+
+            // Persist state for crash recovery
+            stateStore?.addService(PersistedLocalService(
+                serviceName = serviceName,
+                groupName = service.groupName,
+                port = service.port,
+                pid = processHandle.pid() ?: 0,
+                workDir = workDir.toAbsolutePath().toString(),
+                isStatic = service.isStatic,
+                bedrockPort = service.bedrockPort ?: 0,
+                startedAtEpochMs = System.currentTimeMillis()
+            ))
 
             service.transitionTo(ServiceState.STARTING)
             service.pid = processHandle.pid()
@@ -316,6 +332,7 @@ class ServiceManager(
 
         handle.destroy()
         processHandles.remove(serviceName)
+        stateStore?.removeService(serviceName)
         portAllocator.release(service.port)
         service.bedrockPort?.let { portAllocator.releaseBedrockPort(it) }
         registry.unregister(serviceName)
@@ -426,6 +443,7 @@ class ServiceManager(
 
             registry.unregister(name)
             processHandles.remove(name)
+            stateStore?.removeService(name)
 
             if (!service.isStatic) {
                 cleanupWorkingDirectory(service.workingDirectory)
@@ -456,6 +474,7 @@ class ServiceManager(
         portAllocator.release(service.port)
         service.bedrockPort?.let { portAllocator.releaseBedrockPort(it) }
         registry.unregister(name)
+        stateStore?.removeService(name)
 
         if (!service.isStatic) {
             cleanupWorkingDirectory(service.workingDirectory)
@@ -486,6 +505,63 @@ class ServiceManager(
     fun checkCompatibility() = compatibilityChecker.checkCompatibility()
 
     fun determineForwardingMode() = compatibilityChecker.determineForwardingMode()
+
+    data class RecoveredLocalService(
+        val serviceName: String,
+        val groupName: String,
+        val port: Int,
+        val pid: Long
+    )
+
+    fun recoverLocalServices(): Pair<List<RecoveredLocalService>, Set<Path>> {
+        val state = stateStore?.load() ?: return emptyList<RecoveredLocalService>() to emptySet()
+        if (state.services.isEmpty()) return emptyList<RecoveredLocalService>() to emptySet()
+
+        logger.info("Found {} persisted local service(s), attempting recovery...", state.services.size)
+        val recovered = mutableListOf<RecoveredLocalService>()
+        val protectedDirs = mutableSetOf<Path>()
+
+        for (persisted in state.services) {
+            val handle = ProcessHandle.adopt(persisted.pid, persisted.serviceName)
+            if (handle != null) {
+                val workDir = Path(persisted.workDir)
+                val service = Service(
+                    name = persisted.serviceName,
+                    groupName = persisted.groupName,
+                    port = persisted.port,
+                    pid = persisted.pid,
+                    workingDirectory = workDir,
+                    isStatic = persisted.isStatic,
+                    bedrockPort = if (persisted.bedrockPort > 0) persisted.bedrockPort else null,
+                    initialState = ServiceState.READY
+                )
+                service.startedAt = Instant.ofEpochMilli(persisted.startedAtEpochMs)
+
+                registry.register(service)
+                processHandles[persisted.serviceName] = handle
+                portAllocator.reserve(persisted.port)
+                if (persisted.bedrockPort > 0) portAllocator.reserveBedrockPort(persisted.bedrockPort)
+                protectedDirs.add(workDir)
+
+                launchExitMonitor(service, handle)
+
+                recovered.add(RecoveredLocalService(
+                    serviceName = persisted.serviceName,
+                    groupName = persisted.groupName,
+                    port = persisted.port,
+                    pid = persisted.pid
+                ))
+                logger.info("Recovered local service '{}' (PID {})", persisted.serviceName, persisted.pid)
+            } else {
+                logger.info("Service '{}' (PID {}) is no longer alive — removing from state",
+                    persisted.serviceName, persisted.pid)
+                stateStore.removeService(persisted.serviceName)
+            }
+        }
+
+        logger.info("Recovered {}/{} local service(s)", recovered.size, state.services.size)
+        return recovered to protectedDirs
+    }
 
     /**
      * Starts minimum instances for all groups in a phased order:

@@ -15,6 +15,7 @@ sealed class NimbusEvent {
     data class ServiceStopping(val serviceName: String) : NimbusEvent()
     data class ServiceStopped(val serviceName: String) : NimbusEvent()
     data class ServiceCrashed(val serviceName: String, val exitCode: Int, val restartAttempt: Int) : NimbusEvent()
+    data class ServiceRecovered(val serviceName: String, val groupName: String, val pid: Long, val port: Int) : NimbusEvent()
 
     // Scaling
     data class ScaleUp(val groupName: String, val currentInstances: Int, val targetInstances: Int, val reason: String) : NimbusEvent()

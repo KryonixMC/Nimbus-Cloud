@@ -146,6 +146,36 @@ If `restartOnCrash` is enabled for the group and `restartAttempt` is below `maxR
 
 ---
 
+### SERVICE_RECOVERED
+
+Emitted when Nimbus recovers a running service after controller restart (process re-adoption).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `service` | string | Service name (e.g., `Lobby-1`) |
+| `group` | string | Group name (e.g., `Lobby`) |
+| `pid` | string | OS process ID of the recovered process |
+| `port` | string | Port number the service is running on |
+
+```json title="SERVICE_RECOVERED"
+{
+  "type": "SERVICE_RECOVERED",
+  "timestamp": "2025-01-15T10:30:00.000Z",
+  "data": {
+    "service": "Lobby-1",
+    "group": "Lobby",
+    "pid": "48201",
+    "port": "30001"
+  }
+}
+```
+
+<Callout type="info">
+This event is emitted during controller startup when previously running services are re-adopted via PID. It indicates that the service was still alive when the controller restarted and has been successfully reclaimed.
+</Callout>
+
+---
+
 ### SERVICE_CUSTOM_STATE_CHANGED
 
 Emitted when a service's custom state is changed via the API (typically by game plugins).

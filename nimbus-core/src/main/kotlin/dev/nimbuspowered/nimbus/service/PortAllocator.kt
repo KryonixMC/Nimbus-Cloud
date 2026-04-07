@@ -80,6 +80,20 @@ class PortAllocator(
         return port
     }
 
+    fun reserve(port: Int) {
+        synchronized(allocatedPorts) {
+            allocatedPorts.add(port)
+        }
+        logger.info("Reserved port {} (recovered service)", port)
+    }
+
+    fun reserveBedrockPort(port: Int) {
+        synchronized(allocatedBedrockPorts) {
+            allocatedBedrockPorts.add(port)
+        }
+        logger.info("Reserved Bedrock port {} (recovered service)", port)
+    }
+
     fun release(port: Int) {
         if (allocatedPorts.remove(port)) {
             logger.info("Released port {}", port)

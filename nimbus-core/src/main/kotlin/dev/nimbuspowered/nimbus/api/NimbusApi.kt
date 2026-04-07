@@ -1,6 +1,8 @@
 package dev.nimbuspowered.nimbus.api
 
 import dev.nimbuspowered.nimbus.NimbusVersion
+import dev.nimbuspowered.nimbus.api.auth.ApiScope
+import dev.nimbuspowered.nimbus.api.auth.JwtTokenManager
 import dev.nimbuspowered.nimbus.api.routes.*
 import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.config.ApiConfig
@@ -59,6 +61,10 @@ class NimbusApi(
     private val databaseManager: dev.nimbuspowered.nimbus.database.DatabaseManager? = null
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
+
+    val jwtTokenManager: JwtTokenManager? = if (config.api.jwtEnabled && config.api.token.isNotBlank()) {
+        JwtTokenManager(config.api.token)
+    } else null
 
     val startedAt: Instant = Instant.now()
 
@@ -187,9 +193,20 @@ class NimbusApi(
         if (apiConfig.token.isNotBlank()) {
             val serviceToken = deriveServiceToken(apiConfig.token)
             install(Authentication) {
-                // Full admin access — only for the master API token
+                // Full admin access — only for the master API token or JWT with admin scope
                 bearer("api-token") {
                     authenticate { credential ->
+                        // Check JWT first if it looks like one
+                        if (jwtTokenManager != null && JwtTokenManager.looksLikeJwt(credential.token)) {
+                            val jwt = jwtTokenManager.verifyToken(credential.token)
+                            if (jwt != null) {
+                                val scopes = jwtTokenManager.extractScopes(jwt)
+                                if (ApiScope.ADMIN in scopes) {
+                                    return@authenticate UserIdPrincipal("jwt:${jwt.subject}")
+                                }
+                            }
+                            return@authenticate null
+                        }
                         if (timingSafeEquals(credential.token, apiConfig.token)) {
                             UserIdPrincipal("nimbus-admin")
                         } else {
@@ -197,9 +214,20 @@ class NimbusApi(
                         }
                     }
                 }
-                // Service-level access — accepts both master token and derived service token
+                // Service-level access — accepts both master token, derived service token, or JWT with service scopes
                 bearer("service-token") {
                     authenticate { credential ->
+                        // Check JWT first if it looks like one
+                        if (jwtTokenManager != null && JwtTokenManager.looksLikeJwt(credential.token)) {
+                            val jwt = jwtTokenManager.verifyToken(credential.token)
+                            if (jwt != null) {
+                                val scopes = jwtTokenManager.extractScopes(jwt)
+                                if (ApiScope.ADMIN in scopes || scopes.any { it in ApiScope.SERVICE_SCOPES }) {
+                                    return@authenticate UserIdPrincipal("jwt:${jwt.subject}")
+                                }
+                            }
+                            return@authenticate null
+                        }
                         when {
                             timingSafeEquals(credential.token, apiConfig.token) -> UserIdPrincipal("nimbus-admin")
                             timingSafeEquals(credential.token, serviceToken) -> UserIdPrincipal("nimbus-service")
@@ -207,6 +235,9 @@ class NimbusApi(
                         }
                     }
                 }
+            }
+            if (jwtTokenManager != null) {
+                logger.info("JWT authentication enabled (HMAC-SHA256)")
             }
         }
     }
@@ -267,6 +298,7 @@ class NimbusApi(
                 if (databaseManager != null && config.audit.enabled) {
                     auditRoutes(databaseManager)
                 }
+                tokenRoutes(jwtTokenManager)
                 // Module admin-level routes
                 moduleContext?.adminRoutes?.forEach { block -> block() }
             }

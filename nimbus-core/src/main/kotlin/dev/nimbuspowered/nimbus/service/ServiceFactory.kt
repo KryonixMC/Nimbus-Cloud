@@ -1,6 +1,8 @@
 package dev.nimbuspowered.nimbus.service
 
 import dev.nimbuspowered.nimbus.api.NimbusApi
+import dev.nimbuspowered.nimbus.api.auth.ApiScope
+import dev.nimbuspowered.nimbus.api.auth.JwtTokenManager
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.event.EventBus
@@ -37,7 +39,8 @@ class ServiceFactory(
     private val compatibilityChecker: CompatibilityChecker,
     private val eventBus: EventBus,
     private val velocityConfigGen: VelocityConfigGen,
-    private val moduleContext: ModuleContextImpl? = null
+    private val moduleContext: ModuleContextImpl? = null,
+    private val jwtTokenManager: JwtTokenManager? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(ServiceFactory::class.java)
@@ -252,9 +255,17 @@ class ServiceFactory(
                     // Game servers get a derived service token with restricted API access
                     // (no config changes, file access, stress tests, or cluster management).
                     val token = if (software == ServerSoftware.VELOCITY) {
-                        config.api.token
+                        if (jwtTokenManager != null) {
+                            jwtTokenManager.generateToken(serviceName, ApiScope.PROXY_SCOPES, expiresInSeconds = 86400 * 7)
+                        } else {
+                            config.api.token
+                        }
                     } else {
-                        NimbusApi.deriveServiceToken(config.api.token)
+                        if (jwtTokenManager != null) {
+                            jwtTokenManager.generateToken(serviceName, ApiScope.SERVICE_SCOPES, expiresInSeconds = 86400 * 7)
+                        } else {
+                            NimbusApi.deriveServiceToken(config.api.token)
+                        }
                     }
                     processEnv["NIMBUS_API_TOKEN"] = token
                 }

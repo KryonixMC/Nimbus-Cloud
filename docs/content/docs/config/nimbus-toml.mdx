@@ -198,6 +198,7 @@ REST API and WebSocket server configuration.
 | `port` | Int | `8080` | Port for the API server. |
 | `token` | String | `""` | Bearer token for API authentication. If empty, Nimbus auto-generates a random token on **every start** and logs it to the console. Set a permanent token for production. |
 | `allowed_origins` | List\<String\> | `[]` | CORS allowed origins. Empty list allows all origins (with a warning). Set explicit origins for production (e.g., `["https://dashboard.example.com"]`). |
+| `jwt_enabled` | Boolean | `false` | Enable JWT scoped token generation. When enabled, the `POST /api/tokens` endpoint becomes available for generating scoped JWT tokens with fine-grained permissions. Legacy bearer tokens always work regardless of this setting. |
 
 ```toml title="config/nimbus.toml"
 [api]
@@ -440,6 +441,7 @@ Cluster mode is **disabled by default**. Single-node setups do not need it. All 
 | `tls_enabled` | Boolean | `true` | Enable TLS encryption for cluster WebSocket connections. When enabled without a keystore, Nimbus auto-generates a self-signed certificate. |
 | `keystore_path` | String | `""` | Path to a JKS/PKCS12 keystore for TLS. If empty and `tls_enabled = true`, a self-signed keystore is auto-generated at `config/cluster.jks`. |
 | `keystore_password` | String | `""` | Keystore password. If empty during auto-generation, uses a default internal password. Can be overridden via `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` env var. |
+| `reconciliation_delay` | Int | `10000` | Milliseconds to wait for agent reconnections before starting services. During this window, agents report recovered services. Only after the delay does `startMinimumInstances()` run, preventing duplicate service starts. |
 
 ```toml title="config/nimbus.toml"
 [cluster]

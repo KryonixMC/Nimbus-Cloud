@@ -217,6 +217,10 @@ Both implementations provide:
 - **Ready detection** -- Regex matching against stdout (default pattern: `Done`)
 - **Graceful shutdown** -- Sends `stop` command via stdin, then waits, then force-kills
 
+### State persistence & process recovery
+
+The controller persists local service state to `state/services.json` via `ControllerStateStore`. On restart, `ProcessHandle.adopt()` re-attaches to running processes by PID. On Windows, it falls back to checking if the process is a Java process when `commandLine()` is unavailable. Recovered services are registered before temp directory cleanup to protect their working directories from being removed.
+
 ### Service states
 
 ```text title="Service State Machine"

@@ -260,6 +260,8 @@ Nimbus handles node failures automatically:
 | **Agent doesn't reconnect** | After `2 × node_timeout`, services are marked CRASHED. Scaling engine restarts them on other nodes. |
 | **Controller restarts** | Agents reconnect automatically (5-second retry loop). Running services are preserved. |
 
+When the controller restarts, it waits for agents to reconnect during a configurable reconciliation window (`reconciliation_delay`, default 10 seconds). During this window, agents report any services that are still running on their nodes. Only after the reconciliation delay expires does `startMinimumInstances()` run. Because the recovered services are already registered at that point, the controller sees them and only starts the difference -- preventing duplicate instances from being launched.
+
 ## Template Distribution
 
 Agents automatically download templates from the controller when starting a service:

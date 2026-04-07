@@ -46,6 +46,76 @@ Admin-only endpoints (require the admin token): `/api/reload`, `/api/stress/*`, 
 The API enforces **per-IP** rate limits: **120 requests/minute** globally and **5 requests/minute** for stress test endpoints. Exceeding the limit returns HTTP 429 (Too Many Requests).
 </Callout>
 
+### Token Management
+
+JWT-based scoped tokens are available as an opt-in feature. Enable with `jwt_enabled = true` in the `[api]` section of `nimbus.toml`. Legacy bearer tokens always work regardless of this setting.
+
+#### POST /api/tokens
+
+Generate a scoped JWT token. **Admin-only.**
+
+**Request Body:**
+
+```json title="Request"
+{
+  "subject": "my-panel",
+  "scopes": ["services:read"],
+  "expiresInSeconds": 3600
+}
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Token generated |
+| 400 | Invalid scopes or parameters |
+| 403 | JWT not enabled or not admin |
+
+---
+
+#### GET /api/tokens/scopes
+
+List all available permission scopes. **Admin-only.**
+
+**Response:**
+
+```json title="Response"
+{
+  "scopes": [
+    "services:read",
+    "services:write",
+    "groups:read",
+    "groups:write",
+    "metrics:read",
+    "cluster:read",
+    "cluster:write",
+    "files:read",
+    "files:write",
+    "config:read",
+    "config:write",
+    "audit:read",
+    "admin"
+  ]
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+
+<Callout type="info">
+The `admin` scope is a superscope that grants access to all endpoints. Other scopes follow a `resource:action` pattern. JWT tokens are validated on every request and rejected if expired or if the requested endpoint is outside the token's scopes.
+</Callout>
+
+---
+
 ## Response Format
 
 All responses use JSON. Error responses follow a consistent format:

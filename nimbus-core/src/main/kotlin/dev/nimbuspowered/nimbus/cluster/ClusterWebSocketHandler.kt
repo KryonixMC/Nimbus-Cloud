@@ -3,6 +3,9 @@ package dev.nimbuspowered.nimbus.cluster
 import dev.nimbuspowered.nimbus.api.NimbusApi
 import dev.nimbuspowered.nimbus.config.ClusterConfig
 import dev.nimbuspowered.nimbus.event.EventBus
+import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.service.PortAllocator
+import dev.nimbuspowered.nimbus.service.Service
 import dev.nimbuspowered.nimbus.protocol.ClusterMessage
 import dev.nimbuspowered.nimbus.protocol.clusterJson
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -17,7 +20,9 @@ class ClusterWebSocketHandler(
     private val config: ClusterConfig,
     private val nodeManager: NodeManager,
     private val registry: ServiceRegistry,
-    private val eventBus: EventBus
+    private val eventBus: EventBus,
+    private val portAllocator: PortAllocator? = null,
+    private val groupManager: GroupManager? = null
 ) {
     private val logger = LoggerFactory.getLogger(ClusterWebSocketHandler::class.java)
 
@@ -140,6 +145,29 @@ class ClusterWebSocketHandler(
                         ServiceState.CRASHED -> eventBus.emit(
                             dev.nimbuspowered.nimbus.event.NimbusEvent.ServiceCrashed(message.serviceName, -1, 0))
                         else -> {}
+                    }
+                } else if (message.state == "READY" || message.state == "STARTING") {
+                    val group = groupManager?.getGroup(message.groupName)
+                    if (group != null) {
+                        val servicesDir = java.nio.file.Path.of("services", "temp")
+                        val recoveredService = Service(
+                            name = message.serviceName,
+                            groupName = message.groupName,
+                            port = message.port,
+                            host = node.host,
+                            nodeId = nodeId,
+                            workingDirectory = servicesDir.resolve(message.serviceName),
+                            initialState = ServiceState.valueOf(message.state)
+                        )
+                        recoveredService.pid = message.pid
+                        registry.register(recoveredService)
+                        portAllocator?.reserve(message.port)
+                        val remoteHandle = RemoteServiceHandle(message.serviceName, node)
+                        node.remoteHandles[message.serviceName] = remoteHandle
+                        logger.info("Recovered remote service '{}' from node '{}' (PID {}, port {})",
+                            message.serviceName, nodeId, message.pid, message.port)
+                    } else {
+                        logger.warn("Ignoring recovered service '{}' — group '{}' not found", message.serviceName, message.groupName)
                     }
                 }
             }

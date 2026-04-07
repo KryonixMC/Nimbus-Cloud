@@ -19,7 +19,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | Version | Status | Theme |
 |---------|--------|-------|
 | [v0.1.0 – v0.1.4](#v01x--foundation) | Released | Foundation & core cloud features |
-| [v0.2.0](#v020--security--production-readiness) | **In Progress** | Security, stability & production readiness |
+| [v0.2.0](#v020--security--production-readiness) | **Implemented** | Security, stability & production readiness |
 | [v0.3.0](#v030--competitive-features) | Planned | Warm pool, player tracking, smarter scaling |
 | [v0.4.0+](#v040--cloud-native) | Vision | Docker, S3 storage, dashboard |
 
@@ -86,8 +86,8 @@ The first public release shipped a fully functional cloud system:
 
 ## v0.2.0 — Security & Production Readiness
 
-<Callout type="warn">
-  This version is currently in development on the `feat/v0.2.0-security-production-readiness` branch.
+<Callout type="info">
+  These features have been implemented on the `feat/v0.2.0-pid-recovery-jwt-auth` branch.
 </Callout>
 
 **Theme:** Make Nimbus production-ready. Fix the gaps that matter when real players are online and real money is on the line.
@@ -115,34 +115,28 @@ This version focuses on three pillars: **resilience** (services survive controll
 </Step>
 </Steps>
 
-**Status:** Agent-side recovery already works (`AgentStateStore` + `recoverServices()`). Controller-side reconciliation and local PID persistence are the missing pieces.
+**Status:** Fully implemented. Both controller-side local PID persistence and agent-side reconciliation with grace period are working.
 
 ### API Authentication Overhaul
 
 **Problem:** The current API uses a single bearer token with full admin access. There's a derived HMAC token for service-level access, but no granular permissions, no multi-user support, and no token expiry.
 
-**Planned:**
+**Implemented** (opt-in via `jwt_enabled = true` in `nimbus.toml`):
 
-| Feature | Description |
-|---------|-------------|
-| **JWT Tokens** | Signed tokens with expiry, replacing static bearer tokens |
-| **Scoped Permissions** | Granular scopes like `services:read`, `services:write`, `groups:manage`, `admin` |
-| **Multiple API Keys** | Create/revoke named API keys with specific scope sets |
-| **Service Tokens** | Auto-generated, scoped tokens passed to child processes (replaces HMAC derivation) |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **JWT Tokens** | HMAC-SHA256 signed tokens with expiry | Implemented |
+| **Scoped Permissions** | 13 granular scopes (`services:read`, `services:write`, `groups:read`, `groups:write`, `metrics:read`, `cluster:read`, `cluster:write`, `files:read`, `files:write`, `config:read`, `config:write`, `audit:read`, `admin`) | Implemented |
+| **Multiple API Keys** | `POST /api/tokens` to generate scoped JWT tokens, `GET /api/tokens/scopes` to list scopes | Implemented |
+| **Service Tokens** | Game servers receive JWT with service scopes when JWT is enabled | Implemented |
 
-The existing single-token auth remains as a fallback for simple setups.
+Legacy bearer tokens continue to work alongside JWT for simple setups.
 
 ### Local Service Resilience
 
 **Problem:** Services started directly on the controller are child processes of the controller JVM. If the controller crashes, these local services also die.
 
-**Options under evaluation:**
-
-| Approach | Pros | Cons |
-|----------|------|------|
-| **PID file + re-adopt** | Simple, matches agent behavior | Services still die on crash (just detected faster) |
-| **Screen/tmux sessions** | Services survive controller crash | Extra dependency, complexity |
-| **Process detachment** | No extra deps, true independence | Platform-specific, harder to monitor |
+**Chosen approach: PID file + re-adopt.** This matches the agent's existing `AgentStateStore` pattern. `ControllerStateStore` persists service PIDs to `state/services.json`. On restart, the controller checks if those PIDs are still alive via `ProcessHandle.adopt()` and re-adopts them (with Windows-compatible fallback).
 
 ### Already Shipped in v0.2.0
 
@@ -153,6 +147,12 @@ These changes are already on the branch:
 - **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
 - **Leaf Support** — Leaf (Paper fork) added as supported server software
 - **Interactive Pickers** — Arrow-key selection replacing Y/N prompts throughout
+- **Local PID persistence** — `ControllerStateStore` persists service PIDs to `state/services.json`
+- **State reconciliation with grace period** — `reconciliation_delay` allows agents to report recovered services before new instances start
+- **JWT scoped API auth** — Opt-in via `jwt_enabled = true`, `POST /api/tokens` to generate scoped tokens
+- **`ServiceRecovered` event** — CLI displays recovered services with `RECOVERED` indicator
+- **TemplateManager Windows file-lock tolerance** — Skips locked files instead of crashing
+- **Fix mainClass reference** — `dev.kryonix.nimbus.NimbusKt` to `dev.nimbuspowered.nimbus.NimbusKt`
 
 ---
 
@@ -301,9 +301,9 @@ Transparent assessment of current feature maturity. This helps you understand wh
 | Service Lifecycle | 5/5 | Core loop is solid — start, stop, crash recovery, restart limits |
 | Auto-Scaling (player-based) | 5/5 | Cooldowns, thresholds, global caps, stress test awareness |
 | Smart Scaling (time/predictive) | 4/5 | Works well, but requires `nimbus-module-scaling` (not in core) |
-| REST API | 4/5 | 17 route files, rate limiting, CORS — auth needs JWT upgrade |
+| REST API | 4/5 | 17 route files, rate limiting, CORS, JWT scoped auth (opt-in) |
 | WebSocket Events | 4/5 | Live events + bidirectional console work reliably |
-| Multi-Node Cluster | 4/5 | Agent recovery, TLS, placement strategies — needs reconciliation fix |
+| Multi-Node Cluster | 5/5 | Agent recovery, TLS, placement strategies, state reconciliation with grace period |
 | TCP Load Balancer | 4/5 | Async NIO, PROXY protocol v2, health checks — production-capable |
 | Module System | 5/5 | ServiceLoader, dependency resolution, versioning, SetupWizard integration |
 | Permission System | 4/5 | Groups, inheritance, tracks, meta, LuckPerms — audit integration could go deeper |

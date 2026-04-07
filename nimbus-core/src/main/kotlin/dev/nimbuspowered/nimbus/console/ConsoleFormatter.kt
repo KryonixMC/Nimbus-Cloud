@@ -181,6 +181,8 @@ object ConsoleFormatter {
                 "${info("○ STOPPED")} ${BOLD}${event.serviceName}${RESET}"
             is NimbusEvent.ServiceCrashed ->
                 "${error("✖ CRASHED")} ${BOLD}${event.serviceName}${RESET} ${DIM}(exit=${event.exitCode}, attempt=${event.restartAttempt})${RESET}"
+            is NimbusEvent.ServiceRecovered ->
+                "${success("⟳ RECOVERED")} ${BOLD}${event.serviceName}${RESET} ${DIM}(group=${event.groupName}, PID=${event.pid}, port=${event.port})${RESET}"
             is NimbusEvent.ScaleUp ->
                 "${success("↑ SCALE UP")} group=${BOLD}${event.groupName}${RESET} ${event.currentInstances} → ${event.targetInstances} ${DIM}(${event.reason})${RESET}"
             is NimbusEvent.ScaleDown ->

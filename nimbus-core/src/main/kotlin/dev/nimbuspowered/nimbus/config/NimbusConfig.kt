@@ -58,6 +58,8 @@ data class ApiConfig(
     val bind: String = "127.0.0.1",
     val port: Int = 8080,
     val token: String = "",
+    @SerialName("jwt_enabled")
+    val jwtEnabled: Boolean = false,
     @SerialName("allowed_origins")
     val allowedOrigins: List<String> = emptyList()
 )
@@ -153,5 +155,7 @@ data class ClusterConfig(
     @SerialName("keystore_path")
     val keystorePath: String = "",
     @SerialName("keystore_password")
-    val keystorePassword: String = ""
+    val keystorePassword: String = "",
+    @SerialName("reconciliation_delay")
+    val reconciliationDelay: Long = 10000
 )

@@ -19,6 +19,7 @@ class ProcessHandle : ServiceHandle {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var process: Process? = null
+    private var adoptedHandle: java.lang.ProcessHandle? = null
     private var stdinWriter: BufferedWriter? = null
 
     private val _stdoutLines = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -95,10 +96,10 @@ class ProcessHandle : ServiceHandle {
         }
     }
 
-    override fun isAlive(): Boolean = process?.isAlive ?: false
+    override fun isAlive(): Boolean = process?.isAlive ?: adoptedHandle?.isAlive ?: false
 
     override fun pid(): Long? = try {
-        process?.pid()
+        process?.pid() ?: adoptedHandle?.pid()
     } catch (_: UnsupportedOperationException) {
         null
     }
@@ -111,7 +112,11 @@ class ProcessHandle : ServiceHandle {
 
     override suspend fun awaitExit(): Int? {
         return withContext(Dispatchers.IO) {
-            process?.onExit()?.await()
+            if (process != null) {
+                process?.onExit()?.await()
+            } else if (adoptedHandle != null) {
+                adoptedHandle?.onExit()?.await()
+            }
             exitCode()
         }
     }
@@ -121,5 +126,43 @@ class ProcessHandle : ServiceHandle {
         scope.cancel()
         stdinWriter?.runCatching { close() }
         process?.destroyForcibly()
+        adoptedHandle?.destroyForcibly()
+    }
+
+    companion object {
+        private val adoptLogger = LoggerFactory.getLogger(ProcessHandle::class.java)
+
+        fun adopt(pid: Long, serviceName: String): ProcessHandle? {
+            val osHandle = java.lang.ProcessHandle.of(pid).orElse(null)
+            if (osHandle == null) {
+                adoptLogger.debug("PID {} does not exist", pid)
+                return null
+            }
+            if (!osHandle.isAlive) {
+                adoptLogger.debug("PID {} is not alive", pid)
+                return null
+            }
+
+            // On Windows, ProcessHandle.info().commandLine() often returns empty
+            val cmdLine = osHandle.info().commandLine().orElse("")
+            if (cmdLine.isNotEmpty()) {
+                if (!cmdLine.contains("nimbus.service.name=$serviceName")) {
+                    adoptLogger.warn("PID {} exists but is not service '{}' — skipping adoption", pid, serviceName)
+                    return null
+                }
+            } else {
+                val command = osHandle.info().command().orElse("")
+                if (command.isNotEmpty() && !command.contains("java")) {
+                    adoptLogger.warn("PID {} exists but is not a Java process ('{}') — skipping adoption", pid, command)
+                    return null
+                }
+                adoptLogger.info("PID {} command line not available (Windows) — adopting based on PID match", pid)
+            }
+
+            val handle = ProcessHandle()
+            handle.adoptedHandle = osHandle
+            adoptLogger.info("Adopted process PID {} for service '{}'", pid, serviceName)
+            return handle
+        }
     }
 }

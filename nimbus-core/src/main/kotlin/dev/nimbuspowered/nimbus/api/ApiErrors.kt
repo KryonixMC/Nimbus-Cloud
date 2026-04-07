@@ -11,6 +11,10 @@ import io.ktor.server.routing.*
  */
 object ApiErrors {
 
+    // ── Auth ──────────────────────────────────────────────────────
+    const val AUTH_FAILED = "AUTH_FAILED"
+    const val INSUFFICIENT_SCOPE = "INSUFFICIENT_SCOPE"
+
     // ── Generic ────────────────────────────────────────────────────
     const val NOT_FOUND = "NOT_FOUND"
     const val INVALID_INPUT = "INVALID_INPUT"
