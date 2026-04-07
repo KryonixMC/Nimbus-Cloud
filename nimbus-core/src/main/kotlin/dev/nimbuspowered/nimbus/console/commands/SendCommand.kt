@@ -3,7 +3,9 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
@@ -18,10 +20,10 @@ class SendCommand(
     override val description = "Transfer a player to another service"
     override val usage = "send <player> <service>"
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.size != 2) {
-            println(ConsoleFormatter.error("Usage: $usage"))
-            return
+            output.error("Usage: $usage")
+            return true
         }
 
         val playerName = args[0]
@@ -29,8 +31,8 @@ class SendCommand(
 
         // Verify the target service exists
         if (registry.get(targetService) == null) {
-            println(ConsoleFormatter.error("Target service '$targetService' not found."))
-            return
+            output.error("Target service '$targetService' not found.")
+            return true
         }
 
         // Find a running Velocity proxy
@@ -42,19 +44,24 @@ class SendCommand(
             }
 
         if (proxy == null) {
-            println(ConsoleFormatter.error("No running Velocity proxy found."))
-            return
+            output.error("No running Velocity proxy found.")
+            return true
         }
 
         val command = "send $playerName $targetService"
         val success = serviceManager.executeCommand(proxy.name, command)
 
         if (success) {
-            println(ConsoleFormatter.success("Sent transfer command: ") +
+            output.text(ConsoleFormatter.success("Sent transfer command: ") +
                     ConsoleFormatter.hint("$playerName -> $targetService") +
                     ConsoleFormatter.hint(" (via ${proxy.name})"))
         } else {
-            println(ConsoleFormatter.error("Failed to send transfer command to ${proxy.name}."))
+            output.error("Failed to send transfer command to ${proxy.name}.")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

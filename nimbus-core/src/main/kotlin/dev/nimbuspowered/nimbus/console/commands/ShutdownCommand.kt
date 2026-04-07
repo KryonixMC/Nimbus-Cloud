@@ -2,6 +2,7 @@ package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.scaling.ScalingEngine
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -24,6 +25,11 @@ class ShutdownCommand(
     @Volatile
     var shouldExit: Boolean = false
         private set
+
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
+        output.error("Shutdown is only available on the local console.")
+        return true
+    }
 
     override suspend fun execute(args: List<String>) {
         if (args.firstOrNull()?.lowercase() == "confirm") {

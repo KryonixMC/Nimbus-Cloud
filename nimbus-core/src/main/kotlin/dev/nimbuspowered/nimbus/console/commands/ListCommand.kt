@@ -2,6 +2,8 @@ package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
 
@@ -14,7 +16,7 @@ class ListCommand(
     override val description = "List all running services"
     override val usage = "list [group]"
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         val services = if (args.isNotEmpty()) {
             registry.getByGroup(args[0])
         } else {
@@ -22,8 +24,8 @@ class ListCommand(
         }
 
         if (services.isEmpty()) {
-            println(ConsoleFormatter.emptyState("No services running."))
-            return
+            output.info("No services running.")
+            return true
         }
 
         val headers = if (clusterEnabled) {
@@ -61,9 +63,14 @@ class ListCommand(
             }
         }
 
-        println(ConsoleFormatter.header("Services"))
-        println(ConsoleFormatter.formatTable(headers, rows))
-        println(ConsoleFormatter.count(services.size, "service"))
+        output.header("Services")
+        output.text(ConsoleFormatter.formatTable(headers, rows))
+        output.text(ConsoleFormatter.count(services.size, "service"))
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 
     private fun formatHealthIcon(healthy: Boolean, state: ServiceState): String {

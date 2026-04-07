@@ -3,7 +3,9 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.config.GroupType
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -20,28 +22,26 @@ class DynamicCommand(
     override val description = "Set a group back to dynamic mode"
     override val usage = "dynamic <group>"
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.isEmpty()) {
-            println(ConsoleFormatter.error("Usage: $usage"))
-            return
+            output.error("Usage: $usage")
+            return true
         }
 
         val groupName = args[0]
         val group = groupManager.getGroup(groupName)
         if (group == null) {
-            println(ConsoleFormatter.error("Group '$groupName' not found."))
-            return
+            output.error("Group '$groupName' not found.")
+            return true
         }
 
         if (group.isDynamic) {
-            println(ConsoleFormatter.warn("Group '$groupName' is already dynamic."))
-            return
+            output.info("Group '$groupName' is already dynamic.")
+            return true
         }
 
-        // Update in-memory
         groupManager.updateGroupType(groupName, GroupType.DYNAMIC)
 
-        // Persist to TOML file
         val tomlFile = groupsDir.resolve("${groupName.lowercase()}.toml")
         if (tomlFile.exists()) {
             val content = tomlFile.readText()
@@ -52,12 +52,17 @@ class DynamicCommand(
             tomlFile.writeText(updated)
         }
 
-        println(ConsoleFormatter.success("Group '$groupName' is now DYNAMIC."))
-        println(ConsoleFormatter.info("New services will use temporary directories that are cleaned up on stop."))
+        output.success("Group '$groupName' is now DYNAMIC.")
+        output.info("New services will use temporary directories that are cleaned up on stop.")
 
         val running = registry.getByGroup(groupName)
         if (running.isNotEmpty()) {
-            println(ConsoleFormatter.warn("${running.size} running service(s) remain static until restarted."))
+            output.info("${running.size} running service(s) remain static until restarted.")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

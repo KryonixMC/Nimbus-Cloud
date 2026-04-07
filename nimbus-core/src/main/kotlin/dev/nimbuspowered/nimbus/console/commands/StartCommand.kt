@@ -2,7 +2,9 @@ package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 
 class StartCommand(
@@ -14,32 +16,35 @@ class StartCommand(
     override val description = "Start a new service instance for a group"
     override val usage = "start <group>"
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.isEmpty()) {
-            println(ConsoleFormatter.error("Usage: $usage"))
-            return
+            output.error("Usage: $usage")
+            return true
         }
 
         val groupName = args[0]
         val group = groupManager.getGroup(groupName)
         if (group == null) {
-            println(ConsoleFormatter.error("Group '$groupName' not found."))
-            println(ConsoleFormatter.hint(
-                "Available groups: ${groupManager.getAllGroups().joinToString(", ") { it.name }}"
-            ))
-            return
+            output.error("Group '$groupName' not found.")
+            output.info("Available groups: ${groupManager.getAllGroups().joinToString(", ") { it.name }}")
+            return true
         }
 
-        println(ConsoleFormatter.info("Starting new instance for group '$groupName'..."))
+        output.info("Starting new instance for group '$groupName'...")
         try {
             val service = serviceManager.startService(groupName)
             if (service != null) {
-                println(ConsoleFormatter.success("Service '${service.name}' starting on port ${service.port}."))
+                output.success("Service '${service.name}' starting on port ${service.port}.")
             } else {
-                println(ConsoleFormatter.error("Failed to start service for group '$groupName'."))
+                output.error("Failed to start service for group '$groupName'.")
             }
         } catch (e: Exception) {
-            println(ConsoleFormatter.error("Failed to start service: ${e.message}"))
+            output.error("Failed to start service: ${e.message}")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

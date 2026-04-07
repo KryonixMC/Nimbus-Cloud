@@ -2,6 +2,8 @@ package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServerListPing
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
@@ -14,12 +16,14 @@ class PlayersCommand(
     override val description = "List all connected players across services"
     override val usage = "players [service]"
 
-    override suspend fun execute(args: List<String>) {
+    private data class PlayerEntry(val playerName: String, val serviceName: String, val serverGroup: String)
+
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         val services = if (args.isNotEmpty()) {
             val service = registry.get(args[0])
             if (service == null) {
-                println(ConsoleFormatter.error("Service '${args[0]}' not found."))
-                return
+                output.error("Service '${args[0]}' not found.")
+                return true
             }
             listOf(service)
         } else {
@@ -29,11 +33,9 @@ class PlayersCommand(
         val readyServices = services.filter { it.state == ServiceState.READY }
 
         if (readyServices.isEmpty()) {
-            println(ConsoleFormatter.warn("No ready services to query."))
-            return
+            output.info("No ready services to query.")
+            return true
         }
-
-        data class PlayerEntry(val playerName: String, val serviceName: String, val serverGroup: String)
 
         val players = mutableListOf<PlayerEntry>()
 
@@ -45,8 +47,8 @@ class PlayersCommand(
         }
 
         if (players.isEmpty()) {
-            println(ConsoleFormatter.emptyState("No players online."))
-            return
+            output.info("No players online.")
+            return true
         }
 
         val headers = listOf("PLAYER", "SERVICE", "SERVER")
@@ -58,8 +60,13 @@ class PlayersCommand(
             )
         }
 
-        println(ConsoleFormatter.header("Players"))
-        println(ConsoleFormatter.formatTable(headers, rows))
-        println(ConsoleFormatter.count(players.size, "player") + " online")
+        output.header("Players")
+        output.text(ConsoleFormatter.formatTable(headers, rows))
+        output.text(ConsoleFormatter.count(players.size, "player") + " online")
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

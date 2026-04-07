@@ -6,6 +6,8 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
 
@@ -21,23 +23,23 @@ class StatusCommand(
     override val description = "Show full network status overview"
     override val usage = "status"
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         val allServices = registry.getAll()
         val groups = groupManager.getAllGroups()
 
-        println(ConsoleFormatter.header("Network: ${config.network.name}"))
+        output.header("Network: ${config.network.name}")
 
         // Summary line
         val readyCount = allServices.count { it.state == ServiceState.READY }
         val totalPlayers = allServices.sumOf { it.playerCount }
-        println(
+        output.text(
             "${ConsoleFormatter.hint("Services:")} ${ConsoleFormatter.success("$readyCount ready")} ${ConsoleFormatter.hint("/ ${allServices.size} total")}    " +
                     "${ConsoleFormatter.hint("Players:")} ${ConsoleFormatter.colorize("$totalPlayers", ConsoleFormatter.BOLD)}"
         )
 
         // Per-group overview
         if (groups.isEmpty()) {
-            println(ConsoleFormatter.emptyState("No groups configured."))
+            output.info("No groups configured.")
         } else {
             val headers = listOf("GROUP", "TYPE", "INSTANCES", "MIN/MAX", "PLAYERS", "STATUS")
             val rows = groups.sortedBy { it.name }.map { group ->
@@ -65,28 +67,33 @@ class StatusCommand(
                 )
             }
 
-            println(ConsoleFormatter.formatTable(headers, rows))
+            output.text(ConsoleFormatter.formatTable(headers, rows))
         }
 
         // Capacity bar
         val maxServices = config.controller.maxServices
         val usedSlots = allServices.size
-        println("${ConsoleFormatter.hint("Capacity:")} ${ConsoleFormatter.progressBar(usedSlots, maxServices)} $usedSlots/$maxServices services")
+        output.text("${ConsoleFormatter.hint("Capacity:")} ${ConsoleFormatter.progressBar(usedSlots, maxServices)} $usedSlots/$maxServices services")
 
         // Cluster info (if enabled)
         if (nodeManager != null) {
-            println()
-            println("${ConsoleFormatter.hint("Cluster:")} ${ConsoleFormatter.success("${nodeManager.getOnlineNodeCount()}")} online / ${nodeManager.getNodeCount()} nodes")
+            output.text("")
+            output.text("${ConsoleFormatter.hint("Cluster:")} ${ConsoleFormatter.success("${nodeManager.getOnlineNodeCount()}")} online / ${nodeManager.getNodeCount()} nodes")
         }
 
         // Load Balancer info (if enabled)
         if (loadBalancer != null) {
-            println("${ConsoleFormatter.hint("Load Balancer:")} ${loadBalancer.activeConnections} active / ${loadBalancer.totalConnections} total connections")
+            output.text("${ConsoleFormatter.hint("Load Balancer:")} ${loadBalancer.activeConnections} active / ${loadBalancer.totalConnections} total connections")
         }
 
         // Bedrock info (if enabled)
         if (config.bedrock.enabled) {
-            println("${ConsoleFormatter.hint("Bedrock:")} ${ConsoleFormatter.success("enabled")} (Geyser + Floodgate, base port ${config.bedrock.basePort})")
+            output.text("${ConsoleFormatter.hint("Bedrock:")} ${ConsoleFormatter.success("enabled")} (Geyser + Floodgate, base port ${config.bedrock.basePort})")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

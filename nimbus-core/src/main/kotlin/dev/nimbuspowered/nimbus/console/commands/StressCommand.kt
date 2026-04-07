@@ -3,6 +3,8 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
@@ -18,33 +20,40 @@ class StressCommand(
     override val description = "Simulate player load for stress testing"
     override val usage = "stress [start <players> [group] [--ramp <seconds>] | stop | ramp <players> [--duration <seconds>] | status]"
 
-    override suspend fun execute(args: List<String>) {
-        if (args.isEmpty()) {
-            showStatus()
-            return
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
+        if (args.isEmpty() || args[0].lowercase() == "status") {
+            showStatus(output)
+            return true
         }
 
         when (args[0].lowercase()) {
-            "start" -> handleStart(args.drop(1))
-            "stop" -> handleStop()
-            "ramp" -> handleRamp(args.drop(1))
-            "status" -> showStatus()
+            "start" -> handleStart(args.drop(1), output)
+            "stop" -> {
+                if (!stressTestManager.isActive()) {
+                    output.info("No stress test is running.")
+                } else {
+                    stressTestManager.stop()
+                    output.success("Stress test stopped. All simulated players removed, proxy display restored.")
+                }
+            }
+            "ramp" -> handleRamp(args.drop(1), output)
             else -> {
-                println(ConsoleFormatter.error("Unknown subcommand: ${args[0]}"))
-                println(ConsoleFormatter.hint("Usage: $usage"))
+                output.error("Unknown subcommand: ${args[0]}")
+                output.info("Usage: $usage")
             }
         }
+        return true
     }
 
-    private fun handleStart(args: List<String>) {
+    private fun handleStart(args: List<String>, output: CommandOutput) {
         if (args.isEmpty()) {
-            println(ConsoleFormatter.error("Usage: stress start <players> [group] [--ramp <seconds>]"))
+            output.error("Usage: stress start <players> [group] [--ramp <seconds>]")
             return
         }
 
         val players = args[0].toIntOrNull()
         if (players == null || players <= 0) {
-            println(ConsoleFormatter.error("Invalid player count: ${args[0]}"))
+            output.error("Invalid player count: ${args[0]}")
             return
         }
 
@@ -71,12 +80,12 @@ class StressCommand(
         if (groupName != null) {
             val group = groupManager.getGroup(groupName)
             if (group == null) {
-                println(ConsoleFormatter.error("Group '$groupName' not found."))
+                output.error("Group '$groupName' not found.")
                 return
             }
             if (group.config.group.software == ServerSoftware.VELOCITY) {
-                println(ConsoleFormatter.error("Cannot stress test proxy group '$groupName' directly."))
-                println(ConsoleFormatter.hint("Proxy player counts are auto-calculated from backend servers."))
+                output.error("Cannot stress test proxy group '$groupName' directly.")
+                output.info("Proxy player counts are auto-calculated from backend servers.")
                 return
             }
         }
@@ -94,8 +103,8 @@ class StressCommand(
         }
 
         if (readyBackends.isEmpty()) {
-            println(ConsoleFormatter.error("No READY backend services found${if (groupName != null) " in group '$groupName'" else ""}."))
-            println(ConsoleFormatter.hint("Start some services first, then run the stress test."))
+            output.error("No READY backend services found${if (groupName != null) " in group '$groupName'" else ""}.")
+            output.info("Start some services first, then run the stress test.")
             return
         }
 
@@ -109,50 +118,35 @@ class StressCommand(
         val started = stressTestManager.start(groupName, players, rampMs)
 
         if (!started) {
-            println(ConsoleFormatter.warn("A stress test is already running. Stop it first with: stress stop"))
+            output.info("A stress test is already running. Stop it first with: stress stop")
             return
         }
 
         val target = if (groupName != null) "group ${ConsoleFormatter.BOLD}$groupName${ConsoleFormatter.RESET}" else "all backend groups"
         val rampInfo = if (rampSeconds > 0) " ${ConsoleFormatter.DIM}(ramping over ${rampSeconds}s)${ConsoleFormatter.RESET}" else ""
-        println(ConsoleFormatter.successLine(
-            "Stress test started: ${ConsoleFormatter.BOLD}$players${ConsoleFormatter.RESET} simulated players across $target$rampInfo"
-        ))
+        output.success("Stress test started: ${ConsoleFormatter.BOLD}$players${ConsoleFormatter.RESET} simulated players across $target$rampInfo")
 
         if (players > totalCapacity) {
-            println(ConsoleFormatter.warnLine(
-                "Requested $players players exceeds current capacity of $totalCapacity. " +
-                "Scaling will add more instances (up to maxInstances)."
-            ))
+            output.info("Requested $players players exceeds current capacity of $totalCapacity. Scaling will add more instances (up to maxInstances).")
         }
 
-        println(ConsoleFormatter.hint("  Proxy groups auto-updated. Use 'stress status' to monitor, 'stress stop' to end."))
+        output.info("Proxy groups auto-updated. Use 'stress status' to monitor, 'stress stop' to end.")
     }
 
-    private suspend fun handleStop() {
+    private fun handleRamp(args: List<String>, output: CommandOutput) {
         if (!stressTestManager.isActive()) {
-            println(ConsoleFormatter.warn("No stress test is running."))
-            return
-        }
-
-        stressTestManager.stop()
-        println(ConsoleFormatter.successLine("Stress test stopped. All simulated players removed, proxy display restored."))
-    }
-
-    private fun handleRamp(args: List<String>) {
-        if (!stressTestManager.isActive()) {
-            println(ConsoleFormatter.error("No stress test is running. Start one first with: stress start <players>"))
+            output.error("No stress test is running. Start one first with: stress start <players>")
             return
         }
 
         if (args.isEmpty()) {
-            println(ConsoleFormatter.error("Usage: stress ramp <players> [--duration <seconds>]"))
+            output.error("Usage: stress ramp <players> [--duration <seconds>]")
             return
         }
 
         val players = args[0].toIntOrNull()
         if (players == null || players < 0) {
-            println(ConsoleFormatter.error("Invalid player count: ${args[0]}"))
+            output.error("Invalid player count: ${args[0]}")
             return
         }
 
@@ -168,34 +162,32 @@ class StressCommand(
         }
 
         stressTestManager.ramp(players, durationSeconds * 1000)
-        println(ConsoleFormatter.successLine(
-            "Ramping to ${ConsoleFormatter.BOLD}$players${ConsoleFormatter.RESET} players over ${durationSeconds}s"
-        ))
+        output.success("Ramping to ${ConsoleFormatter.BOLD}$players${ConsoleFormatter.RESET} players over ${durationSeconds}s")
     }
 
-    private fun showStatus() {
+    private fun showStatus(output: CommandOutput) {
         val status = stressTestManager.getStatus()
         if (status == null) {
-            println(ConsoleFormatter.emptyState("No stress test running."))
-            println(ConsoleFormatter.hint("Start one with: stress start <players> [group] [--ramp <seconds>]"))
+            output.info("No stress test running.")
+            output.info("Start one with: stress start <players> [group] [--ramp <seconds>]")
             return
         }
 
         val p = status.profile
         val elapsed = status.elapsedMs / 1000
 
-        println(ConsoleFormatter.header("Stress Test"))
-        println()
+        output.header("Stress Test")
+        output.text("")
 
         // Profile info
         val target = p.groupName ?: "all backend groups"
-        println(ConsoleFormatter.field("Target", "${ConsoleFormatter.BOLD}$target${ConsoleFormatter.RESET}"))
-        println(ConsoleFormatter.field("Players", "${ConsoleFormatter.BOLD}${p.currentPlayers}${ConsoleFormatter.RESET} / ${p.targetPlayers}"))
-        println(ConsoleFormatter.field("Capacity", "${ConsoleFormatter.BOLD}${status.totalCapacity}${ConsoleFormatter.RESET} max across ${status.perService.size} service(s)"))
-        println(ConsoleFormatter.field("Elapsed", formatDuration(elapsed)))
+        output.text(ConsoleFormatter.field("Target", "${ConsoleFormatter.BOLD}$target${ConsoleFormatter.RESET}"))
+        output.text(ConsoleFormatter.field("Players", "${ConsoleFormatter.BOLD}${p.currentPlayers}${ConsoleFormatter.RESET} / ${p.targetPlayers}"))
+        output.text(ConsoleFormatter.field("Capacity", "${ConsoleFormatter.BOLD}${status.totalCapacity}${ConsoleFormatter.RESET} max across ${status.perService.size} service(s)"))
+        output.text(ConsoleFormatter.field("Elapsed", formatDuration(elapsed)))
 
         if (p.overflow > 0) {
-            println(ConsoleFormatter.field("Overflow", ConsoleFormatter.warn("${p.overflow} players over capacity")))
+            output.text(ConsoleFormatter.field("Overflow", ConsoleFormatter.warn("${p.overflow} players over capacity")))
         }
 
         // Ramp progress
@@ -204,13 +196,13 @@ class StressCommand(
             val pct = (rampProgress * 100).toInt()
             val bar = ConsoleFormatter.progressBar(pct, 100)
             val rampStatus = if (pct >= 100) ConsoleFormatter.success("COMPLETE") else "${pct}%"
-            println(ConsoleFormatter.field("Ramp", "$bar $rampStatus"))
+            output.text(ConsoleFormatter.field("Ramp", "$bar $rampStatus"))
         }
 
         // Backend services breakdown
         if (status.perService.isNotEmpty()) {
-            println()
-            println(ConsoleFormatter.section("Backend Services"))
+            output.text("")
+            output.text(ConsoleFormatter.section("Backend Services"))
 
             val headers = listOf("Service", "Players", "Max")
             val rows = status.perService.entries.sortedByDescending { it.value }.map { (name, count) ->
@@ -224,20 +216,24 @@ class StressCommand(
                     ""
                 )
             }
-            println(ConsoleFormatter.formatTable(headers, rows))
+            output.text(ConsoleFormatter.formatTable(headers, rows))
         }
 
         // Proxy services
         if (status.proxyServices.isNotEmpty()) {
-            println()
-            println(ConsoleFormatter.section("Proxy Services"))
+            output.text("")
+            output.text(ConsoleFormatter.section("Proxy Services"))
             for ((name, count) in status.proxyServices) {
-                println("  ${ConsoleFormatter.BOLD}$name${ConsoleFormatter.RESET} ${ConsoleFormatter.DIM}→${ConsoleFormatter.RESET} $count players ${ConsoleFormatter.DIM}(reflects total backend count)${ConsoleFormatter.RESET}")
+                output.text("  ${ConsoleFormatter.BOLD}$name${ConsoleFormatter.RESET} ${ConsoleFormatter.DIM}\u2192${ConsoleFormatter.RESET} $count players ${ConsoleFormatter.DIM}(reflects total backend count)${ConsoleFormatter.RESET}")
             }
         }
 
-        println()
-        println(ConsoleFormatter.hint("Commands: stress ramp <players> [--duration <s>] | stress stop"))
+        output.text("")
+        output.info("Commands: stress ramp <players> [--duration <s>] | stress stop")
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 
     private fun formatDuration(seconds: Long): String = when {

@@ -61,8 +61,13 @@ jobs:
           AGENT_JAR=$(find nimbus-agent/build/libs -name "*-all.jar" | head -1)
           cp "$AGENT_JAR" "nimbus-agent-${VERSION}.jar"
 
+          # CLI JAR (nimbus-cli)
+          CLI_JAR=$(find nimbus-cli/build/libs -name "nimbus-cli-*.jar" ! -name "*-all.jar" | head -1)
+          cp "$CLI_JAR" "nimbus-cli-${VERSION}.jar"
+
           echo "Controller: nimbus-core-${VERSION}.jar ($(du -h "nimbus-core-${VERSION}.jar" | cut -f1))"
           echo "Agent: nimbus-agent-${VERSION}.jar ($(du -h "nimbus-agent-${VERSION}.jar" | cut -f1))"
+          echo "CLI: nimbus-cli-${VERSION}.jar ($(du -h "nimbus-cli-${VERSION}.jar" | cut -f1))"
 
       - name: Create Release Draft
         uses: softprops/action-gh-release@v2
@@ -75,6 +80,7 @@ jobs:
           files: |
             nimbus-core-${{ steps.version.outputs.version }}.jar
             nimbus-agent-${{ steps.version.outputs.version }}.jar
+            nimbus-cli-${{ steps.version.outputs.version }}.jar
           body: |
             ## Nimbus ${{ steps.version.outputs.tag }}
 
@@ -98,6 +104,16 @@ jobs:
             **Agent (Windows):**
             ```powershell
             irm https://raw.githubusercontent.com/${{ github.repository }}/main/install-agent.ps1 | iex
+            ```
+
+            **Remote CLI (Linux/macOS):**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install-cli.sh | bash
+            ```
+
+            **Remote CLI (Windows):**
+            ```powershell
+            irm https://raw.githubusercontent.com/${{ github.repository }}/main/install-cli.ps1 | iex
             ```
 
             ### Changes

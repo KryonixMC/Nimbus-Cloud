@@ -20,7 +20,15 @@ curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-a
 irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-agent.ps1 | iex
 ```
 
-Install scripts: `install.sh`, `install.ps1`, `install-agent.sh`, `install-agent.ps1` in repo root.
+```bash
+# Remote CLI (Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.sh | bash
+
+# Remote CLI (Windows PowerShell)
+irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-cli.ps1 | iex
+```
+
+Install scripts: `install.sh`, `install.ps1`, `install-agent.sh`, `install-agent.ps1`, `install-cli.sh`, `install-cli.ps1` in repo root.
 
 ## Build from Source
 
@@ -60,6 +68,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 - `nimbus-sdk` — Server SDK (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed to backend servers)
 - `nimbus-perms` — Permissions plugin: builtin or LuckPerms provider (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed, configurable)
 - `nimbus-display` — Display plugin: server selector signs + NPCs via FancyNpcs (Spigot 1.13+ signs, Paper 1.20+ NPCs, Folia compatible)
+- `nimbus-cli` — Remote CLI: standalone JLine3 console that connects to controller via REST + WebSocket (no Minecraft dependencies)
 - `nimbus-module-api` — Module API: interfaces for external module developers (NimbusModule, ModuleContext, ModuleCommand, Migration)
 - `nimbus-module-perms` — Permissions module: groups, tracks, prefix/suffix, audit log (extracted from core)
 - `nimbus-module-display` — Display module: server selector signs + NPCs config (extracted from core)
@@ -176,6 +185,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 
 - Kotlin, no frameworks (no Spring/DI). Direct object wiring in `Nimbus.kt`
 - Coroutines for all async work (no raw threads)
+- All console commands implement `execute(args, output: CommandOutput)` as the canonical path; `execute(args)` delegates via `ConsoleOutput()`
 - Sealed classes for events (`Events.kt`) with generic `ModuleEvent` for module-fired events
 - Enums for state (`ServiceState.kt`)
 - ANSI-colored console output via `ConsoleFormatter`
@@ -183,10 +193,10 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 ## API (v0.2)
 
 - Bearer token auth (`Authorization: Bearer <token>`), auto-generated if not configured
-- REST: `/api/services`, `/api/services/health` (aggregated health summary), `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`, `/api/audit` (admin-only audit log), `/api/scaling/*` (smart scaling module), `/api/permissions/*` (perms module), `/api/displays/*` (display module), `/api/players/*` (player module)
+- REST: `/api/services`, `/api/services/health` (aggregated health summary), `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`, `/api/audit` (admin-only audit log), `/api/scaling/*` (smart scaling module), `/api/permissions/*` (perms module), `/api/displays/*` (display module), `/api/players/*` (player module), `/api/console/complete` (tab completion for Remote CLI)
 - Proxy events: `POST /api/proxy/events` — generic proxy event reporting (player connect/disconnect/switch)
 - Player module: `/api/players/online`, `/api/players/history/{uuid}`, `/api/players/info/{uuid}`, `/api/players/stats`
-- WebSocket: `/api/events` (live events), `/api/services/{name}/console` (bidirectional) — auth via `Authorization` header or `?token=` query param
+- WebSocket: `/api/events` (live events), `/api/services/{name}/console` (bidirectional), `/api/console/stream` (Remote CLI: multiplexed command execution, events, screen sessions) — auth via `Authorization` header or `?token=` query param
 - `/api/health` is always public (no auth), all other endpoints (including `/api/metrics`) require auth
 - Rate limiting: 120 requests/minute global, 5 requests/minute for stress endpoints
 - Error responses include machine-readable `error` codes (e.g. `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`) — see `ApiErrors.kt`

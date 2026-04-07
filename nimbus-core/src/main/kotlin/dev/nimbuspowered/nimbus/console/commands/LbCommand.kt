@@ -5,6 +5,8 @@ import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConfigWriter
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -22,38 +24,91 @@ class LbCommand(
     override val description = "Manage the TCP load balancer"
     override val usage = "lb [enable|disable|strategy <name>]"
 
-    override suspend fun execute(args: List<String>) {
-        if (args.isEmpty()) {
-            printStatus()
-            return
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
+        if (args.isEmpty() || args[0].lowercase() == "status") {
+            showStatus(output)
+            return true
         }
 
         when (args[0].lowercase()) {
-            "status" -> printStatus()
-            "enable" -> enableLb()
-            "disable" -> disableLb()
-            "strategy" -> setStrategy(args.drop(1))
+            "enable" -> {
+                if (config.loadbalancer.enabled) {
+                    output.info("Load balancer is already enabled.")
+                } else {
+                    ConfigWriter.updateSection(configPath, "loadbalancer", mapOf(
+                        "enabled" to "true",
+                        "bind" to "\"${config.loadbalancer.bind}\"",
+                        "port" to "${config.loadbalancer.port}",
+                        "strategy" to "\"${config.loadbalancer.strategy}\"",
+                        "proxy_protocol" to "${config.loadbalancer.proxyProtocol}",
+                        "connection_timeout" to "${config.loadbalancer.connectionTimeout}",
+                        "buffer_size" to "${config.loadbalancer.bufferSize}"
+                    ))
+                    output.success("Load balancer enabled on ${config.loadbalancer.bind}:${config.loadbalancer.port}")
+                    output.info("Restart required to apply changes.")
+                }
+            }
+            "disable" -> {
+                if (!config.loadbalancer.enabled) {
+                    output.info("Load balancer is already disabled.")
+                } else {
+                    ConfigWriter.updateSection(configPath, "loadbalancer", mapOf(
+                        "enabled" to "false",
+                        "bind" to "\"${config.loadbalancer.bind}\"",
+                        "port" to "${config.loadbalancer.port}",
+                        "strategy" to "\"${config.loadbalancer.strategy}\"",
+                        "proxy_protocol" to "${config.loadbalancer.proxyProtocol}",
+                        "connection_timeout" to "${config.loadbalancer.connectionTimeout}",
+                        "buffer_size" to "${config.loadbalancer.bufferSize}"
+                    ))
+                    output.success("Load balancer disabled.")
+                    output.info("Restart required to apply changes.")
+                }
+            }
+            "strategy" -> {
+                val stratArgs = args.drop(1)
+                if (stratArgs.isEmpty()) {
+                    output.text("  Current strategy: ${ConsoleFormatter.CYAN}${config.loadbalancer.strategy}${ConsoleFormatter.RESET}")
+                    output.info("Available: least-players, round-robin")
+                } else {
+                    val strategy = stratArgs[0].lowercase()
+                    if (strategy !in listOf("least-players", "round-robin")) {
+                        output.error("Invalid strategy: $strategy")
+                        output.info("Available: least-players, round-robin")
+                    } else {
+                        ConfigWriter.updateValue(configPath, "loadbalancer", "strategy", "\"$strategy\"")
+                        output.success("Load balancer strategy set to '$strategy'.")
+                        output.info("Restart required to apply changes.")
+                    }
+                }
+            }
             else -> {
-                println(ConsoleFormatter.warn("Unknown subcommand: ${args[0]}"))
-                printUsage()
+                output.info("Unknown subcommand: ${args[0]}")
+                output.text("")
+                output.text("  ${ConsoleFormatter.BOLD}Usage:${ConsoleFormatter.RESET}")
+                output.text(ConsoleFormatter.commandEntry("lb", "Show load balancer status + backends", padWidth = 30))
+                output.text(ConsoleFormatter.commandEntry("lb enable", "Enable load balancer", padWidth = 30))
+                output.text(ConsoleFormatter.commandEntry("lb disable", "Disable load balancer", padWidth = 30))
+                output.text(ConsoleFormatter.commandEntry("lb strategy <name>", "Set strategy (least-players, round-robin)", padWidth = 30))
             }
         }
+        return true
     }
 
-    private fun printStatus() {
-        println(ConsoleFormatter.header("Load Balancer"))
+    private fun showStatus(output: CommandOutput) {
+        output.header("Load Balancer")
         if (config.loadbalancer.enabled) {
-            println(ConsoleFormatter.field("Status", ConsoleFormatter.enabledDisabled(true)))
-            println(ConsoleFormatter.field("Bind", "${config.loadbalancer.bind}:${config.loadbalancer.port}"))
-            println(ConsoleFormatter.field("Strategy", config.loadbalancer.strategy))
-            println(ConsoleFormatter.field("PROXY v2", ConsoleFormatter.yesNo(config.loadbalancer.proxyProtocol)))
+            output.text(ConsoleFormatter.field("Status", ConsoleFormatter.enabledDisabled(true)))
+            output.text(ConsoleFormatter.field("Bind", "${config.loadbalancer.bind}:${config.loadbalancer.port}"))
+            output.text(ConsoleFormatter.field("Strategy", config.loadbalancer.strategy))
+            output.text(ConsoleFormatter.field("PROXY v2", ConsoleFormatter.yesNo(config.loadbalancer.proxyProtocol)))
             if (loadBalancer != null) {
-                println(ConsoleFormatter.field("Active", "${loadBalancer.activeConnections} connections"))
-                println(ConsoleFormatter.field("Total", "${loadBalancer.totalConnections} connections"))
-                println(ConsoleFormatter.field("Rejected", "${loadBalancer.rejectedConnections} connections"))
-                println(ConsoleFormatter.field("Failed", "${loadBalancer.failedConnections} connections"))
+                output.text(ConsoleFormatter.field("Active", "${loadBalancer.activeConnections} connections"))
+                output.text(ConsoleFormatter.field("Total", "${loadBalancer.totalConnections} connections"))
+                output.text(ConsoleFormatter.field("Rejected", "${loadBalancer.rejectedConnections} connections"))
+                output.text(ConsoleFormatter.field("Failed", "${loadBalancer.failedConnections} connections"))
             }
-            println()
+            output.text("")
 
             // Show backend proxies
             val proxyServices = registry.getAll().filter { service ->
@@ -62,7 +117,7 @@ class LbCommand(
             }
 
             if (proxyServices.isEmpty()) {
-                println(ConsoleFormatter.warn("  No backend proxies available"))
+                output.info("No backend proxies available")
             } else {
                 val headers = listOf("BACKEND", "HOST", "PORT", "PLAYERS", "STATE", "HEALTH", "CONNS")
                 val rows = proxyServices.map { svc ->
@@ -84,79 +139,15 @@ class LbCommand(
                         (health?.activeConnections?.get() ?: 0).toString()
                     )
                 }
-                println(ConsoleFormatter.formatTable(headers, rows))
+                output.text(ConsoleFormatter.formatTable(headers, rows))
             }
         } else {
-            println(ConsoleFormatter.field("Status", ConsoleFormatter.enabledDisabled(false)))
-            println(ConsoleFormatter.hint("  Use 'lb enable' to activate"))
+            output.text(ConsoleFormatter.field("Status", ConsoleFormatter.enabledDisabled(false)))
+            output.info("Use 'lb enable' to activate")
         }
     }
 
-    private fun enableLb() {
-        if (config.loadbalancer.enabled) {
-            println(ConsoleFormatter.warn("Load balancer is already enabled."))
-            return
-        }
-
-        ConfigWriter.updateSection(configPath, "loadbalancer", mapOf(
-            "enabled" to "true",
-            "bind" to "\"${config.loadbalancer.bind}\"",
-            "port" to "${config.loadbalancer.port}",
-            "strategy" to "\"${config.loadbalancer.strategy}\"",
-            "proxy_protocol" to "${config.loadbalancer.proxyProtocol}",
-            "connection_timeout" to "${config.loadbalancer.connectionTimeout}",
-            "buffer_size" to "${config.loadbalancer.bufferSize}"
-        ))
-
-        println(ConsoleFormatter.success("Load balancer enabled on ${config.loadbalancer.bind}:${config.loadbalancer.port}"))
-        ConfigWriter.printRestartHint(configPath)
-    }
-
-    private fun disableLb() {
-        if (!config.loadbalancer.enabled) {
-            println(ConsoleFormatter.warn("Load balancer is already disabled."))
-            return
-        }
-
-        ConfigWriter.updateSection(configPath, "loadbalancer", mapOf(
-            "enabled" to "false",
-            "bind" to "\"${config.loadbalancer.bind}\"",
-            "port" to "${config.loadbalancer.port}",
-            "strategy" to "\"${config.loadbalancer.strategy}\"",
-            "proxy_protocol" to "${config.loadbalancer.proxyProtocol}",
-            "connection_timeout" to "${config.loadbalancer.connectionTimeout}",
-            "buffer_size" to "${config.loadbalancer.bufferSize}"
-        ))
-
-        println(ConsoleFormatter.success("Load balancer disabled."))
-        ConfigWriter.printRestartHint(configPath)
-    }
-
-    private fun setStrategy(args: List<String>) {
-        if (args.isEmpty()) {
-            println("  Current strategy: ${ConsoleFormatter.CYAN}${config.loadbalancer.strategy}${ConsoleFormatter.RESET}")
-            println(ConsoleFormatter.info("  Available: least-players, round-robin"))
-            return
-        }
-
-        val strategy = args[0].lowercase()
-        if (strategy !in listOf("least-players", "round-robin")) {
-            println(ConsoleFormatter.error("Invalid strategy: $strategy"))
-            println(ConsoleFormatter.info("Available: least-players, round-robin"))
-            return
-        }
-
-        ConfigWriter.updateValue(configPath, "loadbalancer", "strategy", "\"$strategy\"")
-        println(ConsoleFormatter.success("Load balancer strategy set to '$strategy'."))
-        ConfigWriter.printRestartHint(configPath)
-    }
-
-    private fun printUsage() {
-        println()
-        println("  ${ConsoleFormatter.BOLD}Usage:${ConsoleFormatter.RESET}")
-        println(ConsoleFormatter.commandEntry("lb", "Show load balancer status + backends", padWidth = 30))
-        println(ConsoleFormatter.commandEntry("lb enable", "Enable load balancer", padWidth = 30))
-        println(ConsoleFormatter.commandEntry("lb disable", "Disable load balancer", padWidth = 30))
-        println(ConsoleFormatter.commandEntry("lb strategy <name>", "Set strategy (least-players, round-robin)", padWidth = 30))
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }

@@ -6,6 +6,7 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.BOLD
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.CYAN
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.DIM
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.RESET
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.database.AuditLog
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.module.CommandOutput
@@ -30,7 +31,7 @@ class AuditCommand(
         SubcommandMeta("--actor <name>", "Filter by actor", "audit --actor console")
     )
 
-    override suspend fun execute(args: List<String>) {
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         var limit = 20
         var actionFilter: String? = null
         var actorFilter: String? = null
@@ -62,12 +63,11 @@ class AuditCommand(
         }
 
         if (entries.isEmpty()) {
-            println(ConsoleFormatter.info("No audit entries found."))
-            return
+            output.info("No audit entries found.")
+            return true
         }
 
-        println("${BOLD}Audit Log${RESET} ${DIM}(${entries.size} entries, newest first)${RESET}")
-        println("")
+        output.header("Audit Log (${entries.size} entries, newest first)")
 
         for (entry in entries) {
             val ts = entry.timestamp.substringBefore('T').let { date ->
@@ -76,8 +76,13 @@ class AuditCommand(
             }
             val targetStr = if (entry.target.isNotBlank()) " ${BOLD}${entry.target}${RESET}" else ""
             val detailStr = if (entry.details.isNotBlank()) " ${DIM}(${entry.details})${RESET}" else ""
-            println("  ${DIM}$ts${RESET}  ${CYAN}${entry.actor}${RESET}  ${entry.action}$targetStr$detailStr")
+            output.text("  ${DIM}$ts${RESET}  ${CYAN}${entry.actor}${RESET}  ${entry.action}$targetStr$detailStr")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 
     private data class Entry(

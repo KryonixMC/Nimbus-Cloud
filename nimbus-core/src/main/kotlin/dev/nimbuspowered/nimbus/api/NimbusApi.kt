@@ -312,6 +312,11 @@ class NimbusApi(
             eventRoutes(eventBus, registry, serviceManager, token, serviceToken)
             templateRoutes(templatesDir, config.cluster.token)
 
+            // Remote CLI console routes (WebSocket + REST, master token only)
+            if (dispatcher != null) {
+                consoleRoutes(dispatcher, eventBus, registry, serviceManager, token, serviceToken)
+            }
+
             if (token.isNotBlank()) {
                 authenticate("service-token") {
                     serviceRouteBlock()

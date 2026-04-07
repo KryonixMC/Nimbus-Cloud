@@ -624,6 +624,38 @@ data class CommandExecuteResponse(
     val lines: List<OutputLineResponse>
 )
 
+// ── Console DTOs ───────────────────────────────────────────────────
+
+@Serializable
+data class CompleteRequest(
+    val buffer: String,
+    val cursor: Int = -1
+)
+
+@Serializable
+data class CompleteResponse(
+    val candidates: List<String>
+)
+
+@Serializable
+data class ConsoleMessageIn(
+    val type: String,
+    val id: String = "",
+    val input: String = "",
+    val service: String = "",
+    val text: String = ""
+)
+
+@Serializable
+data class ConsoleMessageOut(
+    val type: String,
+    val id: String = "",
+    val line: OutputLineResponse? = null,
+    val event: EventMessage? = null,
+    val text: String = "",
+    val candidates: List<String> = emptyList()
+)
+
 // ── Event DTOs (for WebSocket) ──────────────────────────────────────
 
 @Serializable

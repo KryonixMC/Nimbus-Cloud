@@ -3,9 +3,11 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.config.ConfigLoader
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
+import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.module.CommandOutput
 import dev.nimbuspowered.nimbus.proxy.ProxySyncManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import java.nio.file.Path
@@ -22,15 +24,15 @@ class ReloadCommand(
     override val description = "Hot-reload group and proxy configuration files"
     override val usage = "reload"
 
-    override suspend fun execute(args: List<String>) {
-        println(ConsoleFormatter.info("Reloading configurations..."))
+    override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
+        output.info("Reloading configurations...")
 
         val configs = try {
             ConfigLoader.loadGroupConfigs(groupsDir)
         } catch (e: Exception) {
-            println(ConsoleFormatter.error("Failed to load configs: ${e.message}"))
-            println(ConsoleFormatter.warn("Keeping current configuration."))
-            return
+            output.error("Failed to load configs: ${e.message}")
+            output.info("Keeping current configuration.")
+            return true
         }
 
         // Snapshot current group names before reload
@@ -39,7 +41,7 @@ class ReloadCommand(
         groupManager.reloadGroups(configs)
 
         val loadedGroups = groupManager.getAllGroups()
-        println(ConsoleFormatter.success("Loaded ${configs.size} group configuration(s)."))
+        output.success("Loaded ${configs.size} group configuration(s).")
 
         // Show instance count per group
         for (group in loadedGroups.sortedBy { it.name }) {
@@ -50,7 +52,7 @@ class ReloadCommand(
             } else {
                 ConsoleFormatter.hint("0 running")
             }
-            println("$icon ${ConsoleFormatter.colorize(group.name, ConsoleFormatter.BOLD)}  $countText")
+            output.text("$icon ${ConsoleFormatter.colorize(group.name, ConsoleFormatter.BOLD)}  $countText")
         }
 
         // Warn about groups with running services that were removed from config
@@ -59,12 +61,10 @@ class ReloadCommand(
         for (groupName in orphanedGroups.sorted()) {
             val runningServices = registry.getByGroup(groupName)
             if (runningServices.isNotEmpty()) {
-                println()
-                println(
-                    ConsoleFormatter.warn(
-                        "Group '$groupName' was removed from config but has " +
-                            "${runningServices.size} running service(s). They will continue until stopped."
-                    )
+                output.text("")
+                output.info(
+                    "Group '$groupName' was removed from config but has " +
+                        "${runningServices.size} running service(s). They will continue until stopped."
                 )
             }
         }
@@ -89,7 +89,12 @@ class ReloadCommand(
                 format = cfg.chat.format,
                 enabled = cfg.chat.enabled
             ))
-            println(ConsoleFormatter.success("Proxy sync config reloaded and pushed to proxies."))
+            output.success("Proxy sync config reloaded and pushed to proxies.")
         }
+        return true
+    }
+
+    override suspend fun execute(args: List<String>) {
+        execute(args, ConsoleOutput())
     }
 }
