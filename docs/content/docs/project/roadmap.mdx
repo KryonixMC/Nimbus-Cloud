@@ -4,7 +4,6 @@ description: Current development status, planned features, and long-term vision 
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
-import { Steps, Step } from 'fumadocs-ui/components/steps';
 
 This page tracks where Nimbus is, where it's going, and why. Each version has a clear theme — features are grouped by the problem they solve, not by when someone thought of them.
 
@@ -19,7 +18,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | Version | Status | Theme |
 |---------|--------|-------|
 | [v0.1.0 – v0.1.4](#v01x--foundation) | Released | Foundation & core cloud features |
-| [v0.2.0](#v020--security--production-readiness) | **Implemented** | Security, stability & production readiness |
+| [v0.2.0](#v020--security--production-readiness) | Released | Security, stability & production readiness |
 | [v0.3.0](#v030--competitive-features) | Planned | Warm pool, player tracking, smarter scaling |
 | [v0.4.0+](#v040--cloud-native) | Vision | Docker, S3 storage, dashboard |
 
@@ -84,75 +83,21 @@ The first public release shipped a fully functional cloud system:
 
 ---
 
-## v0.2.0 — Security & Production Readiness
-
-<Callout type="info">
-  These features have been implemented on the `feat/v0.2.0-pid-recovery-jwt-auth` branch.
-</Callout>
+## v0.2.0 — Security & Production Readiness (April 7, 2026)
 
 **Theme:** Make Nimbus production-ready. Fix the gaps that matter when real players are online and real money is on the line.
 
-This version focuses on three pillars: **resilience** (services survive controller crashes), **security** (proper API auth), and **correctness** (no duplicate services after restart).
+Three pillars: **resilience** (services survive controller crashes), **security** (proper API auth), and **correctness** (no duplicate services after restart).
 
-### State Reconciliation
-
-**Problem:** When the controller restarts, it doesn't know which services are already running on agent nodes. It starts new instances to satisfy `min_instances`, causing duplicates.
-
-**Solution:**
-
-<Steps>
-<Step>
-**Grace Period** — On startup, the controller waits for agent reconnections before starting any services (configurable, default 15 seconds).
-</Step>
-<Step>
-**Agent State Reports** — Reconnecting agents report their currently running services with PIDs, ports, and state.
-</Step>
-<Step>
-**Registry Rebuild** — Controller rebuilds the ServiceRegistry from agent reports before evaluating scaling rules.
-</Step>
-<Step>
-**Local PID Persistence** — Analogous to the agent's `AgentStateStore`, the controller persists local service PIDs to disk. On restart, it checks if those PIDs are still alive and re-adopts them.
-</Step>
-</Steps>
-
-**Status:** Fully implemented. Both controller-side local PID persistence and agent-side reconciliation with grace period are working.
-
-### API Authentication Overhaul
-
-**Problem:** The current API uses a single bearer token with full admin access. There's a derived HMAC token for service-level access, but no granular permissions, no multi-user support, and no token expiry.
-
-**Implemented** (opt-in via `jwt_enabled = true` in `nimbus.toml`):
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **JWT Tokens** | HMAC-SHA256 signed tokens with expiry | Implemented |
-| **Scoped Permissions** | 13 granular scopes (`services:read`, `services:write`, `groups:read`, `groups:write`, `metrics:read`, `cluster:read`, `cluster:write`, `files:read`, `files:write`, `config:read`, `config:write`, `audit:read`, `admin`) | Implemented |
-| **Multiple API Keys** | `POST /api/tokens` to generate scoped JWT tokens, `GET /api/tokens/scopes` to list scopes | Implemented |
-| **Service Tokens** | Game servers receive JWT with service scopes when JWT is enabled | Implemented |
-
-Legacy bearer tokens continue to work alongside JWT for simple setups.
-
-### Local Service Resilience
-
-**Problem:** Services started directly on the controller are child processes of the controller JVM. If the controller crashes, these local services also die.
-
-**Chosen approach: PID file + re-adopt.** This matches the agent's existing `AgentStateStore` pattern. `ControllerStateStore` persists service PIDs to `state/services.json`. On restart, the controller checks if those PIDs are still alive via `ProcessHandle.adopt()` and re-adopts them (with Windows-compatible fallback).
-
-### Already Shipped in v0.2.0
-
-These changes are already on the branch:
-
-- **Org Rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
-- **Migration Bootstrap** — Self-repair for baseline detection, handles upgrades from v0.1.x
-- **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
+- **Local PID Persistence** — `ControllerStateStore` persists service PIDs to `state/services.json`. On restart, re-adopts running processes via `ProcessHandle.adopt()` (Windows-compatible)
+- **State Reconciliation** — Grace period (`reconciliation_delay`, default 10s) lets agents report running services before the controller starts new instances. Registry rebuilt from agent reports before scaling rules evaluate
+- **JWT Scoped API Auth** — Opt-in via `jwt_enabled = true`. HMAC-SHA256 tokens with 13 granular scopes, `POST /api/tokens` to generate, `GET /api/tokens/scopes` to list. Game servers receive scoped JWT automatically. Legacy bearer tokens still work
 - **Leaf Support** — Leaf (Paper fork) added as supported server software
+- **Org Rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
+- **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
+- **Migration Self-Repair** — Baseline detection fixes for upgrades from v0.1.x
 - **Interactive Pickers** — Arrow-key selection replacing Y/N prompts throughout
-- **Local PID persistence** — `ControllerStateStore` persists service PIDs to `state/services.json`
-- **State reconciliation with grace period** — `reconciliation_delay` allows agents to report recovered services before new instances start
-- **JWT scoped API auth** — Opt-in via `jwt_enabled = true`, `POST /api/tokens` to generate scoped tokens
-- **`ServiceRecovered` event** — CLI displays recovered services with `RECOVERED` indicator
-- **TemplateManager Windows file-lock tolerance** — Skips locked files instead of crashing
-- **Fix mainClass reference** — `dev.kryonix.nimbus.NimbusKt` to `dev.nimbuspowered.nimbus.NimbusKt`
+- **Windows Fixes** — TemplateManager skips locked files, mainClass reference corrected
 
 ---
 
@@ -340,11 +285,11 @@ How Nimbus compares to the two major Minecraft cloud systems as of April 2026:
 
 ### What competitors have that we don't (yet)
 
-| Feature | Who has it | Our plan |
+| Feature | Who has it | Our status |
 |---------|-----------|----------|
-| Services survive controller crash (local) | SimpleCloud (Screen), CloudNET (Wrapper) | v0.2.0 |
-| State reconciliation on restart | SimpleCloud (auto-reattach) | v0.2.0 |
-| JWT/scoped API auth | CloudNET (module-rest) | v0.2.0 |
+| Services survive controller crash (local) | SimpleCloud (Screen), CloudNET (Wrapper) | v0.2.0 ✓ |
+| State reconciliation on restart | SimpleCloud (auto-reattach) | v0.2.0 ✓ |
+| JWT/scoped API auth | CloudNET (module-rest) | v0.2.0 ✓ |
 | Warm pool / prepared services | CloudNET (smart module) | v0.3.0 |
 | Cross-server player management | SimpleCloud (Player Droplet) | v0.3.0 |
 | Template stacking | CloudNET (multi-template tasks) | v0.3.0 |
