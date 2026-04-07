@@ -8,7 +8,7 @@ plugins {
 }
 
 application {
-    mainClass.set("dev.kryonix.nimbus.NimbusKt")
+    mainClass.set("dev.nimbuspowered.nimbus.NimbusKt")
 }
 
 dependencies {
@@ -56,6 +56,12 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:3.1.1")
     implementation("io.ktor:ktor-server-status-pages:3.1.1")
     implementation("io.ktor:ktor-server-rate-limit:3.1.1")
+    implementation("io.ktor:ktor-server-auth-jwt:3.1.1")
+
+    // Netty engine for cluster server (native TLS/SSL support via sslConnector)
+    implementation("io.ktor:ktor-server-netty:3.1.1")
+    // Self-signed certificate generation for auto-TLS
+    implementation("io.ktor:ktor-network-tls-certificates:3.1.1")
 
     // Test dependencies
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")

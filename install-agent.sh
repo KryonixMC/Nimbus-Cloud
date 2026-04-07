@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── Nimbus Agent Installer ──────────────────────────────────────
-# Usage: curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-agent.sh | bash
 
 # Ensure interactive prompts work when piped via curl | bash
 if [[ -e /dev/tty ]]; then
@@ -12,7 +12,7 @@ else
 fi
 # ────────────────────────────────────────────────────────────────
 
-REPO_OWNER="kryonixmc"
+REPO_OWNER="NimbusPowered"
 REPO_NAME="Nimbus"
 INSTALL_DIR="/opt/nimbus-agent"
 JAVA_VERSION="21"

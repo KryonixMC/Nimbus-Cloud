@@ -1,0 +1,14 @@
+{
+  "root": true,
+  "title": "Configuration",
+  "description": "TOML config reference",
+  "pages": [
+    "---Configuration---",
+    "nimbus-toml",
+    "groups",
+    "templates",
+    "---Modules---",
+    "permissions",
+    "display"
+  ]
+}

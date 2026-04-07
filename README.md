@@ -8,11 +8,11 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF.svg?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Java](https://img.shields.io/badge/Java-21+-ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://adoptium.net)
 [![Gradle](https://img.shields.io/badge/Gradle-8.x-02303A.svg?style=for-the-badge&logo=gradle&logoColor=white)](https://gradle.org)
-[![Docs](https://img.shields.io/badge/Docs-Read%20the%20Docs-0ea5e9.svg?style=for-the-badge&logo=readthedocs&logoColor=white)](https://kryonixmc.github.io/Nimbus/)
+[![Docs](https://img.shields.io/badge/Docs-Read%20the%20Docs-0ea5e9.svg?style=for-the-badge&logo=readthedocs&logoColor=white)](https://NimbusPowered.github.io/Nimbus/)
 
 Dynamic server management from a single JAR — auto-scaling, multi-node clusters, and a powerful API without the bloat.
 
-[Documentation](https://kryonixmc.github.io/Nimbus/) &#183; [Quick Start](#quick-start) &#183; [API Reference](https://kryonixmc.github.io/Nimbus/reference/api.html)
+[Documentation](https://NimbusPowered.github.io/Nimbus/) &#183; [Quick Start](#quick-start) &#183; [API Reference](https://NimbusPowered.github.io/Nimbus/reference/api.html)
 
 </div>
 
@@ -46,13 +46,13 @@ Install and run Nimbus with a single command — Java 21, the latest release, an
 **Linux / macOS:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.ps1 | iex
 ```
 
 Then start Nimbus:
@@ -63,7 +63,7 @@ nimbus
 
 The setup wizard guides you through network name, proxy, Bedrock support, permissions, server groups, and downloads — then starts everything automatically.
 
-See the [Quick Start Guide](https://kryonixmc.github.io/Nimbus/guide/quickstart.html) for a full walkthrough.
+See the [Quick Start Guide](https://NimbusPowered.github.io/Nimbus/guide/quickstart.html) for a full walkthrough.
 
 ### Agent Nodes (Multi-Node)
 
@@ -71,10 +71,10 @@ To add remote worker nodes to your cluster:
 
 ```bash
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.sh | bash
+curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-agent.sh | bash
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
+irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-agent.ps1 | iex
 ```
 
 The agent installer prompts for controller connection details and optionally creates a system service.
@@ -82,7 +82,7 @@ The agent installer prompts for controller connection details and optionally cre
 ## Build from Source
 
 ```bash
-git clone https://github.com/kryonixmc/Nimbus.git
+git clone https://github.com/NimbusPowered/Nimbus.git
 cd Nimbus
 ./gradlew shadowJar
 
@@ -262,7 +262,7 @@ wscat -c "ws://localhost:8080/api/events?token=<token>"
 curl http://localhost:8080/api/metrics
 ```
 
-See the full [REST API Reference](https://kryonixmc.github.io/Nimbus/reference/api.html) for all 40+ endpoints.
+See the full [REST API Reference](https://NimbusPowered.github.io/Nimbus/reference/api.html) for all 40+ endpoints.
 
 ## Tech Stack
 
@@ -288,6 +288,6 @@ MIT — see [LICENSE](LICENSE)
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=kryonixmc/Nimbus&type=Date)](https://star-history.com/#kryonixmc/Nimbus&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=NimbusPowered/Nimbus&type=Date)](https://star-history.com/#NimbusPowered/Nimbus&Date)
 
 </div>

@@ -1,10 +1,10 @@
 # ── Nimbus Agent Installer (Windows) ────────────────────────────
-# Usage: irm https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install-agent.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install-agent.ps1 | iex
 # ────────────────────────────────────────────────────────────────
 
 $ErrorActionPreference = "Stop"
 
-$RepoOwner = "kryonixmc"
+$RepoOwner = "NimbusPowered"
 $RepoName = "Nimbus"
 $InstallDir = "C:\NimbusAgent"
 $JavaVersion = 21

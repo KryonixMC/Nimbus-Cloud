@@ -1,0 +1,181 @@
+---
+title: Installation
+description: How to install Nimbus using the one-command installer, build from source, or set up auto-updates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## One-Command Install (Recommended)
+
+The fastest way to get Nimbus running. The installer handles everything — Java 21, the latest release, start scripts, and an optional system service.
+
+<Tabs items={['Linux / macOS', 'Windows']}>
+  <Tab value="Linux / macOS">
+    ```bash title="Terminal"
+    curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell title="PowerShell"
+    irm https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+The installer will:
+
+1. **Check for Java 21** — installs Eclipse Temurin automatically if missing
+2. **Download the latest Nimbus release** from GitHub
+3. **Create a start script** (`nimbus` command on Linux, `nimbus.bat` on Windows)
+4. **Optionally create a system service** (systemd on Linux, Windows Service)
+
+After installation, run `nimbus` to start the setup wizard.
+
+<Callout title="Already have Java 21?" type="info">
+The installer detects it and skips the Java step. Run `java -version` to check.
+</Callout>
+
+## Auto-Updates
+
+Nimbus checks for updates automatically on every startup by querying GitHub Releases.
+
+| Update type | Behavior |
+|---|---|
+| **Patch / Minor** (e.g. `0.1.0` → `0.1.3` or `0.2.0`) | Downloads and applies automatically. A backup of the previous JAR is kept. |
+| **Major** (e.g. `0.x` → `1.0.0`) | Shows changelog and prompts `Upgrade now? [y/N]` — you decide. |
+
+```text title="Nimbus"
+ℹ Update available: v0.1.0 -> v0.2.0 (minor)
+  Downloading v0.2.0... done
+✓ Updated to v0.2.0 (backup: nimbus-backup.jar)
+  Restart Nimbus to apply the update.
+```
+
+<Callout title="Integrity verification" type="info">
+Downloaded JARs are verified against the expected file size from the GitHub API. The SHA-256 hash is computed and logged for manual verification. If the file size does not match, the update is rejected.
+</Callout>
+
+<Callout title="Dev builds" type="info">
+When running from source (version = `dev`), the auto-updater is skipped.
+</Callout>
+
+## Prerequisites
+
+If you prefer to install manually, make sure you have:
+
+- **Java 21** or later (required)
+- **Git** (for cloning the repository)
+- **2 GB RAM** minimum for the controller plus a few server instances
+
+<Callout title="Checking your Java version" type="info">
+Run `java -version` in your terminal. You should see version 21 or higher:
+
+```bash title="Terminal"
+java -version
+openjdk version "21.0.2" 2024-01-16
+```
+
+If you don't have Java 21, download it from [Adoptium](https://adoptium.net/) or use your system package manager.
+</Callout>
+
+<Callout title="Java version matters" type="warn">
+Nimbus requires Java 21. It will not run on older versions. The Minecraft servers it manages may also need Java 21 (Paper 1.20.5+, Purpur 1.20.5+, Leaf 1.21.4+).
+</Callout>
+
+## Building from Source
+
+Clone the repository and build the fat JAR:
+
+```bash title="Terminal"
+git clone https://github.com/NimbusPowered/Nimbus.git
+cd Nimbus
+./gradlew shadowJar
+> Task :nimbus-bridge:shadowJar
+> Task :nimbus-core:processResources
+> Task :nimbus-core:shadowJar
+BUILD SUCCESSFUL in 12s
+```
+
+The output JAR will be at:
+
+```text title="Output Path"
+nimbus-core/build/libs/nimbus-core-<version>-all.jar
+```
+
+<Callout title="Quick compile check" type="info">
+To verify the code compiles without building the full JAR:
+
+```bash title="Terminal"
+./gradlew :nimbus-core:compileKotlin
+BUILD SUCCESSFUL in 4s
+```
+</Callout>
+
+## Running Nimbus
+
+Copy the JAR to your desired directory and run it:
+
+```bash title="Terminal"
+mkdir my-network
+cp nimbus-core/build/libs/nimbus-core-<version>-all.jar my-network/
+cd my-network
+java -jar nimbus-core-<version>-all.jar
+```
+
+On first launch, the **Setup Wizard** starts automatically and walks you through initial configuration.
+
+<Callout title="JLine native access" type="info">
+On Java 21+, Nimbus automatically relaunches itself with the `--enable-native-access=ALL-UNNAMED` flag to suppress JLine terminal warnings. This is handled transparently — you don't need to add any JVM flags yourself.
+</Callout>
+
+## Directory Structure
+
+After the setup wizard completes, your directory will look like this:
+
+```text title="Directory Structure"
+my-network/
+├── nimbus-core-<version>-all.jar    # The Nimbus application
+├── config/                       # All configuration files
+│   ├── nimbus.toml               #   Main configuration
+│   ├── groups/                   #   Server group definitions
+│   │   ├── proxy.toml            #     Velocity proxy group
+│   │   ├── lobby.toml            #     Lobby server group
+│   │   └── bedwars.toml          #     (example game mode)
+│   └── modules/                  #   Module-specific configs
+│       ├── display/              #     Sign/NPC display configs
+│       └── syncproxy/            #     Proxy sync (MOTD, tab list, chat, maintenance)
+├── templates/                    # File templates for services
+│   ├── global/                   #   Shared across all backends
+│   │   └── plugins/              #     nimbus-sdk.jar (auto-deployed)
+│   ├── global_proxy/             #   Shared across all proxies
+│   │   └── plugins/              #     nimbus-bridge.jar (auto-deployed)
+│   ├── proxy/                    #   Velocity template files
+│   ├── lobby/                    #   Lobby template files
+│   └── bedwars/                  #   Game mode template files
+├── services/                     # Running service instances
+│   ├── static/                   #   Persistent services (proxy)
+│   └── temp/                     #   Ephemeral services (lobbies, games)
+├── permissions/                  # Permission data files
+├── plugins/                      # Optional plugins (SDK, Signs)
+└── logs/                         # Log files
+    └── latest.log                #   Current session log
+```
+
+### Key Directories
+
+| Directory | Purpose |
+|---|---|
+| `config/nimbus.toml` | Main configuration file for Nimbus. |
+| `config/groups/` | One TOML file per server group. This is where you define your server types. |
+| `templates/` | Template files that get copied to each service instance on startup. |
+| `templates/global/` | Files shared across **all backend servers** (Paper, Purpur, Leaf, etc.). |
+| `templates/global_proxy/` | Files shared across **all proxy servers** (Velocity). |
+| `services/static/` | Persistent service instances that survive restarts (e.g., proxy). |
+| `services/temp/` | Ephemeral instances created and destroyed by the scaling engine. |
+| `permissions/` | Built-in permission system data. |
+| `plugins/` | Optional Nimbus plugins available for manual installation. |
+
+## What's Next?
+
+Follow the [Quick Start](/docs/guide/quickstart) guide to walk through your first network setup, or read about [Core Concepts](/docs/guide/concepts) to understand how Nimbus works.

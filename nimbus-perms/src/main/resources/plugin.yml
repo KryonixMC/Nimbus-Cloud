@@ -1,8 +1,8 @@
 name: NimbusPerms
 version: '${version}'
-main: dev.kryonix.nimbus.perms.NimbusPermsPlugin
+main: dev.nimbuspowered.nimbus.perms.NimbusPermsPlugin
 description: Permissions bridge for Nimbus cloud networks — builtin or LuckPerms provider
-author: Kryonix
+author: NimbusPowered
 depend:
   - NimbusSDK
 folia-supported: true

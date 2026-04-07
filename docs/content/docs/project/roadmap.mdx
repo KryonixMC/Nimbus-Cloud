@@ -1,0 +1,310 @@
+---
+title: Roadmap
+description: Current development status, planned features, and long-term vision for Nimbus.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This page tracks where Nimbus is, where it's going, and why. Each version has a clear theme — features are grouped by the problem they solve, not by when someone thought of them.
+
+<Callout type="info">
+  Nimbus follows [Semantic Versioning](https://semver.org/). Patch releases (0.x.Y) are backwards-compatible fixes and improvements. Minor releases (0.X.0) introduce new features. The API is not yet stable — breaking changes are possible before 1.0.
+</Callout>
+
+---
+
+## Current Status
+
+| Version | Status | Theme |
+|---------|--------|-------|
+| [v0.1.0 – v0.1.4](#v01x--foundation) | Released | Foundation & core cloud features |
+| [v0.2.0](#v020--security--production-readiness) | Released | Security, stability & production readiness |
+| [v0.3.0](#v030--competitive-features) | Planned | Warm pool, player tracking, smarter scaling |
+| [v0.4.0+](#v040--cloud-native) | Vision | Docker, S3 storage, dashboard |
+
+---
+
+## v0.1.x — Foundation
+
+**Theme:** Build a complete, working Minecraft cloud system from scratch.
+
+Everything in v0.1.x was about getting the core right: start servers, manage groups, auto-scale, handle proxies, and provide an API. The full v0.1.x changelog is available on the [Changelog](/docs/project/changelog) page.
+
+### v0.1.0 — Initial Release (April 1, 2026)
+
+The first public release shipped a fully functional cloud system:
+
+- **Core Engine** — Service lifecycle, group configs, port allocation, phased startup (proxies first, then backends)
+- **Auto-Scaling** — Player-count-based scaling with configurable thresholds and cooldowns
+- **Velocity Proxy** — Auto-managed server list, modern + legacy forwarding, Via plugin support
+- **REST API v0.2** — Bearer token auth, WebSocket live events, bidirectional console
+- **Console** — JLine3 REPL with 30+ commands, tab completion, ANSI formatting
+- **Server Software** — Paper, Purpur, Pufferfish, Folia, Forge, Fabric, NeoForge, Custom
+- **SDK + Plugins** — Server SDK, Bridge (Velocity), Permissions, Display (signs + NPCs)
+- **Database** — SQLite/MySQL/PostgreSQL via Exposed ORM with versioned migrations
+- **Proxy Sync** — MOTD, tab list, chat formatting, maintenance mode
+- **TCP Load Balancer** — Async NIO with round-robin/least-players, PROXY protocol v2
+- **Bedrock** — Geyser + Floodgate auto-download and config generation
+- **Performance** — Aikar's JVM flags, Paper/Purpur config tuning
+- **Stress Testing** — Simulated player load with ramping and per-service distribution
+- **Multi-Node Cluster** — Agent nodes via WebSocket, TLS with self-signed certs, placement strategies
+- **Install Scripts** — One-command installers for Linux/macOS/Windows (controller + agent)
+- **Auto-Updater** — GitHub Releases based, semver comparison, backup + swap
+- **Cross-Version** — All plugins support Spigot 1.8.8+ through latest Paper/Folia
+
+### v0.1.1 — Module System (April 4, 2026)
+
+- **Dynamic Module Loading** — ServiceLoader + URLClassLoader architecture
+- **Module API** — NimbusModule, ModuleContext, lifecycle hooks, dependency resolution
+- **Extracted Modules** — Permissions, Display, Smart Scaling as standalone JARs
+- **Security Hardening** — Zip slip fix in agent, scaling deadlock fix
+- **Plugin Search** — Live search on Hangar + Modrinth with multi-select and dependency resolution
+- **Package Rename** — `dev.nimbus` to `dev.kryonix.nimbus` (later `dev.nimbuspowered.nimbus`)
+
+### v0.1.2 — Smart Scaling (April 5, 2026)
+
+- **Smart Scaling Module** — Time-based schedules, predictive warmup from 7-day player history
+- **Phased Startup** — Proxy must be READY before any backends start
+- **Dynamic Bridge Commands** — Controller pushes command registry to Velocity plugin
+- **Module Extraction** — Permissions and Display logic fully moved out of core
+
+### v0.1.3 — Quality of Life (April 5, 2026)
+
+- **Java 16+ Baseline** — Dropped legacy Java 8/11 support
+- **`version` Command** — Shows running version, checks for updates
+- **JDK Auto-Download** — Multi-provider fallback with streaming progress
+- **Versioned JARs** — Smart start scripts with auto-restart after update
+
+### v0.1.4 — API Errors & Health (April 5, 2026)
+
+- **Machine-Readable Errors** — `ApiErrors.kt` with codes like `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`
+- **Health System** — `health` command, `/api/services/health` endpoint, Bridge integration
+- **Smart Scaling Default** — Module set to `default=false` (opt-in during setup)
+
+---
+
+## v0.2.0 — Security & Production Readiness (April 7, 2026)
+
+**Theme:** Make Nimbus production-ready. Fix the gaps that matter when real players are online and real money is on the line.
+
+Three pillars: **resilience** (services survive controller crashes), **security** (proper API auth), and **correctness** (no duplicate services after restart).
+
+- **Local PID Persistence** — `ControllerStateStore` persists service PIDs to `state/services.json`. On restart, re-adopts running processes via `ProcessHandle.adopt()` (Windows-compatible)
+- **State Reconciliation** — Grace period (`reconciliation_delay`, default 10s) lets agents report running services before the controller starts new instances. Registry rebuilt from agent reports before scaling rules evaluate
+- **JWT Scoped API Auth** — Opt-in via `jwt_enabled = true`. HMAC-SHA256 tokens with 13 granular scopes, `POST /api/tokens` to generate, `GET /api/tokens/scopes` to list. Game servers receive scoped JWT automatically. Legacy bearer tokens still work
+- **Leaf Support** — Leaf (Paper fork) added as supported server software
+- **Org Rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
+- **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
+- **Migration Self-Repair** — Baseline detection fixes for upgrades from v0.1.x
+- **Interactive Pickers** — Arrow-key selection replacing Y/N prompts throughout
+- **Windows Fixes** — TemplateManager skips locked files, mainClass reference corrected
+
+---
+
+## v0.3.0 — Competitive Features
+
+**Theme:** Close the gaps with SimpleCloud and CloudNET. Add the features that make operators choose Nimbus over alternatives.
+
+### Warm Pool / Prepared Services
+
+Pre-configure services without starting them. When scaling triggers, a prepared service starts in seconds instead of minutes.
+
+- Templates copied and configs patched in advance
+- Services held in `PREPARED` state until needed
+- Configurable pool size per group (e.g., always keep 2 BedWars servers prepared)
+- Especially valuable for modded servers with long startup times (Forge, modpacks)
+
+**Inspiration:** CloudNET v4's `preparedServices` concept.
+
+### Player Module (`nimbus-module-players`)
+
+Centralized player data management as a controller module:
+
+- **Player Database** — UUID, name, first/last login, total online time, client version, last server
+- **Cross-Server API** — Transfer, kick, message players from any service or the API
+- **Adventure Integration** — Send titles, action bars, boss bars, sounds cross-server
+- **History** — Login/disconnect events, server transfer log
+- **REST Endpoints** — `/api/players/{uuid}`, `/api/players/online`, player search
+
+**Inspiration:** SimpleCloud v3's Player Droplet.
+
+### Template Stacking
+
+Allow multiple templates to be composed per group, applied in order:
+
+```toml title="config/groups/BedWars.toml"
+templates = ["global", "paper-shared", "BedWars"]
+```
+
+- Templates applied in order (later overrides earlier)
+- Reduces duplication across groups sharing common plugins
+- Special templates: `every` (all servers), `every_paper` (all Paper-based)
+
+**Inspiration:** CloudNET v4's multi-template tasks.
+
+### Service Deployments
+
+Automatically copy changed files from a service back to its template when it stops:
+
+- Configurable per group: which paths to deploy back (e.g., `world/`, `plugins/*/config.yml`)
+- Useful for SMPs, SkyBlock, and other persistent game modes
+- Optional: only deploy if service stopped cleanly (not on crash)
+
+**Inspiration:** CloudNET v4's deployment system.
+
+### Remote File Management API
+
+Browse, read, and edit files on running services through the REST API:
+
+```
+GET    /api/services/{name}/files?path=/plugins/
+GET    /api/services/{name}/files/content?path=/server.properties
+PUT    /api/services/{name}/files/content?path=/server.properties
+DELETE /api/services/{name}/files?path=/plugins/old-plugin.jar
+```
+
+Works for both local and remote (agent) services. Enables future dashboard development.
+
+**Inspiration:** SimpleCloud v3's Server Host file management.
+
+### Remote CLI
+
+A standalone binary that connects to the controller's API and provides the full JLine console experience remotely:
+
+- Same commands, same tab completion, same formatting
+- Authenticates via API token
+- Useful for ops managing from a different machine
+- Lightweight: no Minecraft dependencies, just the console + HTTP client
+
+---
+
+## v0.4.0+ — Cloud-Native
+
+**Theme:** Enterprise features for large networks. These are long-term goals, not promises.
+
+### Docker Runtime Module
+
+Run services as Docker containers instead of bare JVM processes:
+
+- Custom service factory registered via module system
+- Configurable base image per group
+- Port mapping, volume mounts, resource limits
+- Container logs forwarded to controller
+- Enables CI/CD workflows for custom server images
+
+### S3 / SFTP Template Storage
+
+Pluggable template storage backends beyond local filesystem:
+
+- **S3** — Store templates in AWS S3, MinIO, or compatible storage
+- **SFTP** — Remote template storage on dedicated file servers
+- Template sync across cluster nodes without manual copying
+- Hash-based cache invalidation (already implemented for agent template verification)
+
+### Web Dashboard
+
+A self-hosted web UI for managing the cloud:
+
+- Service overview with live status
+- Group management and scaling configuration
+- Real-time console per service
+- File browser (built on Remote File Management API)
+- Player list and management
+- Metrics visualization
+- Built on the existing REST API + WebSocket infrastructure
+
+### Multi-Controller HA
+
+Remove the single point of failure by supporting multiple controllers:
+
+- Leader election for placement decisions
+- Shared state via database (already the case for most data)
+- Automatic failover: if leader dies, another controller takes over
+- Agent reconnects to any available controller
+
+This is a significant architectural change and will only be pursued if there's real demand from large networks.
+
+### Cloudflare DNS Module
+
+Automatically manage DNS records for services:
+
+- Create SRV records when proxy services start
+- Remove records when services stop
+- Configurable per group (which domain, which zone)
+- Useful for networks with multiple proxy endpoints
+
+**Inspiration:** CloudNET v4's Cloudflare module.
+
+---
+
+## Feature Audit
+
+Transparent assessment of current feature maturity. This helps you understand what's battle-tested and what's newer.
+
+| Feature | Maturity | Notes |
+|---------|----------|-------|
+| Service Lifecycle | 5/5 | Core loop is solid — start, stop, crash recovery, restart limits |
+| Auto-Scaling (player-based) | 5/5 | Cooldowns, thresholds, global caps, stress test awareness |
+| Smart Scaling (time/predictive) | 4/5 | Works well, but requires `nimbus-module-scaling` (not in core) |
+| REST API | 4/5 | 17 route files, rate limiting, CORS, JWT scoped auth (opt-in) |
+| WebSocket Events | 4/5 | Live events + bidirectional console work reliably |
+| Multi-Node Cluster | 5/5 | Agent recovery, TLS, placement strategies, state reconciliation with grace period |
+| TCP Load Balancer | 4/5 | Async NIO, PROXY protocol v2, health checks — production-capable |
+| Module System | 5/5 | ServiceLoader, dependency resolution, versioning, SetupWizard integration |
+| Permission System | 4/5 | Groups, inheritance, tracks, meta, LuckPerms — audit integration could go deeper |
+| Template System | 5/5 | 10+ server software types, auto-download, config patching, symlinks |
+| Database | 5/5 | SQLite/MySQL/PostgreSQL all verified, migrations auto-apply |
+| Audit Logging | 4/5 | Batch writes, 90-day retention, actor tracking — good coverage |
+| Stress Testing | 4/5 | Ramping, per-service distribution, scaling pause — works well |
+| Proxy Sync (MOTD/Tab/Chat) | 4/5 | Three separate configs, maintenance mode, stress count reflection |
+| Bedrock/Geyser | 3/5 | Works but minimal customization, Velocity-only |
+| Plugin Search | 5/5 | Hangar + Modrinth, multi-select, dependency resolution, version-aware |
+| Performance Optimizer | 4/5 | Aikar flags + Paper/Purpur config tuning, memory-aware |
+| Console UX | 5/5 | JLine3, interactive pickers, 30+ commands, ANSI formatting |
+| Install Scripts | 4/5 | Linux/macOS/Windows, Java auto-install, systemd/screen integration |
+| Auto-Updater | 4/5 | Semver comparison, backup, swap, manual prompt for major versions |
+
+---
+
+## Competitive Position
+
+How Nimbus compares to the two major Minecraft cloud systems as of April 2026:
+
+### What only Nimbus has
+
+- Built-in REST API (SimpleCloud uses gRPC only, CloudNET has REST as separate module)
+- Audit logging with actor tracking
+- Stress testing system
+- Time-based scaling schedules + predictive warmup
+- Performance optimizer (Aikar flags + server config tuning)
+- Built-in TCP load balancer with PROXY protocol
+- One-command installers
+- Live plugin search (Hangar + Modrinth)
+- Bedrock/Geyser support
+- Folia compatibility across all plugins
+
+### What competitors have that we don't (yet)
+
+| Feature | Who has it | Our status |
+|---------|-----------|----------|
+| Services survive controller crash (local) | SimpleCloud (Screen), CloudNET (Wrapper) | v0.2.0 ✓ |
+| State reconciliation on restart | SimpleCloud (auto-reattach) | v0.2.0 ✓ |
+| JWT/scoped API auth | CloudNET (module-rest) | v0.2.0 ✓ |
+| Warm pool / prepared services | CloudNET (smart module) | v0.3.0 |
+| Cross-server player management | SimpleCloud (Player Droplet) | v0.3.0 |
+| Template stacking | CloudNET (multi-template tasks) | v0.3.0 |
+| Docker runtime | CloudNET (dockerized-services) | v0.4.0+ |
+| S3/SFTP template storage | CloudNET (storage-s3, storage-sftp) | v0.4.0+ |
+| Web dashboard | SimpleCloud (hosted) | v0.4.0+ |
+| BungeeCord support | Both | No plans (Velocity-only by design) |
+| Peer-to-peer cluster (no SPOF) | CloudNET | v0.4.0+ (if demand exists) |
+
+### Our philosophy
+
+Nimbus is **lightweight by design**. We don't aim to match every feature of systems that have been developed for years. Instead, we focus on:
+
+1. **Single JAR simplicity** — One file, one command, it works
+2. **Smart defaults** — Everything is pre-configured sensibly
+3. **Console-first** — No mandatory web UI, no browser required
+4. **Built-in essentials** — Permissions, scaling, load balancing, metrics out of the box
+5. **Extensible** — Module system for everything else

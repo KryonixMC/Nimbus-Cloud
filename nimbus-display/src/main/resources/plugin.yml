@@ -1,9 +1,9 @@
 name: NimbusDisplay
 version: '${version}'
-main: dev.kryonix.nimbus.display.NimbusDisplayPlugin
+main: dev.nimbuspowered.nimbus.display.NimbusDisplayPlugin
 api-version: '1.13'
 description: Server selector signs and NPCs for Nimbus cloud networks
-author: Kryonix
+author: NimbusPowered
 folia-supported: true
 depend: [NimbusSDK]
 softdepend: [FancyNpcs]

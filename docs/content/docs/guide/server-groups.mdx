@@ -1,0 +1,368 @@
+---
+title: Server Groups
+description: Configure server groups in Nimbus — group types, scaling, lifecycle, templates, software updates, and runtime type changes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Groups are the building blocks of a Nimbus network. Each group defines a type of server -- its software, version, resources, scaling rules, and lifecycle behavior. Services (running instances) are created from groups.
+
+## Group types
+
+### STATIC groups
+
+Static groups create **persistent** services that keep their data between restarts.
+
+- The template is applied only on first creation
+- Server files (worlds, configs, plugins) persist in `services/static/<ServiceName>/`
+- Ideal for: proxies, lobbies, survival servers, build servers
+
+```toml title="Configuration"
+[group]
+name = "Lobby"
+type = "STATIC"
+software = "PAPER"
+version = "1.21.4"
+```
+
+### DYNAMIC groups
+
+Dynamic groups create **ephemeral** services that start fresh every time.
+
+- A clean copy of the template is made on every start
+- Instance files are stored in `services/temp/<ServiceName>/` and cleaned on stop
+- Instance count is managed by the [scaling engine](/docs/guide/scaling)
+- Ideal for: minigames, game servers, event servers
+
+```toml title="config/modules/scaling/*.toml"
+[group]
+name = "BedWars"
+type = "DYNAMIC"
+software = "PAPER"
+version = "1.21.4"
+```
+
+<Callout type="info">
+You can convert between static and dynamic at runtime using the `static` and `dynamic` console commands. See [Runtime type changes](#runtime-type-changes) below.
+</Callout>
+
+## Creating groups
+
+### Interactive command
+
+The `create` console command walks you through group creation:
+
+```text title="Output"
+nimbus> create
+```
+
+It prompts for name, software, version, type, memory, and scaling parameters, then generates the TOML file.
+
+### Manual TOML file
+
+Create a file in the `config/groups/` directory named after your group (lowercase):
+
+```text title="Output"
+config/groups/bedwars.toml
+```
+
+Full example:
+
+```toml title="config/groups/bedwars.toml"
+[group]
+name = "BedWars"
+type = "DYNAMIC"
+software = "PAPER"
+version = "1.21.4"
+
+[group.resources]
+memory = "2G"
+max_players = 16
+
+[group.scaling]
+min_instances = 2
+max_instances = 10
+players_per_instance = 16
+scale_threshold = 0.8
+idle_timeout = 300
+
+[group.lifecycle]
+stop_on_empty = false
+restart_on_crash = true
+max_restarts = 5
+
+[group.jvm]
+optimize = true
+```
+
+### Via REST API
+
+```bash title="Terminal"
+# Create a group via the API
+curl -X POST http://127.0.0.1:8080/api/groups \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "SkyWars",
+    "type": "DYNAMIC",
+    "software": "PAPER",
+    "version": "1.21.4"
+  }'
+```
+
+## Naming conventions
+
+| Element | Convention | Example |
+|---|---|---|
+| Group names | `PascalCase` | `BedWars`, `Lobby`, `Proxy` |
+| Service names | `<GroupName>-<N>` | `BedWars-1`, `Lobby-2`, `Proxy-1` |
+| Config files | `lowercase.toml` | `bedwars.toml`, `lobby.toml` |
+
+Service names are auto-generated. The number is the next available integer for that group.
+
+## Configuration reference
+
+### Software
+
+| Value | Description |
+|---|---|
+| `PAPER` | Paper server (most common) |
+| `PUFFERFISH` | Pufferfish server (Paper fork, optimized for high player counts) |
+| `PURPUR` | Purpur server (Paper fork with extra features) |
+| `LEAF` | Leaf server (Paper fork, performance + stability balance, 1.21.4+) |
+| `FOLIA` | Folia server (Paper fork with regionized multithreading, 1.19.4+) |
+| `VELOCITY` | Velocity proxy |
+| `FORGE` | Forge modded server |
+| `FABRIC` | Fabric modded server (optionally with [Cardboard](https://modrinth.com/mod/cardboard) for plugin support) |
+| `NEOFORGE` | NeoForge modded server |
+| `CUSTOM` | Custom server JAR (requires `jar_name`) |
+
+For `CUSTOM` software, set the `jar_name` field:
+
+```toml title="Configuration"
+[group]
+name = "CustomServer"
+software = "CUSTOM"
+jar_name = "server.jar"
+```
+
+### Resources
+
+```toml title="Configuration"
+[group.resources]
+memory = "2G"          # JVM heap size (-Xmx)
+max_players = 50       # Server max player slots
+```
+
+### Scaling
+
+```toml title="config/modules/scaling/*.toml"
+[group.scaling]
+min_instances = 1          # Always keep at least this many running
+max_instances = 4          # Never exceed this many instances
+players_per_instance = 40  # Expected capacity per instance
+scale_threshold = 0.8      # Scale up when fill rate exceeds 80%
+idle_timeout = 0           # Seconds before stopping an empty instance (0 = never)
+```
+
+See [Auto-Scaling Guide](/docs/guide/scaling) for a detailed explanation.
+
+### Lifecycle
+
+```toml title="config/modules/scaling/*.toml"
+[group.lifecycle]
+stop_on_empty = false      # Stop the service when all players leave
+restart_on_crash = true    # Auto-restart if the process crashes
+max_restarts = 5           # Max consecutive restart attempts before giving up
+```
+
+<Callout type="info">
+`stop_on_empty` is different from `idle_timeout`. `stop_on_empty` triggers immediately when the last player leaves. `idle_timeout` waits for the specified number of seconds after the server becomes empty.
+</Callout>
+
+### JVM & Performance
+
+```toml title="Configuration"
+[group.jvm]
+optimize = true    # Aikar's flags + config tuning (default)
+```
+
+When `optimize = true` (default), Nimbus automatically applies Aikar's JVM flags and optimizes server configs for best performance. Set custom `args` to override the JVM flags, or `optimize = false` to disable all auto-optimization. Memory (`-Xmx`/`-Xms`) is set automatically from `resources.memory`.
+
+### Advanced fields
+
+| Field | Description |
+|---|---|
+| `template` | Template directory name (defaults to group name) |
+| `modloader_version` | Modloader version for Forge/Fabric/NeoForge |
+| `jar_name` | Custom JAR filename (for `CUSTOM` software) |
+| `ready_pattern` | Custom regex to detect when the server is ready |
+| `java_path` | Path to a specific Java binary |
+
+## Port allocation
+
+Nimbus automatically assigns ports to services:
+
+| Type | Port range |
+|---|---|
+| Proxy | 25565, 25566, 25567, ... |
+| Backend | 30000, 30001, 30002, ... |
+
+You never need to configure ports manually. The `PortAllocator` tracks used ports and assigns the next available one.
+
+## Templates
+
+Each group has a template directory under `templates/`:
+
+```text title="Output"
+templates/
+  Lobby/           # Template for the Lobby group
+    plugins/
+    server.properties
+  BedWars/         # Template for the BedWars group
+    plugins/
+    bukkit.yml
+  global/          # Applied to ALL backend servers
+    plugins/
+      nimbus-sdk.jar    # Auto-deployed
+  global_proxy/    # Applied to ALL proxy servers
+    plugins/
+      nimbus-bridge.jar # Auto-deployed
+```
+
+- **Group templates** are copied to new service instances
+- **`global/`** contents are overlaid onto every backend service
+- **`global_proxy/`** contents are overlaid onto every proxy service
+- For static groups, the template is only applied on first creation
+- For dynamic groups, a fresh copy is made every time
+
+The `nimbus-sdk.jar` and `nimbus-bridge.jar` plugins are automatically deployed by Nimbus -- you don't need to place them manually.
+
+## Hot-reload
+
+The `reload` command re-reads all group configs without restarting Nimbus:
+
+```text title="Nimbus"
+nimbus> reload
+```
+
+This picks up:
+- New group files added to `config/groups/`
+- Changes to existing group configurations
+- Updated permission and display configs
+
+<Callout type="warn">
+Removing a group file while services are still running does not stop those services. They continue running but are flagged as orphaned until the next restart.
+</Callout>
+
+## Import modpacks
+
+The `import` command lets you import a Modrinth modpack as a new server group:
+
+```text title="Output"
+nimbus> import adrenaserver
+nimbus> import https://modrinth.com/modpack/cobblemon
+nimbus> import /path/to/modpack.mrpack
+```
+
+It downloads the modpack, installs the modloader and mods, and walks you through group configuration.
+
+## Updating software & versions
+
+The `update` command lets you change a group's Minecraft version or server software without recreating it. Nimbus handles the JAR download, config update, and reload automatically.
+
+### Update the Minecraft version
+
+```text title="Nimbus"
+nimbus> update Lobby version 1.21.5
+```
+
+For modded servers (Forge, NeoForge, Fabric), Nimbus also resolves the latest matching modloader version automatically.
+
+### Switch server software
+
+```text title="Output"
+nimbus> update Lobby software purpur
+```
+
+You can also switch software and version at the same time:
+
+```text title="Output"
+nimbus> update Lobby software purpur 1.21.5
+```
+
+### Interactive mode
+
+Run `update <group>` without arguments for an interactive wizard that shows available versions and compatible software options:
+
+```text title="Output"
+nimbus> update Lobby
+```
+
+### Compatibility rules
+
+Not all software switches are allowed. Nimbus groups software into families and only allows switches within compatible families:
+
+| Family | Software | Can switch to |
+|--------|----------|---------------|
+| Plugin servers | Paper, Purpur, Leaf | Each other |
+| Forge family | Forge, NeoForge | Each other (with warning) |
+| Fabric | Fabric | Version changes only |
+| Proxy | Velocity | Version changes only |
+| Custom | Custom | Version changes only |
+
+Switching **between** families (e.g., Paper → Forge, Forge → Fabric) is blocked because plugins and mods are fundamentally incompatible. Create a new group instead.
+
+<Callout type="info">
+After updating, restart running services to apply the changes: `restart Lobby-1`
+</Callout>
+
+## Runtime type changes
+
+Convert a dynamic group to static (preserves instance data):
+
+```text title="Output"
+nimbus> static group BedWars
+```
+
+Convert a static group to dynamic (future instances will be ephemeral):
+
+```text title="Output"
+nimbus> dynamic BedWars
+```
+
+You can also convert an individual running service to static:
+
+```text title="Nimbus"
+nimbus> static service BedWars-1
+```
+
+## Service lifecycle states
+
+Every service goes through these states:
+
+| State | Description |
+|---|---|
+| `PREPARING` | Template is being copied to the service directory |
+| `STARTING` | JVM process started, waiting for the ready pattern |
+| `READY` | Server is accepting players |
+| `STOPPING` | Graceful shutdown in progress |
+| `STOPPED` | Clean shutdown complete |
+| `CRASHED` | Process exited unexpectedly |
+
+The ready detection watches stdout for a "Done" pattern (e.g., `Done (12.345s)!`). You can override this with the `ready_pattern` field for custom server software.
+
+## Shutdown order
+
+When Nimbus shuts down (via `shutdown` command or SIGTERM), services stop in a specific order:
+
+1. **Game servers** (dynamic groups) -- stop first to evacuate players
+2. **Lobbies** (static backend groups) -- stop next
+3. **Proxies** -- stop last to maintain connectivity as long as possible
+
+## Next steps
+
+- [Auto-Scaling Guide](/docs/guide/scaling) -- Configure dynamic scaling
+- [Proxy Setup](/docs/guide/proxy-setup) -- Configure the proxy layer
+- [Group Config Reference](/docs/config/groups) -- Full configuration reference
+- [Console Commands](/docs/guide/commands) -- Full command reference including `update`

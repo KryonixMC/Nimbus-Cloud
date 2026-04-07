@@ -1,7 +1,7 @@
 name: NimbusSDK
 version: '${version}'
-main: dev.kryonix.nimbus.sdk.NimbusSdkPlugin
+main: dev.nimbuspowered.nimbus.sdk.NimbusSdkPlugin
 description: Nimbus Cloud SDK — provides API client for Nimbus-managed servers
-author: Kryonix
+author: NimbusPowered
 load: STARTUP
 folia-supported: true

@@ -1,0 +1,23 @@
+{
+  "root": true,
+  "title": "Guide",
+  "description": "Getting started & setup",
+  "pages": [
+    "---Getting Started---",
+    "introduction",
+    "installation",
+    "quickstart",
+    "concepts",
+    "commands",
+    "---Server Setup---",
+    "server-groups",
+    "proxy-setup",
+    "scaling",
+    "modpacks",
+    "---Advanced---",
+    "multi-node",
+    "bedrock",
+    "permissions",
+    "stress-testing"
+  ]
+}

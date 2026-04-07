@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── Nimbus Cloud Installer ──────────────────────────────────────
-# Usage: curl -fsSL https://raw.githubusercontent.com/kryonixmc/Nimbus/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.sh | bash
 
 # Ensure interactive prompts work when piped via curl | bash
 if [[ -e /dev/tty ]]; then
@@ -12,7 +12,7 @@ else
 fi
 # ────────────────────────────────────────────────────────────────
 
-REPO_OWNER="kryonixmc"
+REPO_OWNER="NimbusPowered"
 REPO_NAME="Nimbus"
 INSTALL_DIR="/opt/nimbus"
 JAVA_VERSION="21"

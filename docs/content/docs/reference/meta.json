@@ -1,0 +1,10 @@
+{
+  "root": true,
+  "title": "API Reference",
+  "description": "REST API & WebSocket",
+  "pages": [
+    "api",
+    "websocket",
+    "events"
+  ]
+}
