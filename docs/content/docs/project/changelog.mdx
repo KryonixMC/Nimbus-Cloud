@@ -9,6 +9,36 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.3.0 (April 7, 2026)
+
+Competitive features: closing the gaps with SimpleCloud and CloudNET.
+
+### Added
+- **Template stacking**: Groups can now compose multiple templates via `templates = ["base", "overlay"]` in group config. Templates are applied in order — later templates override earlier ones. Backwards compatible with single `template` field. Agent and cluster protocol support included
+- **Warm pool / prepared services**: New `PREPARED` service state. `WarmPoolManager` pre-stages services in the background (15s loop). Configured per group via `scaling.warm_pool_size`. When scaling triggers, a prepared service starts in seconds instead of minutes
+- **Player module** (`nimbus-module-players`): Centralized player tracking as a controller module. In-memory player map + DB persistence (`player_sessions`, `player_tracking` tables). REST endpoints (`/api/players/online`, `/api/players/history/{uuid}`, `/api/players/info/{uuid}`, `/api/players/stats`). Console command `players list|info|history|stats` with Bridge remote execution support (`/cloud players`)
+- **Service deployments**: Automatically copy changed files from a service's working directory back to its template on stop. Configured via `lifecycle.deploy_on_stop` and `lifecycle.deploy_excludes`. Hash-based file comparison to only copy actual changes
+- **Remote file management API**: Browse, read, write, and delete files on agent-hosted services via the existing REST API. New cluster protocol messages (`FileListRequest/Response`, `FileReadRequest/Response`, `FileWriteRequest/Response`, `FileDeleteRequest/Response`). `RemoteFileProxy` with `CompletableDeferred`-based request/response (10s timeout). Path traversal protection on agent side
+- **Proxy event endpoint**: Generic `POST /api/proxy/events` for the Bridge to report player connect/disconnect/switch events. Core emits events on EventBus, modules subscribe. No module-specific logic in Bridge or Core
+- **Module auto-sync**: `ModuleManager.syncEmbeddedModules()` automatically updates installed module JARs from embedded versions on startup. No more manual copying after rebuilds
+- **`PlayerServerSwitch` event**: New core event emitted when a player moves between servers. Bridge reports via proxy event endpoint
+- **`ServiceDeployed` event**: Emitted after deploy-back completes, includes file count
+- **`ServicePrepared` / `WarmPoolReplenished` events**: Warm pool lifecycle events with console and WebSocket support
+
+### Changed
+- **`PlayerConnected`/`PlayerDisconnected` events** now include `uuid` field (previously name-only)
+- **`TemplateRoutes.resolveGlobalDirs`** now includes Pufferfish, Leaf, and Folia (previously only Paper, Purpur, Velocity)
+- **Core `PlayersCommand` removed** — replaced entirely by Player Module's richer command with subcommands
+- **Player session tracking removed from Core** — `PlayerSessions` table, `MetricsCollector` player logic, and `V1_Baseline` migration no longer include player-specific code. All player tracking is now exclusively in the Player Module
+- **Console**: Player connect/disconnect/switch events suppressed from CLI output (available via `players` command and WebSocket)
+
+### Fixed
+- Legacy `player_sessions` table (pre-v0.3.0 schema without UUIDs) cleanly dropped and recreated by Player Module migration
+- Player module uses `player_tracking` table name to avoid collision with Permissions module's `player_meta` table
+- Bridge `reportPlayerConnect` moved from `onPostLogin` (player has no server yet) to `onServerConnected` for correct timing
+
+---
+
 ## v0.2.1 (April 7, 2026)
 
 Bug fixes, improved console feedback, and config validation hardening.
