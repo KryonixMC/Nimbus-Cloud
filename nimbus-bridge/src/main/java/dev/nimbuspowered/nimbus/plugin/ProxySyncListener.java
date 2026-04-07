@@ -186,11 +186,6 @@ public class ProxySyncListener {
             applyPlayerDisplayName(player);
         }).delay(500, TimeUnit.MILLISECONDS).schedule();
 
-        // Report player connect to controller (initial server not yet known)
-        player.getCurrentServer().ifPresent(conn -> {
-            String serviceName = conn.getServerInfo().getName();
-            sdkClient.reportPlayerConnect(serviceName, player.getUsername(), player.getUniqueId().toString());
-        });
     }
 
     @Subscribe
@@ -202,15 +197,19 @@ public class ProxySyncListener {
             applyPlayerDisplayName(player);
         }).delay(250, TimeUnit.MILLISECONDS).schedule();
 
-        // Report server switch to controller
+        // Report player events to controller
         var previousServer = event.getPreviousServer();
-        if (previousServer != null) {
-            player.getCurrentServer().ifPresent(conn -> {
+        player.getCurrentServer().ifPresent(conn -> {
+            String currentService = conn.getServerInfo().getName();
+            if (previousServer == null) {
+                // First server = initial connect
+                sdkClient.reportPlayerConnect(currentService, player.getUsername(), player.getUniqueId().toString());
+            } else {
+                // Server switch
                 String from = previousServer.getServerInfo().getName();
-                String to = conn.getServerInfo().getName();
-                sdkClient.reportPlayerSwitch(player.getUsername(), player.getUniqueId().toString(), from, to);
-            });
-        }
+                sdkClient.reportPlayerSwitch(player.getUsername(), player.getUniqueId().toString(), from, currentService);
+            }
+        });
     }
 
     @Subscribe
