@@ -9,6 +9,8 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.error
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
+import dev.nimbuspowered.nimbus.module.DashboardConfig
+import dev.nimbuspowered.nimbus.module.DashboardSection
 import dev.nimbuspowered.nimbus.module.ModuleContext
 import dev.nimbuspowered.nimbus.module.NimbusModule
 import dev.nimbuspowered.nimbus.module.players.commands.PlayersModuleCommand
@@ -22,6 +24,15 @@ class PlayersModule : NimbusModule {
     override val name = "Players"
     override val version: String get() = NimbusVersion.version
     override val description = "Centralized player tracking, cross-server management, session history"
+
+    override val dashboardConfig = DashboardConfig(
+        icon = "Users",
+        apiPrefix = "/api/players",
+        sections = listOf(
+            DashboardSection("Online Players", "table", "/online"),
+            DashboardSection("Statistics", "stats", "/stats")
+        )
+    )
 
     private val logger = LoggerFactory.getLogger(PlayersModule::class.java)
     private lateinit var tracker: PlayerTracker

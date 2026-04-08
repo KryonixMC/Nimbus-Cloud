@@ -39,4 +39,43 @@ interface NimbusModule {
      * Called during shutdown. Clean up resources, cancel jobs.
      */
     fun disable()
+
+    /**
+     * Optional dashboard configuration for the Web UI.
+     * Return null if this module has no dashboard page.
+     *
+     * The dashboard automatically renders a page for each module that provides
+     * a [DashboardConfig]. The page path is `/modules/{id}`.
+     *
+     * Custom modules can provide their own dashboard panels by overriding this.
+     * The [DashboardConfig.apiPrefix] tells the dashboard which API prefix
+     * to use for fetching data (e.g. "/api/permissions", "/api/players").
+     */
+    val dashboardConfig: DashboardConfig? get() = null
 }
+
+/**
+ * Configuration for a module's dashboard page in the Web UI.
+ *
+ * @param icon Lucide icon name (e.g. "Shield", "Users", "Monitor")
+ * @param apiPrefix API route prefix registered by this module (e.g. "/api/permissions")
+ * @param sections List of dashboard sections to render
+ */
+data class DashboardConfig(
+    val icon: String = "Box",
+    val apiPrefix: String = "",
+    val sections: List<DashboardSection> = emptyList()
+)
+
+/**
+ * A section on a module's dashboard page.
+ *
+ * @param title Section heading
+ * @param type Section type: "table", "stats", "config"
+ * @param endpoint API endpoint relative to [DashboardConfig.apiPrefix]
+ */
+data class DashboardSection(
+    val title: String,
+    val type: String,
+    val endpoint: String
+)

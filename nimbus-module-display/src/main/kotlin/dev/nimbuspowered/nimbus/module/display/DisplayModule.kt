@@ -5,6 +5,8 @@ import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.module.display.routes.displayRoutes
+import dev.nimbuspowered.nimbus.module.DashboardConfig
+import dev.nimbuspowered.nimbus.module.DashboardSection
 import dev.nimbuspowered.nimbus.module.ModuleContext
 import dev.nimbuspowered.nimbus.module.NimbusModule
 import dev.nimbuspowered.nimbus.module.PluginDeployment
@@ -15,6 +17,14 @@ class DisplayModule : NimbusModule {
     override val name = "Display"
     override val version: String get() = NimbusVersion.version
     override val description = "Server selector signs + NPCs via FancyNpcs"
+
+    override val dashboardConfig = DashboardConfig(
+        icon = "Monitor",
+        apiPrefix = "/api/displays",
+        sections = listOf(
+            DashboardSection("Configurations", "table", "")
+        )
+    )
 
     private lateinit var displayManager: DisplayManager
 

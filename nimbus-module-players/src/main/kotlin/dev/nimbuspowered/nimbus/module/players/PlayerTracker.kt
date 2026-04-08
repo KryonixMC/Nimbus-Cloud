@@ -170,6 +170,42 @@ class PlayerTracker(private val db: DatabaseManager) {
         }
     }
 
+    suspend fun searchPlayers(query: String, limit: Int = 50): List<Map<String, String>> {
+        return db.query {
+            val q = "%${query.lowercase()}%"
+            PlayerMeta.selectAll()
+                .where { PlayerMeta.name.lowerCase() like q }
+                .orderBy(PlayerMeta.lastSeen, SortOrder.DESC)
+                .limit(limit)
+                .map { row ->
+                    mapOf(
+                        "uuid" to row[PlayerMeta.uuid],
+                        "name" to row[PlayerMeta.name],
+                        "firstSeen" to row[PlayerMeta.firstSeen],
+                        "lastSeen" to row[PlayerMeta.lastSeen],
+                        "totalPlaytimeSeconds" to row[PlayerMeta.totalPlaytimeSeconds].toString()
+                    )
+                }
+        }
+    }
+
+    suspend fun getRecentPlayers(limit: Int = 50): List<Map<String, String>> {
+        return db.query {
+            PlayerMeta.selectAll()
+                .orderBy(PlayerMeta.lastSeen, SortOrder.DESC)
+                .limit(limit)
+                .map { row ->
+                    mapOf(
+                        "uuid" to row[PlayerMeta.uuid],
+                        "name" to row[PlayerMeta.name],
+                        "firstSeen" to row[PlayerMeta.firstSeen],
+                        "lastSeen" to row[PlayerMeta.lastSeen],
+                        "totalPlaytimeSeconds" to row[PlayerMeta.totalPlaytimeSeconds].toString()
+                    )
+                }
+        }
+    }
+
     suspend fun getStats(): Map<String, Any> {
         val online = onlinePlayers.size
         val total = db.query {

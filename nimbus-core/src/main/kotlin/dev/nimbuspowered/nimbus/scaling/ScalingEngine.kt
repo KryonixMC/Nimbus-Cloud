@@ -106,6 +106,12 @@ class ScalingEngine(
         for (group in groupManager.getAllGroups()) {
             if (group.isStatic) continue
 
+            // Skip scaling while a service in this group is being restarted
+            if (group.name in serviceManager.restartingGroups) {
+                logger.debug("Skipping scaling for group '{}': service restart in progress", group.name)
+                continue
+            }
+
             val config = group.config
             val playersPerInstance = config.group.scaling.playersPerInstance
             val scaleThreshold = config.group.scaling.scaleThreshold

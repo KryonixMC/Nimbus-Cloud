@@ -182,7 +182,7 @@ private fun validateGroupRequest(request: CreateGroupRequest): List<String> {
 /**
  * Builds a TOML string with proper escaping to prevent injection.
  */
-private fun buildGroupToml(request: CreateGroupRequest, groupType: GroupType, software: ServerSoftware): String {
+internal fun buildGroupToml(request: CreateGroupRequest, groupType: GroupType, software: ServerSoftware): String {
     return buildString {
         appendLine("[group]")
         appendLine("name = ${tomlString(request.name)}")
@@ -218,7 +218,7 @@ private fun buildGroupToml(request: CreateGroupRequest, groupType: GroupType, so
 /**
  * Escapes a string for safe TOML embedding — prevents TOML injection.
  */
-private fun tomlString(value: String): String {
+internal fun tomlString(value: String): String {
     val escaped = value
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
@@ -228,7 +228,7 @@ private fun tomlString(value: String): String {
     return "\"$escaped\""
 }
 
-private fun buildGroupConfig(request: CreateGroupRequest, groupType: GroupType, software: ServerSoftware): GroupConfig {
+internal fun buildGroupConfig(request: CreateGroupRequest, groupType: GroupType, software: ServerSoftware): GroupConfig {
     return GroupConfig(
         group = GroupDefinition(
             name = request.name,

@@ -10,6 +10,8 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.success
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.warn
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
+import dev.nimbuspowered.nimbus.module.DashboardConfig
+import dev.nimbuspowered.nimbus.module.DashboardSection
 import dev.nimbuspowered.nimbus.module.ModuleContext
 import dev.nimbuspowered.nimbus.module.NimbusModule
 import dev.nimbuspowered.nimbus.module.PluginDeployment
@@ -25,6 +27,17 @@ class PermsModule : NimbusModule {
     override val name = "Permissions"
     override val version: String get() = NimbusVersion.version
     override val description = "Permission groups, tracks, prefix/suffix, audit log"
+
+    override val dashboardConfig = DashboardConfig(
+        icon = "Shield",
+        apiPrefix = "/api/permissions",
+        sections = listOf(
+            DashboardSection("Groups", "table", "/groups"),
+            DashboardSection("Players", "table", "/players"),
+            DashboardSection("Tracks", "table", "/tracks"),
+            DashboardSection("Audit Log", "table", "/audit")
+        )
+    )
 
     private lateinit var permissionManager: PermissionManager
 

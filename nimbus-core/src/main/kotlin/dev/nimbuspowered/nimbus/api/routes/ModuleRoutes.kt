@@ -13,12 +13,18 @@ fun Route.moduleRoutes(moduleManager: ModuleManager) {
         // List all loaded modules
         get {
             val loaded = moduleManager.getModules().map {
+                val dc = it.dashboardConfig
                 ModuleResponse(
                     id = it.id,
                     name = it.name,
                     version = it.version,
                     description = it.description,
-                    status = "active"
+                    status = "active",
+                    dashboard = if (dc != null) ModuleDashboardResponse(
+                        icon = dc.icon,
+                        apiPrefix = dc.apiPrefix,
+                        sections = dc.sections.map { s -> ModuleDashboardSectionResponse(s.title, s.type, s.endpoint) }
+                    ) else null
                 )
             }
             val available = moduleManager.discoverAvailable()
@@ -29,7 +35,8 @@ fun Route.moduleRoutes(moduleManager: ModuleManager) {
                     name = it.name,
                     version = null,
                     description = it.description,
-                    status = "available"
+                    status = "available",
+                    dashboard = null
                 )
             }
             call.respond(ModulesListResponse(loaded + notInstalled))
@@ -66,7 +73,22 @@ data class ModuleResponse(
     val name: String,
     val version: String?,
     val description: String,
-    val status: String // "active" or "available"
+    val status: String, // "active" or "available"
+    val dashboard: ModuleDashboardResponse? = null
+)
+
+@Serializable
+data class ModuleDashboardResponse(
+    val icon: String,
+    val apiPrefix: String,
+    val sections: List<ModuleDashboardSectionResponse> = emptyList()
+)
+
+@Serializable
+data class ModuleDashboardSectionResponse(
+    val title: String,
+    val type: String,
+    val endpoint: String
 )
 
 @Serializable

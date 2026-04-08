@@ -5,6 +5,15 @@ import kotlinx.serialization.Serializable
 // ── Permission DTOs ─────────────────────────────────────────────────
 
 @Serializable
+data class PlayerListEntry(
+    val uuid: String,
+    val name: String,
+    val groups: List<String>,
+    val displayGroup: String,
+    val prefix: String
+)
+
+@Serializable
 data class PermissionGroupResponse(
     val name: String,
     val default: Boolean,

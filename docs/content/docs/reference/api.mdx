@@ -2175,3 +2175,133 @@ Server-side tab completion. Returns candidates for the given input buffer.
 |-------------|-------------|
 | 200 | Completion candidates returned |
 | 401 | Authentication failed |
+
+---
+
+## Plugins
+
+Endpoints for searching and installing plugins from Hangar and Modrinth. Used by both the console `plugins` command and the [Web Dashboard](/docs/guide/dashboard).
+
+### GET /api/plugins/search
+
+Search for plugins on Hangar and Modrinth.
+
+**Auth:** Admin token required.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | string | Search query |
+| `platform` | string | Target platform (`PAPER`, `VELOCITY`, etc.) |
+
+**Response:**
+
+```json title="Response (200 OK)"
+{
+  "results": [
+    {
+      "name": "ViaVersion",
+      "slug": "viaversion",
+      "source": "hangar",
+      "description": "Allow newer clients to join older server versions.",
+      "downloads": 1500000
+    }
+  ]
+}
+```
+
+### POST /api/plugins/install
+
+Install a plugin to a group's template.
+
+**Auth:** Admin token required.
+
+**Request:**
+
+```json title="Request"
+{
+  "slug": "viaversion",
+  "source": "hangar",
+  "group": "Lobby",
+  "version": "latest"
+}
+```
+
+### GET /api/plugins/installed/{group}
+
+List installed plugins for a group template.
+
+**Auth:** Admin token required.
+
+---
+
+## Modpacks
+
+Endpoints for importing Modrinth modpacks. Used by both the console `import` command and the [Web Dashboard](/docs/guide/dashboard).
+
+### POST /api/modpacks/import
+
+Import a Modrinth modpack as a new server group.
+
+**Auth:** Admin token required.
+
+**Request:**
+
+```json title="Request"
+{
+  "slug": "adrenaserver",
+  "version": "latest",
+  "groupName": "Modded"
+}
+```
+
+**Response:**
+
+```json title="Response (200 OK)"
+{
+  "success": true,
+  "message": "Modpack imported as group 'Modded'",
+  "group": "Modded"
+}
+```
+
+### GET /api/modpacks/platforms
+
+List supported modpack platforms.
+
+**Auth:** Admin token required.
+
+---
+
+## Software
+
+Endpoints for querying available server software types and versions. Used by the [Web Dashboard](/docs/guide/dashboard) for group creation.
+
+### GET /api/software
+
+List all supported server software types.
+
+**Auth:** Admin token required.
+
+**Response:**
+
+```json title="Response (200 OK)"
+{
+  "software": ["PAPER", "PURPUR", "PUFFERFISH", "LEAF", "FOLIA", "VELOCITY", "FORGE", "NEOFORGE", "FABRIC", "CUSTOM"]
+}
+```
+
+### GET /api/software/{type}/versions
+
+List available versions for a specific server software.
+
+**Auth:** Admin token required.
+
+**Response:**
+
+```json title="Response (200 OK)"
+{
+  "versions": ["1.21.4", "1.21.3", "1.21.1", "1.20.6", "1.20.4"]
+}
+```

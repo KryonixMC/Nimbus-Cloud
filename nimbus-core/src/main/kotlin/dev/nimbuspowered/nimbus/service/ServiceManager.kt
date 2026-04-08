@@ -53,6 +53,9 @@ class ServiceManager(
     /** Warm pool manager, set after construction in Nimbus.kt. */
     var warmPoolManager: WarmPoolManager? = null
 
+    /** Groups currently being restarted — ScalingEngine should skip these. */
+    val restartingGroups: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     private val processHandles = ConcurrentHashMap<String, ServiceHandle>()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
     private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
@@ -528,9 +531,15 @@ class ServiceManager(
         val groupName = service.groupName
         logger.info("Restarting service '{}' in group '{}'", name, groupName)
 
-        stopService(name)
-        // Static services reuse the same name automatically (lowest available = the one we just stopped)
-        return startService(groupName)
+        // Prevent ScalingEngine from scaling up during the stop→start gap
+        restartingGroups.add(groupName)
+        try {
+            stopService(name)
+            // Static services reuse the same name automatically (lowest available = the one we just stopped)
+            return startService(groupName)
+        } finally {
+            restartingGroups.remove(groupName)
+        }
     }
 
     fun checkCompatibility() = compatibilityChecker.checkCompatibility()

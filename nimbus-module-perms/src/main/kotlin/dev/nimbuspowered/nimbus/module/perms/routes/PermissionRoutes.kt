@@ -164,6 +164,31 @@ fun Route.permissionRoutes(
 
         route("players") {
 
+            // GET /api/permissions/players — List all known players
+            get {
+                val query = call.request.queryParameters["q"] ?: ""
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                val allPlayers = permissionManager.getAllPlayers()
+                val filtered = if (query.isNotBlank()) {
+                    allPlayers.filter { (_, entry) ->
+                        entry.name.contains(query, ignoreCase = true)
+                    }
+                } else {
+                    allPlayers
+                }
+                val result = filtered.entries.take(limit).map { (uuid, entry) ->
+                    val display = permissionManager.getPlayerDisplay(uuid)
+                    PlayerListEntry(
+                        uuid = uuid,
+                        name = entry.name,
+                        groups = entry.groups,
+                        displayGroup = display.groupName,
+                        prefix = display.prefix
+                    )
+                }
+                call.respond(result)
+            }
+
             // GET /api/permissions/players/{uuid}?server=&world=
             get("{uuid}") {
                 val uuid = call.parameters["uuid"]!!

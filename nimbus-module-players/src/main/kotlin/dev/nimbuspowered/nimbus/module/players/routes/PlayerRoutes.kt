@@ -99,6 +99,31 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
             }
         }
 
+        // GET /api/players/all — All known players (search + paginate)
+        get("all") {
+            val query = call.queryParameters["q"] ?: ""
+            val limit = call.queryParameters["limit"]?.toIntOrNull() ?: 50
+
+            val players = if (query.isNotBlank()) {
+                tracker.searchPlayers(query, limit)
+            } else {
+                tracker.getRecentPlayers(limit)
+            }
+
+            val onlineUuids = tracker.getOnlinePlayers().map { it.uuid }.toSet()
+            val result = players.map {
+                mapOf(
+                    "uuid" to it["uuid"]!!,
+                    "name" to it["name"]!!,
+                    "firstSeen" to it["firstSeen"]!!,
+                    "lastSeen" to it["lastSeen"]!!,
+                    "totalPlaytimeSeconds" to it["totalPlaytimeSeconds"]!!,
+                    "online" to onlineUuids.contains(it["uuid"]).toString()
+                )
+            }
+            call.respond(result)
+        }
+
         // GET /api/players/stats — Aggregate stats
         get("stats") {
             val stats = tracker.getStats()

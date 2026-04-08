@@ -58,7 +58,8 @@ class NimbusApi(
     private val moduleContext: ModuleContextImpl? = null,
     private val moduleManager: dev.nimbuspowered.nimbus.module.ModuleManager? = null,
     private val dispatcher: dev.nimbuspowered.nimbus.console.CommandDispatcher? = null,
-    private val databaseManager: dev.nimbuspowered.nimbus.database.DatabaseManager? = null
+    private val databaseManager: dev.nimbuspowered.nimbus.database.DatabaseManager? = null,
+    private val softwareResolver: dev.nimbuspowered.nimbus.template.SoftwareResolver? = null
 ) {
     private val logger = LoggerFactory.getLogger(NimbusApi::class.java)
 
@@ -300,6 +301,14 @@ class NimbusApi(
                     auditRoutes(databaseManager)
                 }
                 tokenRoutes(jwtTokenManager)
+                if (softwareResolver != null) {
+                    softwareRoutes(softwareResolver)
+                    modpackRoutes(softwareResolver, groupManager, serviceManager, groupsDir, templatesDir)
+                    pluginRoutes(
+                        dev.nimbuspowered.nimbus.template.PluginSearchClient(io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)),
+                        groupManager, templatesDir
+                    )
+                }
                 // Module admin-level routes
                 moduleContext?.adminRoutes?.forEach { block -> block() }
             }
