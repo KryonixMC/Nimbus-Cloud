@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { InstallTabs } from './install-tabs';
 
-const basePath = process.env.NODE_ENV === 'production' ? '/Nimbus' : '';
+const basePath = '';
 
 const features = [
   {

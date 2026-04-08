@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { VersionBadge } from './version-badge';
 
-const basePath = process.env.NODE_ENV === 'production' ? '/Nimbus' : '';
+const basePath = '';
 
 const NEW_THRESHOLD_DAYS = 14;
 
