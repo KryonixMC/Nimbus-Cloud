@@ -110,8 +110,8 @@ class NimbusConsole(
         }
         if (groupsDir != null && softwareResolver != null) {
             val templatesDir = java.nio.file.Path.of(config.paths.templates)
-            dispatcher.register(CreateGroupCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this))
-            dispatcher.register(ImportCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this))
+            dispatcher.register(CreateGroupCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this, config.curseforge.apiKey))
+            dispatcher.register(ImportCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, this, config.curseforge.apiKey))
             dispatcher.register(UpdateCommand(terminal, groupManager, registry, softwareResolver, groupsDir, templatesDir, this))
             dispatcher.register(PluginsCommand(config, registry, groupManager, softwareResolver, terminal))
         }

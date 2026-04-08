@@ -303,7 +303,7 @@ class NimbusApi(
                 tokenRoutes(jwtTokenManager)
                 if (softwareResolver != null) {
                     softwareRoutes(softwareResolver)
-                    modpackRoutes(softwareResolver, groupManager, serviceManager, groupsDir, templatesDir)
+                    modpackRoutes(softwareResolver, groupManager, serviceManager, groupsDir, templatesDir, config.curseforge)
                     pluginRoutes(
                         dev.nimbuspowered.nimbus.template.PluginSearchClient(io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO)),
                         groupManager, templatesDir

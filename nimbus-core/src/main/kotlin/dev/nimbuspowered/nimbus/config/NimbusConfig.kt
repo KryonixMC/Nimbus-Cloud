@@ -17,7 +17,8 @@ data class NimbusConfig(
     val permissions: PermissionsConfig = PermissionsConfig(),
     val bedrock: BedrockConfig = BedrockConfig(),
     val cluster: ClusterConfig = ClusterConfig(),
-    val audit: AuditConfig = AuditConfig()
+    val audit: AuditConfig = AuditConfig(),
+    val curseforge: CurseForgeConfig = CurseForgeConfig()
 )
 
 @Serializable
@@ -134,6 +135,12 @@ data class AuditConfig(
     val enabled: Boolean = true,
     @SerialName("retention_days")
     val retentionDays: Long = 90
+)
+
+@Serializable
+data class CurseForgeConfig(
+    @SerialName("api_key")
+    val apiKey: String = ""
 )
 
 @Serializable

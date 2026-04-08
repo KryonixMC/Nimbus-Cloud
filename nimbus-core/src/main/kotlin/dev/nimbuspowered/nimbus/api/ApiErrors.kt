@@ -60,6 +60,12 @@ object ApiErrors {
 
     // ── Proxy ──────────────────────────────────────────────────────
     const val PROXY_NOT_AVAILABLE = "PROXY_NOT_AVAILABLE"
+
+    // ── Modpack ───────────────────────────────────────────────────
+    const val MODPACK_NOT_FOUND = "MODPACK_NOT_FOUND"
+    const val MODPACK_INVALID = "MODPACK_INVALID"
+    const val MODPACK_UPLOAD_FAILED = "MODPACK_UPLOAD_FAILED"
+    const val CURSEFORGE_API_KEY_MISSING = "CURSEFORGE_API_KEY_MISSING"
 }
 
 /** Shortcut to create a failed [ApiMessage] with an error code. */

@@ -3,15 +3,18 @@ package dev.nimbuspowered.nimbus.api.routes
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.CreateGroupRequest
 import dev.nimbuspowered.nimbus.api.apiError
+import dev.nimbuspowered.nimbus.config.CurseForgeConfig
 import dev.nimbuspowered.nimbus.config.GroupType
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.template.ModpackInstaller
+import dev.nimbuspowered.nimbus.template.ModpackSource
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -32,7 +35,8 @@ data class ModpackInfoResponse(
     val modloader: String,
     val modloaderVersion: String,
     val totalFiles: Int,
-    val serverFiles: Int
+    val serverFiles: Int,
+    val source: String = "MODRINTH"
 )
 
 @Serializable
@@ -54,14 +58,25 @@ data class ModpackImportResponse(
     val filesFailed: Int = 0
 )
 
+@Serializable
+data class ModpackUploadImportRequest(
+    val groupName: String,
+    val type: String = "DYNAMIC",
+    val memory: String = "2G",
+    val minInstances: Int = 1,
+    val maxInstances: Int = 2
+)
+
 fun Route.modpackRoutes(
     softwareResolver: SoftwareResolver,
     groupManager: GroupManager,
     serviceManager: ServiceManager,
     groupsDir: Path,
-    templatesDir: Path
+    templatesDir: Path,
+    curseForgeConfig: CurseForgeConfig = CurseForgeConfig()
 ) {
-    val installer = ModpackInstaller(HttpClient(CIO))
+    val installer = ModpackInstaller(HttpClient(CIO), curseForgeConfig.apiKey)
+    val maxUploadBytes = 2L * 1024 * 1024 * 1024 // 2 GB for modpack ZIPs
 
     route("/api/modpacks") {
 
@@ -71,11 +86,28 @@ fun Route.modpackRoutes(
             val downloadDir = templatesDir.resolve(".modpack-cache")
             Files.createDirectories(downloadDir)
 
-            val mrpackPath = installer.resolve(request.source, downloadDir)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.NOT_FOUND))
+            val resolvedPath = installer.resolve(request.source, downloadDir)
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.MODPACK_NOT_FOUND))
 
-            val index = installer.parseIndex(mrpackPath)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.VALIDATION_FAILED))
+            // Server pack ZIP (CurseForge-style)
+            if (installer.isServerPack(resolvedPath)) {
+                val info = installer.getServerPackInfo(resolvedPath)
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+                return@post call.respond(ModpackInfoResponse(
+                    name = info.name,
+                    version = info.version,
+                    mcVersion = info.mcVersion,
+                    modloader = info.modloader.name,
+                    modloaderVersion = info.modloaderVersion,
+                    totalFiles = info.totalFiles,
+                    serverFiles = info.serverFiles,
+                    source = info.source.name
+                ))
+            }
+
+            // Modrinth .mrpack
+            val index = installer.parseIndex(resolvedPath)
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.MODPACK_INVALID))
 
             val info = installer.getInfo(index)
             call.respond(ModpackInfoResponse(
@@ -85,11 +117,12 @@ fun Route.modpackRoutes(
                 modloader = info.modloader.name,
                 modloaderVersion = info.modloaderVersion,
                 totalFiles = info.totalFiles,
-                serverFiles = info.serverFiles
+                serverFiles = info.serverFiles,
+                source = info.source.name
             ))
         }
 
-        // POST /api/modpacks/import — Full modpack import
+        // POST /api/modpacks/import — Full modpack import (Modrinth slug/URL or CurseForge slug/URL)
         post("import") {
             val request = call.receive<ModpackImportRequest>()
 
@@ -103,17 +136,27 @@ fun Route.modpackRoutes(
             val downloadDir = templatesDir.resolve(".modpack-cache")
             Files.createDirectories(downloadDir)
 
-            // Resolve .mrpack
-            val mrpackPath = installer.resolve(request.source, downloadDir)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.NOT_FOUND))
+            val resolvedPath = installer.resolve(request.source, downloadDir)
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.MODPACK_NOT_FOUND))
 
-            val index = installer.parseIndex(mrpackPath)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.VALIDATION_FAILED))
-
-            val info = installer.getInfo(index)
             val templateName = request.groupName.lowercase()
             val templateDir = templatesDir.resolve(templateName)
             Files.createDirectories(templateDir)
+
+            // Server pack ZIP path
+            if (installer.isServerPack(resolvedPath)) {
+                return@post handleServerPackImport(
+                    call, installer, softwareResolver, groupManager,
+                    resolvedPath, request.groupName, templateDir, groupsDir,
+                    request.type, request.memory, request.minInstances, request.maxInstances
+                )
+            }
+
+            // Modrinth .mrpack path
+            val index = installer.parseIndex(resolvedPath)
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.MODPACK_INVALID))
+
+            val info = installer.getInfo(index)
 
             // Download modloader JAR
             softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, templateDir, info.modloaderVersion)
@@ -122,7 +165,7 @@ fun Route.modpackRoutes(
             val result = installer.installFiles(index, templateDir) { _, _, _ -> }
 
             // Extract overrides
-            installer.extractOverrides(mrpackPath, templateDir)
+            installer.extractOverrides(resolvedPath, templateDir)
 
             // Install proxy forwarding mods
             when (info.modloader) {
@@ -134,7 +177,7 @@ fun Route.modpackRoutes(
             // Auto-accept EULA
             templateDir.resolve("eula.txt").toFile().writeText("eula=true\n")
 
-            // Create group via existing group creation logic
+            // Create group
             val groupRequest = CreateGroupRequest(
                 name = request.groupName,
                 type = request.type,
@@ -147,10 +190,9 @@ fun Route.modpackRoutes(
                 maxInstances = request.maxInstances
             )
             val groupType = try { GroupType.valueOf(request.type.uppercase()) } catch (_: Exception) { GroupType.DYNAMIC }
-            val software = info.modloader
-            val toml = buildGroupToml(groupRequest, groupType, software)
-            groupsDir.resolve("${request.groupName.lowercase()}.toml").toFile().writeText(toml)
-            val groupConfig = buildGroupConfig(groupRequest, groupType, software)
+            val toml = buildGroupToml(groupRequest, groupType, info.modloader)
+            groupsDir.resolve("${templateName}.toml").toFile().writeText(toml)
+            val groupConfig = buildGroupConfig(groupRequest, groupType, info.modloader)
             groupManager.reloadGroups(
                 groupManager.getAllGroups().map { it.config } + groupConfig
             )
@@ -164,5 +206,187 @@ fun Route.modpackRoutes(
                 filesFailed = result.filesFailed
             ))
         }
+
+        // POST /api/modpacks/upload — Upload a server pack ZIP and import it
+        post("upload") {
+            val contentType = call.request.contentType()
+            if (!contentType.match(ContentType.MultiPart.FormData)) {
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Expected multipart/form-data", ApiErrors.VALIDATION_FAILED))
+            }
+
+            val multipart = call.receiveMultipart()
+            var zipPath: Path? = null
+            var groupName = ""
+            var type = "DYNAMIC"
+            var memory = "2G"
+            var minInstances = 1
+            var maxInstances = 2
+
+            val uploadDir = templatesDir.resolve(".modpack-uploads")
+            Files.createDirectories(uploadDir)
+
+            multipart.forEachPart { part ->
+                when (part) {
+                    is PartData.FileItem -> {
+                        val fileName = part.originalFileName ?: "upload.zip"
+                        @Suppress("DEPRECATION")
+                        val bytes = part.streamProvider().readBytes()
+                        if (bytes.size > maxUploadBytes) {
+                            part.dispose()
+                            return@forEachPart
+                        }
+                        val target = uploadDir.resolve(fileName)
+                        target.toFile().writeBytes(bytes)
+                        zipPath = target
+                    }
+                    is PartData.FormItem -> {
+                        when (part.name) {
+                            "groupName" -> groupName = part.value
+                            "type" -> type = part.value
+                            "memory" -> memory = part.value
+                            "minInstances" -> minInstances = part.value.toIntOrNull() ?: 1
+                            "maxInstances" -> maxInstances = part.value.toIntOrNull() ?: 2
+                        }
+                    }
+                    else -> {}
+                }
+                part.dispose()
+            }
+
+            val uploadedZip = zipPath
+            if (uploadedZip == null) {
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("No file uploaded", ApiErrors.MODPACK_UPLOAD_FAILED))
+            }
+
+            if (groupName.isBlank() || !groupName.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
+                Files.deleteIfExists(uploadedZip)
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
+            }
+            if (groupManager.getGroup(groupName) != null) {
+                Files.deleteIfExists(uploadedZip)
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+            }
+
+            val templateName = groupName.lowercase()
+            val templateDir = templatesDir.resolve(templateName)
+            Files.createDirectories(templateDir)
+
+            // Detect format: server pack ZIP or .mrpack
+            if (installer.isServerPack(uploadedZip)) {
+                handleServerPackImport(
+                    call, installer, softwareResolver, groupManager,
+                    uploadedZip, groupName, templateDir, groupsDir,
+                    type, memory, minInstances, maxInstances
+                )
+            } else if (uploadedZip.fileName.toString().endsWith(".mrpack") || installer.parseIndex(uploadedZip) != null) {
+                // Treat as .mrpack
+                val index = installer.parseIndex(uploadedZip)
+                if (index == null) {
+                    Files.deleteIfExists(uploadedZip)
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file — not a server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                }
+                val info = installer.getInfo(index)
+
+                softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, templateDir, info.modloaderVersion)
+                val result = installer.installFiles(index, templateDir) { _, _, _ -> }
+                installer.extractOverrides(uploadedZip, templateDir)
+
+                when (info.modloader) {
+                    ServerSoftware.FABRIC -> softwareResolver.ensureFabricProxyMod(templateDir, info.mcVersion)
+                    ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.ensureForwardingMod(info.modloader, info.mcVersion, templateDir)
+                    else -> {}
+                }
+
+                templateDir.resolve("eula.txt").toFile().writeText("eula=true\n")
+
+                val groupRequest = CreateGroupRequest(
+                    name = groupName, type = type, template = templateName,
+                    software = info.modloader.name, version = info.mcVersion,
+                    modloaderVersion = info.modloaderVersion, memory = memory,
+                    minInstances = minInstances, maxInstances = maxInstances
+                )
+                val groupType = try { GroupType.valueOf(type.uppercase()) } catch (_: Exception) { GroupType.DYNAMIC }
+                val toml = buildGroupToml(groupRequest, groupType, info.modloader)
+                groupsDir.resolve("${templateName}.toml").toFile().writeText(toml)
+                val groupConfig = buildGroupConfig(groupRequest, groupType, info.modloader)
+                groupManager.reloadGroups(groupManager.getAllGroups().map { it.config } + groupConfig)
+
+                Files.deleteIfExists(uploadedZip)
+                call.respond(HttpStatusCode.Created, ModpackImportResponse(
+                    success = result.success,
+                    message = if (result.success) "Modpack '${info.name}' uploaded and imported as group '$groupName'"
+                             else "Import completed with ${result.filesFailed} failed downloads",
+                    groupName = groupName,
+                    filesDownloaded = result.filesDownloaded,
+                    filesFailed = result.filesFailed
+                ))
+            } else {
+                Files.deleteIfExists(uploadedZip)
+                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+            }
+        }
     }
+}
+
+/**
+ * Shared handler for server pack ZIP import (used by both /import and /upload).
+ */
+private suspend fun handleServerPackImport(
+    call: io.ktor.server.routing.RoutingCall,
+    installer: ModpackInstaller,
+    softwareResolver: SoftwareResolver,
+    groupManager: GroupManager,
+    zipPath: Path,
+    groupName: String,
+    templateDir: Path,
+    groupsDir: Path,
+    type: String,
+    memory: String,
+    minInstances: Int,
+    maxInstances: Int
+) {
+    val info = installer.getServerPackInfo(zipPath)
+    if (info == null) {
+        Files.deleteIfExists(zipPath)
+        return call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+    }
+
+    // Extract all server files to template
+    installer.extractServerPack(zipPath, templateDir)
+
+    // Install modloader JAR (the ZIP has the installer but Nimbus needs to run it)
+    softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, templateDir, info.modloaderVersion)
+
+    // Install proxy forwarding mods
+    when (info.modloader) {
+        ServerSoftware.FABRIC -> softwareResolver.ensureFabricProxyMod(templateDir, info.mcVersion)
+        ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.ensureForwardingMod(info.modloader, info.mcVersion, templateDir)
+        else -> {}
+    }
+
+    // Auto-accept EULA
+    templateDir.resolve("eula.txt").toFile().writeText("eula=true\n")
+
+    // Create group config
+    val templateName = groupName.lowercase()
+    val groupRequest = CreateGroupRequest(
+        name = groupName, type = type, template = templateName,
+        software = info.modloader.name, version = info.mcVersion,
+        modloaderVersion = info.modloaderVersion, memory = memory,
+        minInstances = minInstances, maxInstances = maxInstances
+    )
+    val groupType = try { GroupType.valueOf(type.uppercase()) } catch (_: Exception) { GroupType.DYNAMIC }
+    val toml = buildGroupToml(groupRequest, groupType, info.modloader)
+    groupsDir.resolve("${templateName}.toml").toFile().writeText(toml)
+    val groupConfig = buildGroupConfig(groupRequest, groupType, info.modloader)
+    groupManager.reloadGroups(groupManager.getAllGroups().map { it.config } + groupConfig)
+
+    Files.deleteIfExists(zipPath)
+    call.respond(HttpStatusCode.Created, ModpackImportResponse(
+        success = true,
+        message = "Server pack imported as group '$groupName' (${info.modloader.name} ${info.modloaderVersion}, MC ${info.mcVersion}, ${info.serverFiles} mods)",
+        groupName = groupName,
+        filesDownloaded = info.serverFiles,
+        filesFailed = 0
+    ))
 }
