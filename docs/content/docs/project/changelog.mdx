@@ -9,6 +9,39 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.4.0 (April 8, 2026)
+
+Web Dashboard: manage your cloud from the browser.
+
+<Callout type="warn">
+  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected. Report issues on [GitHub](https://github.com/NimbusPowered/Nimbus/issues).
+</Callout>
+
+### Added
+- **Web Dashboard** (ALPHA): Self-hosted Next.js web UI for managing your Nimbus cloud, live at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org). Features include:
+  - **Service overview** with live status, player counts, and uptime
+  - **Group management** — view, create, and configure server groups
+  - **Real-time console** per service with ANSI log rendering
+  - **Plugin management** — search and install plugins from Hangar + Modrinth
+  - **Modpack import** — import Modrinth modpacks directly from the dashboard
+  - **Stress testing** — start, stop, and monitor stress tests
+  - **Audit log viewer** — browse the full audit trail with filters
+  - **Node management** — monitor connected agent nodes
+  - **Module configuration** — configure Display, Permissions, Players, and SyncProxy modules
+  - **Metrics & charts** — visualize player counts, service health, and resource usage
+  - **Authentication** — login with your API token, session management
+  - **Responsive design** — works on desktop and mobile
+- **Modpack import API** (`POST /api/modpacks/import`, `GET /api/modpacks/platforms`): Import Modrinth modpacks via REST API, used by both console and dashboard
+- **Plugin management API** (`GET /api/plugins/search`, `POST /api/plugins/install`, `GET /api/plugins/installed/{group}`): Search Hangar + Modrinth, install plugins, and list installed plugins via REST
+- **Software versions API** (`GET /api/software`, `GET /api/software/{type}/versions`): Query available server software types and their versions via REST
+
+### Changed
+- **CORS configuration** updated to allow dashboard origin (`dashboard.nimbuspowered.org`)
+- **GroupRoutes** extended with additional metadata for dashboard consumption
+- **ModuleRoutes** extended with configuration read/write endpoints for dashboard
+
+---
+
 ## v0.3.1 (April 7, 2026)
 
 Remote management tooling: manage your cloud from anywhere.

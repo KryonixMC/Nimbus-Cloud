@@ -21,7 +21,8 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | [v0.2.0 – v0.2.1](#v02x--security--production-readiness) | Released | Security, stability & production readiness |
 | [v0.3.0](#v030--competitive-features) | Released | Template stacking, warm pool, player module, deployments |
 | [v0.3.1](#v031--remote-cli) | Released | Remote CLI, session tracking |
-| [v0.4.0+](#v040--cloud-native) | Vision | Docker, S3 storage, dashboard |
+| [v0.4.0](#v040--web-dashboard) | Released (ALPHA) | Web Dashboard, new API endpoints |
+| [v0.5.0+](#v050--cloud-native) | Vision | Docker, S3 storage, multi-controller HA |
 
 ---
 
@@ -144,7 +145,46 @@ A standalone binary (`nimbus-cli`, 11MB JAR) that connects to the controller's A
 
 ---
 
-## v0.4.0+ — Cloud-Native
+## v0.4.0 — Web Dashboard
+
+**Theme:** Manage your cloud from the browser. The dashboard is a separate Next.js application that connects to the existing REST API + WebSocket infrastructure.
+
+<Callout type="warn">
+  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected.
+</Callout>
+
+### v0.4.0 — Web Dashboard (April 8, 2026)
+
+A self-hosted web UI available at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org):
+
+- **Web Dashboard** (ALPHA) — Full management UI built with Next.js + shadcn/ui. Connect by entering your controller's API URL and token. Features:
+  - Service overview with live status, player counts, uptime
+  - Group management: view, create, configure server groups
+  - Real-time console per service with ANSI rendering
+  - Plugin management: search Hangar + Modrinth, install plugins
+  - Modpack import from Modrinth
+  - Stress testing: start, stop, monitor
+  - Audit log viewer with filters
+  - Node management for multi-node clusters
+  - Module configuration (Display, Permissions, Players, SyncProxy)
+  - Metrics visualization with charts
+  - Responsive design (desktop + mobile)
+- **New API endpoints** — Modpack import (`/api/modpacks/*`), plugin management (`/api/plugins/*`), and software versions (`/api/software/*`) added to core for dashboard and external tool consumption
+
+### How to connect
+
+1. Open [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org) in your browser
+2. Enter your controller's API URL (e.g., `http://your-server:8080`)
+3. Enter your API token (shown in console on startup, or set in `nimbus.toml`)
+4. Click **Connect** — the dashboard connects directly to your controller's REST API
+
+<Callout type="info">
+  The dashboard runs entirely in your browser. Your API token is stored locally and all requests go directly from your browser to your controller. No data passes through any third-party server.
+</Callout>
+
+---
+
+## v0.5.0+ — Cloud-Native
 
 **Theme:** Enterprise features for large networks. These are long-term goals, not promises.
 
@@ -167,18 +207,6 @@ Pluggable template storage backends beyond local filesystem:
 - Template sync across cluster nodes without manual copying
 - Hash-based cache invalidation (already implemented for agent template verification)
 
-### Web Dashboard
-
-A self-hosted web UI for managing the cloud:
-
-- Service overview with live status
-- Group management and scaling configuration
-- Real-time console per service
-- File browser (built on Remote File Management API)
-- Player list and management
-- Metrics visualization
-- Built on the existing REST API + WebSocket infrastructure
-
 ### Multi-Controller HA
 
 Remove the single point of failure by supporting multiple controllers:
@@ -189,6 +217,16 @@ Remove the single point of failure by supporting multiple controllers:
 - Agent reconnects to any available controller
 
 This is a significant architectural change and will only be pursued if there's real demand from large networks.
+
+### Web Dashboard Enhancements
+
+The ALPHA dashboard will continue to evolve:
+
+- File browser (built on Remote File Management API)
+- Template management and editing
+- Permission group editor
+- Real-time metrics dashboards with historical data
+- Multi-language support
 
 ### Cloudflare DNS Module
 
@@ -234,6 +272,7 @@ Transparent assessment of current feature maturity. This helps you understand wh
 | Player Module | 3/5 | Tracking, sessions, history — needs real-world testing |
 | Service Deployments | 3/5 | Hash-based copy-back, local only (agent support planned) |
 | Remote CLI | 4/5 | Full JLine3 experience, tab completion, events, screen sessions, session tracking with GeoIP |
+| Web Dashboard | 2/5 | ALPHA — functional but still evolving, needs real-world testing and polish |
 
 ---
 
@@ -254,6 +293,7 @@ How Nimbus compares to the two major Minecraft cloud systems as of April 2026:
 - Bedrock/Geyser support
 - Folia compatibility across all plugins
 - Remote CLI with session tracking and GeoIP (SimpleCloud has CLI but no session auditing)
+- Web Dashboard (ALPHA) — browser-based management UI connecting to existing API (SimpleCloud's dashboard is hosted/commercial)
 
 ### What competitors have that we don't (yet)
 
@@ -265,11 +305,11 @@ How Nimbus compares to the two major Minecraft cloud systems as of April 2026:
 | Warm pool / prepared services | CloudNET (smart module) | v0.3.0 ✓ |
 | Cross-server player management | SimpleCloud (Player Droplet) | v0.3.0 ✓ |
 | Template stacking | CloudNET (multi-template tasks) | v0.3.0 ✓ |
-| Docker runtime | CloudNET (dockerized-services) | v0.4.0+ |
-| S3/SFTP template storage | CloudNET (storage-s3, storage-sftp) | v0.4.0+ |
-| Web dashboard | SimpleCloud (hosted) | v0.4.0+ |
+| Docker runtime | CloudNET (dockerized-services) | v0.5.0+ |
+| S3/SFTP template storage | CloudNET (storage-s3, storage-sftp) | v0.5.0+ |
+| Web dashboard | SimpleCloud (hosted) | v0.4.0 ✓ (ALPHA) |
 | BungeeCord support | Both | No plans (Velocity-only by design) |
-| Peer-to-peer cluster (no SPOF) | CloudNET | v0.4.0+ (if demand exists) |
+| Peer-to-peer cluster (no SPOF) | CloudNET | v0.5.0+ (if demand exists) |
 
 ### Our philosophy
 

@@ -74,6 +74,7 @@ Version is defined once in `gradle.properties` (`nimbusVersion=x.y.z`).
 - `nimbus-module-display` — Display module: server selector signs + NPCs config (extracted from core)
 - `nimbus-module-scaling` — Smart Scaling module: time-based schedules, predictive warmup, player count history
 - `nimbus-module-players` — Player module: centralized tracking, session history, cross-server management (controller module, auto-deployed)
+- `dashboard` — Web Dashboard (ALPHA): Next.js + shadcn/ui management UI, connects to controller REST API + WebSocket. Live at `dashboard.nimbuspowered.org`. Separate app, not embedded in core JAR
 
 ## Tech Stack
 
@@ -108,6 +109,11 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 ├── update/                # UpdateChecker (GitHub Releases auto-updater)
 └── velocity/              # VelocityConfigGen (auto-manage proxy server list)
 # Note: permissions, display code now lives in their respective module JARs
+
+dashboard/src/              # Web Dashboard (Next.js, ALPHA)
+├── app/                   # Next.js pages (login, dashboard, groups, services, etc.)
+├── components/            # React components (shadcn/ui based)
+└── lib/                   # API client, auth, utilities
 ```
 
 ## Configuration
@@ -168,6 +174,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 - Warm pool: `warm_pool_size` configures pre-staged services per group, PREPARED state between PREPARING and STARTING
 - Service deployments: `deploy_on_stop = true` copies changed files back to template on service stop
 - Player tracking: Bridge reports player events via `POST /api/proxy/events`, Player Module subscribes via EventBus
+- Web Dashboard (ALPHA): `dashboard.nimbuspowered.org` — browser-based UI connecting to controller API. Runs entirely client-side, API token stored in browser localStorage. CORS must include dashboard origin
 
 ## Cross-Version Compatibility
 
@@ -194,7 +201,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 ## API (v0.2)
 
 - Bearer token auth (`Authorization: Bearer <token>`), auto-generated if not configured
-- REST: `/api/services`, `/api/services/health` (aggregated health summary), `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`, `/api/audit` (admin-only audit log), `/api/scaling/*` (smart scaling module), `/api/permissions/*` (perms module), `/api/displays/*` (display module), `/api/players/*` (player module), `/api/console/complete` (tab completion for Remote CLI)
+- REST: `/api/services`, `/api/services/health` (aggregated health summary), `/api/groups`, `/api/status`, `/api/players`, `/api/maintenance`, `/api/stress`, `/api/reload`, `/api/shutdown`, `/api/loadbalancer`, `/api/nodes`, `/api/metrics`, `/api/audit` (admin-only audit log), `/api/scaling/*` (smart scaling module), `/api/permissions/*` (perms module), `/api/displays/*` (display module), `/api/players/*` (player module), `/api/console/complete` (tab completion for Remote CLI), `/api/modpacks/*` (modpack import), `/api/plugins/*` (plugin search/install), `/api/software/*` (server software versions)
 - Proxy events: `POST /api/proxy/events` — generic proxy event reporting (player connect/disconnect/switch)
 - Player module: `/api/players/online`, `/api/players/history/{uuid}`, `/api/players/info/{uuid}`, `/api/players/stats`
 - WebSocket: `/api/events` (live events), `/api/services/{name}/console` (bidirectional), `/api/console/stream` (Remote CLI: multiplexed command execution, events, screen sessions) — auth via `Authorization` header or `?token=` query param

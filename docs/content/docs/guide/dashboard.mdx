@@ -1,0 +1,124 @@
+---
+title: Web Dashboard
+description: Manage your Nimbus cloud from the browser with the self-hosted web dashboard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="warn">
+  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected. Report issues on [GitHub](https://github.com/NimbusPowered/Nimbus/issues).
+</Callout>
+
+The Nimbus Web Dashboard is a browser-based management UI that connects to your controller's REST API. It provides a visual interface for everything you can do from the console — service management, group configuration, plugin installation, stress testing, and more.
+
+The dashboard is live at **[dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org)**.
+
+## How It Works
+
+The dashboard is a static Next.js application that runs entirely in your browser. When you log in, it connects directly to your Nimbus controller's API — no data passes through any third-party server. Your API token is stored in your browser's local storage.
+
+```text title="Architecture"
+┌─────────────┐        HTTPS / WSS        ┌──────────────────┐
+│  Dashboard   │  ◄──────────────────────► │ Nimbus Controller │
+│  (Browser)   │    REST API + WebSocket   │   (your server)   │
+└─────────────┘                            └──────────────────┘
+```
+
+## Connecting
+
+1. Open [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org) in your browser
+2. Enter your controller's **API URL** (e.g., `http://your-server:8080` or `https://api.your-domain.com`)
+3. Enter your **API token** (shown in the console on startup, or set permanently in `nimbus.toml`)
+4. Click **Connect**
+
+<Callout type="info">
+  Your API must be reachable from your browser. If your controller runs on a remote server, ensure port 8080 (or your configured API port) is open and accessible. For production use, we recommend putting the API behind a reverse proxy with HTTPS.
+</Callout>
+
+### Finding Your API Token
+
+If you haven't set a permanent token, Nimbus auto-generates one on each start and logs the first 8 characters to the console. To set a permanent token:
+
+```toml title="config/nimbus.toml"
+[api]
+enabled = true
+bind = "0.0.0.0"
+port = 8080
+token = "your-secret-token"
+```
+
+You can also use the `api` console command to view the current token:
+
+```text title="Console"
+nimbus » api token
+```
+
+## Features
+
+### Service Overview
+
+The dashboard home page shows all running services with live status, player counts, ports, and uptime. Services are color-coded by state (READY, STARTING, STOPPING, CRASHED).
+
+### Group Management
+
+View all server groups, their configuration, and running instances. Create new groups or modify existing ones directly from the dashboard.
+
+### Real-Time Console
+
+Attach to any service's console output with full ANSI color rendering. Send commands to services interactively — the same experience as `screen <service>` in the console.
+
+### Plugin Management
+
+Search for plugins on Hangar and Modrinth, view details, and install them to any group's template — all from the browser. The same functionality as the `plugins` console command.
+
+### Modpack Import
+
+Import Modrinth modpacks as new server groups. Select the modpack, choose a version, and the dashboard creates the group and downloads everything.
+
+### Stress Testing
+
+Start, stop, and monitor stress tests. View per-service simulated player distribution and total capacity in real time.
+
+### Audit Log
+
+Browse the full audit trail with filters by action type and actor. See who did what and when.
+
+### Node Management
+
+Monitor connected agent nodes in multi-node clusters — see their status, memory usage, and running services.
+
+### Module Configuration
+
+Configure Display (signs + NPCs), Permissions, Players, and SyncProxy (MOTD, tab list, chat) modules through visual forms instead of editing TOML files.
+
+### Metrics & Charts
+
+Visualize player counts, service health, and resource usage over time with interactive charts.
+
+## CORS Configuration
+
+The dashboard at `dashboard.nimbuspowered.org` is pre-configured in the default CORS allowlist. If you host the dashboard yourself or use a custom domain, add it to the CORS origins in `nimbus.toml`:
+
+```toml title="config/nimbus.toml"
+[api]
+cors_origins = ["https://dashboard.nimbuspowered.org", "https://your-custom-domain.com"]
+```
+
+## Self-Hosting
+
+The dashboard source code is in the `dashboard/` directory of the Nimbus repository. You can build and host it yourself:
+
+```bash title="Terminal"
+cd dashboard
+npm install
+npm run build
+```
+
+The output is a static site that can be deployed to any web host (Vercel, Netlify, Cloudflare Pages, or your own Nginx).
+
+## Security
+
+- Your API token is stored in your browser's local storage — treat it like a password
+- All API communication happens directly between your browser and your controller
+- For production use, enable HTTPS on your API (via reverse proxy) to encrypt token transmission
+- Consider using JWT scoped tokens (`jwt_enabled = true`) for fine-grained access control

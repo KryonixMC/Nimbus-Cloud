@@ -12,7 +12,7 @@
 
 Dynamic server management from a single JAR — auto-scaling, multi-node clusters, and a powerful API without the bloat.
 
-[Documentation](https://NimbusPowered.github.io/Nimbus/) &#183; [Quick Start](#quick-start) &#183; [API Reference](https://NimbusPowered.github.io/Nimbus/reference/api.html)
+[Documentation](https://NimbusPowered.github.io/Nimbus/) &#183; [Quick Start](#quick-start) &#183; [Dashboard](https://dashboard.nimbuspowered.org) &#183; [API Reference](https://NimbusPowered.github.io/Nimbus/reference/api.html)
 
 </div>
 
@@ -31,6 +31,7 @@ Dynamic server management from a single JAR — auto-scaling, multi-node cluster
 - **Version Compatibility** — supports 1.8.8 to latest via adaptive forwarding + auto-deployed Via plugins
 - **Bedrock Crossplay** — Geyser + Floodgate auto-configured for mobile and console players
 - **Built-in Permissions** — groups, inheritance, tracks, prefixes/suffixes, wildcards, and audit log
+- **Web Dashboard** (ALPHA) — browser-based management UI at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org). Connects to your controller's API for service management, real-time console, plugin search, stress testing, and more
 - **REST API + WebSocket** — 40+ endpoints, live events, bidirectional console, file management, and metrics
 - **Interactive Console** — JLine3-powered REPL with 28 commands, tab completion, and screen sessions
 - **Performance Optimizer** — Aikar's JVM flags + Paper/Purpur/Pufferfish/Folia config tuning out of the box
@@ -101,6 +102,7 @@ java -jar nimbus-core/build/libs/nimbus-core-<version>-all.jar
 | `nimbus-sdk` | Paper server SDK — game states, routing, events, player tracking |
 | `nimbus-perms` | Paper permissions plugin — built-in or LuckPerms provider |
 | `nimbus-display` | Paper display plugin — server selector signs and NPCs |
+| `dashboard` | Web Dashboard (ALPHA) — Next.js management UI, connects to controller API |
 
 ## Architecture
 
