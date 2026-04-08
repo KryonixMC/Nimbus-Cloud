@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { statusColors } from "@/lib/status";
+import { toast } from "sonner";
 
 interface Node {
   nodeId: string;
@@ -39,7 +41,7 @@ export default function NodesPage() {
   useEffect(() => {
     apiFetch<NodeListResponse>("/api/nodes")
       .then((data) => setNodes(data.nodes))
-      .catch(() => {})
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load nodes"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -76,11 +78,7 @@ export default function NodesPage() {
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={
-                        n.isConnected
-                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                          : "bg-muted text-muted-foreground"
-                      }
+                      className={n.isConnected ? statusColors.online : statusColors.inactive}
                     >
                       {n.isConnected ? "Connected" : "Disconnected"}
                     </Badge>

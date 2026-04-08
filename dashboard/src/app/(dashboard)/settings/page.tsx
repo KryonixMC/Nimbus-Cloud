@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { apiFetch } from "@/lib/api";
+import { dotColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Save, RefreshCw } from "lucide-react";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
@@ -153,7 +154,7 @@ export default function SettingsPage() {
                     </div>
                     <div
                       className={`size-2 rounded-full ${
-                        m.loaded ? "bg-green-500" : "bg-muted"
+                        m.loaded ? dotColors.active : dotColors.inactive
                       }`}
                     />
                   </div>

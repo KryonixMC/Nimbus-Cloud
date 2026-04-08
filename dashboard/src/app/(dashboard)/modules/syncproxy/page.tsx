@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { statusColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
@@ -421,11 +422,7 @@ function MaintenanceTab() {
                   <span className="text-sm font-medium">{name}</span>
                   <Badge
                     variant="outline"
-                    className={
-                      g.enabled
-                        ? "bg-red-500/20 text-red-400 border-red-500/30"
-                        : "bg-muted text-muted-foreground"
-                    }
+                    className={g.enabled ? statusColors.maintenance : statusColors.inactive}
                   >
                     {g.enabled ? "Active" : "Off"}
                   </Badge>

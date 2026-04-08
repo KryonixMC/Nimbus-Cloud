@@ -61,3 +61,58 @@ export function apiWebSocket(path: string): WebSocket {
   const token = getToken();
   return new WebSocket(`${apiUrl}${path}?token=${encodeURIComponent(token)}`);
 }
+
+/**
+ * WebSocket with automatic reconnection on disconnect.
+ * Returns a cleanup function to stop reconnecting.
+ */
+export function apiWebSocketReconnect(
+  path: string,
+  handlers: {
+    onOpen?: (ws: WebSocket) => void;
+    onMessage?: (event: MessageEvent) => void;
+    onClose?: () => void;
+    onError?: (event: Event) => void;
+  },
+  options?: { maxRetries?: number; baseDelay?: number }
+): { getSocket: () => WebSocket | null; cleanup: () => void } {
+  const maxRetries = options?.maxRetries ?? 10;
+  const baseDelay = options?.baseDelay ?? 1000;
+  let ws: WebSocket | null = null;
+  let retries = 0;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  function connect() {
+    if (stopped) return;
+    ws = apiWebSocket(path);
+
+    ws.onopen = () => {
+      retries = 0;
+      handlers.onOpen?.(ws!);
+    };
+
+    ws.onmessage = (event) => handlers.onMessage?.(event);
+
+    ws.onerror = (event) => handlers.onError?.(event);
+
+    ws.onclose = () => {
+      handlers.onClose?.();
+      if (stopped || retries >= maxRetries) return;
+      const delay = Math.min(baseDelay * Math.pow(2, retries), 30000);
+      retries++;
+      timer = setTimeout(connect, delay);
+    };
+  }
+
+  connect();
+
+  return {
+    getSocket: () => ws,
+    cleanup: () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      ws?.close();
+    },
+  };
+}

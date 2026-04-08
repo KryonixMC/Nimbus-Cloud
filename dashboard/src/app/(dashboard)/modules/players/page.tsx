@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { statusColors } from "@/lib/status";
 import { PlayerSheet } from "@/components/player-sheet";
 import { Search } from "lucide-react";
 
@@ -171,11 +172,7 @@ export default function PlayersModulePage() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={
-                            p.online === "true"
-                              ? "bg-green-500/20 text-green-400 border-green-500/30"
-                              : "bg-muted text-muted-foreground"
-                          }
+                          className={p.online === "true" ? statusColors.online : statusColors.inactive}
                         >
                           {p.online === "true" ? "Online" : "Offline"}
                         </Badge>

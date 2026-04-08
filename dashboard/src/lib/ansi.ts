@@ -1,10 +1,10 @@
 // ANSI escape code → styled HTML span converter
 
 const ANSI_COLORS: Record<number, string> = {
-  30: "#4d4d4d", 31: "#e06c75", 32: "#98c379", 33: "#e5c07b",
-  34: "#61afef", 35: "#c678dd", 36: "#56b6c2", 37: "#abb2bf",
-  90: "#5c6370", 91: "#e06c75", 92: "#98c379", 93: "#e5c07b",
-  94: "#61afef", 95: "#c678dd", 96: "#56b6c2", 97: "#ffffff",
+  30: "#6b7280", 31: "#f87171", 32: "#4ade80", 33: "#facc15",
+  34: "#60a5fa", 35: "#c084fc", 36: "#22d3ee", 37: "#d1d5db",
+  90: "#9ca3af", 91: "#f87171", 92: "#4ade80", 93: "#facc15",
+  94: "#60a5fa", 95: "#c084fc", 96: "#22d3ee", 97: "#ffffff",
 };
 
 interface Span {

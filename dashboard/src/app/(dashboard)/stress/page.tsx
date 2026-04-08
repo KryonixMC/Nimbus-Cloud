@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { statusColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Play, Square } from "lucide-react";
@@ -128,10 +129,7 @@ export default function StressPage() {
           <CardContent>
             <Badge
               variant="outline"
-              className={status?.active
-                ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-                : "bg-muted text-muted-foreground"
-              }
+              className={status?.active ? statusColors.active : statusColors.inactive}
             >
               {status?.active ? "Active" : "Inactive"}
             </Badge>

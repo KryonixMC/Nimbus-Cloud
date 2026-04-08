@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { statusColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
 
@@ -191,11 +192,7 @@ export function PlayerSheet({
                     <div>
                       <Badge
                         variant="outline"
-                        className={
-                          meta.online
-                            ? "bg-green-500/20 text-green-400 border-green-500/30"
-                            : "bg-muted text-muted-foreground"
-                        }
+                        className={meta.online ? statusColors.online : statusColors.inactive}
                       >
                         {meta.online ? "Online" : "Offline"}
                       </Badge>

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
+import { iconColors } from "@/lib/status";
 import { Activity, Server, Users, Clock, CircleDot } from "lucide-react";
 import Link from "next/link";
 
@@ -98,7 +99,7 @@ export default function OverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 text-2xl font-bold">
-              <CircleDot className={`size-4 ${status?.online ? "text-green-400" : "text-muted-foreground"}`} />
+              <CircleDot className={`size-4 ${status?.online ? iconColors.online : iconColors.offline}`} />
               {status?.online ? "Online" : "Offline"}
             </div>
             <p className="text-xs text-muted-foreground">
