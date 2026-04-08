@@ -301,7 +301,10 @@ class NimbusApi(
                     auditRoutes(databaseManager)
                 }
                 tokenRoutes(jwtTokenManager)
-                if (softwareResolver != null) softwareRoutes(softwareResolver)
+                if (softwareResolver != null) {
+                    softwareRoutes(softwareResolver)
+                    modpackRoutes(softwareResolver, groupManager, serviceManager, groupsDir, templatesDir)
+                }
                 // Module admin-level routes
                 moduleContext?.adminRoutes?.forEach { block -> block() }
             }

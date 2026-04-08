@@ -35,8 +35,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Package } from "lucide-react";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
+
+interface ModpackInfo {
+  name: string;
+  version: string;
+  mcVersion: string;
+  modloader: string;
+  modloaderVersion: string;
+  totalFiles: number;
+  serverFiles: number;
+}
 
 interface Group {
   name: string;
@@ -177,6 +187,58 @@ export default function GroupsPage() {
     }
   }
 
+  // Modpack import state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSource, setImportSource] = useState("");
+  const [importGroupName, setImportGroupName] = useState("");
+  const [importMemory, setImportMemory] = useState("2G");
+  const [importInfo, setImportInfo] = useState<ModpackInfo | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  async function resolveModpack() {
+    if (!importSource.trim()) return;
+    setResolving(true);
+    setImportInfo(null);
+    try {
+      const info = await apiFetch<ModpackInfo>("/api/modpacks/resolve", {
+        method: "POST",
+        body: JSON.stringify({ source: importSource.trim() }),
+      });
+      setImportInfo(info);
+      if (!importGroupName) setImportGroupName(info.name.replace(/[^a-zA-Z0-9_-]/g, ""));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not resolve modpack");
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function importModpack() {
+    if (!importGroupName.trim() || !importSource.trim()) return;
+    setImporting(true);
+    try {
+      await apiFetch("/api/modpacks/import", {
+        method: "POST",
+        body: JSON.stringify({
+          source: importSource.trim(),
+          groupName: importGroupName.trim(),
+          memory: importMemory,
+        }),
+      });
+      toast.success(`Modpack imported as '${importGroupName}'`);
+      setImportOpen(false);
+      setImportSource("");
+      setImportGroupName("");
+      setImportInfo(null);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function deleteGroup(name: string) {
     if (!confirm(`Delete group '${name}'? All running services must be stopped first.`))
       return;
@@ -195,14 +257,83 @@ export default function GroupsPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Groups ({groups.length})</CardTitle>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger
-            render={
-              <Button>
-                <Plus className="mr-1 size-4" /> New Group
-              </Button>
-            }
-          />
+        <div className="flex items-center gap-2">
+          <Dialog open={importOpen} onOpenChange={setImportOpen}>
+            <DialogTrigger
+              render={
+                <Button variant="outline">
+                  <Package className="mr-1 size-4" /> Import Modpack
+                </Button>
+              }
+            />
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Import Modpack</DialogTitle>
+                <DialogDescription>
+                  Import a Modrinth modpack (.mrpack) as a new group.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <Field>
+                  <FieldLabel>Modpack Source</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={importSource}
+                      onChange={(e) => setImportSource(e.target.value)}
+                      placeholder="Modrinth slug, URL, or .mrpack path"
+                      onKeyDown={(e) => e.key === "Enter" && resolveModpack()}
+                    />
+                    <Button variant="outline" onClick={resolveModpack} disabled={resolving || !importSource.trim()}>
+                      {resolving ? <Loader2 className="size-4 animate-spin" /> : "Resolve"}
+                    </Button>
+                  </div>
+                  <FieldDescription>e.g. &quot;adrenaserver&quot; or a Modrinth URL</FieldDescription>
+                </Field>
+
+                {importInfo && (
+                  <div className="rounded-md border p-3 space-y-1 text-sm">
+                    <div className="font-medium">{importInfo.name} v{importInfo.version}</div>
+                    <div className="text-muted-foreground">
+                      {importInfo.modloader} {importInfo.modloaderVersion} / MC {importInfo.mcVersion}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {importInfo.serverFiles} server mods ({importInfo.totalFiles} total)
+                    </div>
+                  </div>
+                )}
+
+                <Field>
+                  <FieldLabel>Group Name</FieldLabel>
+                  <Input
+                    value={importGroupName}
+                    onChange={(e) => setImportGroupName(e.target.value)}
+                    placeholder="e.g. MyModpack"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Memory</FieldLabel>
+                  <Input
+                    value={importMemory}
+                    onChange={(e) => setImportMemory(e.target.value)}
+                    placeholder="2G"
+                  />
+                </Field>
+              </div>
+              <DialogFooter>
+                <Button onClick={importModpack} disabled={importing || !importGroupName.trim() || !importSource.trim()}>
+                  {importing ? "Importing..." : "Import"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="mr-1 size-4" /> New Group
+                </Button>
+              }
+            />
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create Group</DialogTitle>
@@ -373,6 +504,7 @@ export default function GroupsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {groups.length === 0 ? (
