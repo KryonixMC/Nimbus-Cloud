@@ -56,6 +56,40 @@ export async function apiFetch<T = unknown>(
   return res.json();
 }
 
+/**
+ * Upload a file as raw request body (streamed, no multipart buffering).
+ * Parameters should be passed as query params in the path.
+ */
+export async function apiUpload<T = unknown>(
+  path: string,
+  file: File | Blob
+): Promise<T> {
+  const apiUrl = getApiUrl();
+  const token = getToken();
+
+  const res = await fetch(`${apiUrl}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+    },
+    body: file,
+  });
+
+  if (res.status === 401) {
+    clearCredentials();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || body.error || `Upload failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export function apiWebSocket(path: string): WebSocket {
   const apiUrl = getApiUrl().replace(/^http/, "ws");
   const token = getToken();

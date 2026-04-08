@@ -1,6 +1,10 @@
 package dev.nimbuspowered.nimbus.console.commands
 
+import dev.nimbuspowered.nimbus.api.CreateGroupRequest
+import dev.nimbuspowered.nimbus.api.routes.buildGroupConfig
+import dev.nimbuspowered.nimbus.api.routes.buildGroupToml
 import dev.nimbuspowered.nimbus.config.ConfigLoader
+import dev.nimbuspowered.nimbus.config.GroupType
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
@@ -11,6 +15,7 @@ import dev.nimbuspowered.nimbus.console.NimbusConsole
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.template.ModpackInstaller
+import dev.nimbuspowered.nimbus.template.ModpackSource
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import org.jline.reader.Candidate
 import org.jline.reader.Completer
@@ -28,14 +33,15 @@ class ImportCommand(
     private val softwareResolver: SoftwareResolver,
     private val groupsDir: Path,
     private val templatesDir: Path,
-    private val console: NimbusConsole
+    private val console: NimbusConsole,
+    curseForgeApiKey: String = ""
 ) : Command {
 
     override val name = "import"
-    override val description = "Import a Modrinth modpack"
-    override val usage = "import <url|slug|path.mrpack>"
+    override val description = "Import a modpack (Modrinth, CurseForge, or server pack ZIP)"
+    override val usage = "import <url|slug|curseforge:slug|path.mrpack|path.zip>"
 
-    private val installer = ModpackInstaller(softwareResolver.client)
+    private val installer = ModpackInstaller(softwareResolver.client, curseForgeApiKey)
 
     override suspend fun execute(args: List<String>) {
         if (args.isEmpty()) {
@@ -44,10 +50,18 @@ class ImportCommand(
             w.println("${ConsoleFormatter.colorize("Usage:", ConsoleFormatter.BOLD)} import <source>")
             w.println()
             w.println(ConsoleFormatter.hint("Sources:"))
-            w.println("  ${CYAN}modrinth URL$RESET    import https://modrinth.com/modpack/adrenaserver")
-            w.println("  ${CYAN}modrinth slug$RESET   import adrenaserver")
-            w.println("  ${CYAN}local file$RESET      import /path/to/modpack.mrpack")
+            w.println("  ${CYAN}modrinth URL$RESET      import https://modrinth.com/modpack/adrenaserver")
+            w.println("  ${CYAN}modrinth slug$RESET     import adrenaserver")
+            w.println("  ${CYAN}curseforge URL$RESET    import https://curseforge.com/minecraft/modpacks/all-the-mods-10")
+            w.println("  ${CYAN}curseforge slug$RESET   import curseforge:all-the-mods-10")
+            w.println("  ${CYAN}local .mrpack$RESET     import /path/to/modpack.mrpack")
+            w.println("  ${CYAN}server pack ZIP$RESET   import /path/to/ServerFiles.zip")
             w.println()
+            if (!installer.hasCurseForgeKey) {
+                w.println(ConsoleFormatter.hint("CurseForge API fetch requires [curseforge] api_key in nimbus.toml"))
+                w.println(ConsoleFormatter.hint("You can always import CurseForge server pack ZIPs without an API key."))
+                w.println()
+            }
             w.flush()
             return
         }
@@ -83,16 +97,22 @@ class ImportCommand(
         if (mrpackPath == null) {
             w.println(" ${ConsoleFormatter.colorize("✗", ConsoleFormatter.RED)}")
             w.println(ConsoleFormatter.error("Could not find or download modpack: $source"))
-            w.println(ConsoleFormatter.hint("Try a Modrinth URL, slug, or local .mrpack file path."))
+            w.println(ConsoleFormatter.hint("Try a Modrinth/CurseForge URL or slug, or a local .mrpack/.zip file path."))
             w.flush()
             return
         }
         w.println(" ${ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN)}")
 
-        // Step 2: Parse index
+        // Detect if this is a server pack ZIP
+        if (installer.isServerPack(mrpackPath)) {
+            runServerPackImport(w, mrpackPath)
+            return
+        }
+
+        // Step 2: Parse .mrpack index
         val index = installer.parseIndex(mrpackPath)
         if (index == null) {
-            w.println(ConsoleFormatter.error("Failed to parse modpack — not a valid .mrpack file."))
+            w.println(ConsoleFormatter.error("Failed to parse modpack — not a valid .mrpack file or server pack ZIP."))
             w.flush()
             return
         }
@@ -123,7 +143,7 @@ class ImportCommand(
         w.println(ConsoleFormatter.successLine(if (isStatic) "Static" else "Dynamic"))
 
         // Step 6: Memory & instances
-        val memory = prompt("Memory per instance", "2G")
+        val memory = normalizeMemory(prompt("Memory per instance", "2G"))
         val minInstances = promptInt("Min instances", if (isStatic) 1 else 0)
         val maxInstances = promptInt("Max instances", 1)
 
@@ -131,7 +151,7 @@ class ImportCommand(
         w.println(ConsoleFormatter.colorize("Installing...", ConsoleFormatter.BOLD))
         w.println()
 
-        // Step 6: Install modloader
+        // Install modloader
         val templateDir = templatesDir.resolve(groupName.lowercase())
         if (!templateDir.exists()) templateDir.toFile().mkdirs()
 
@@ -185,7 +205,7 @@ class ImportCommand(
 
         // Step 11: Write group TOML
         w.println()
-        writeGroupToml(groupName, info, minInstances, maxInstances, memory, isStatic)
+        createGroupConfig(groupName, info, minInstances, maxInstances, memory, isStatic)
         w.println(ConsoleFormatter.successLine("config/groups/${groupName.lowercase()}.toml"))
 
         // Step 12: Reload
@@ -198,6 +218,116 @@ class ImportCommand(
         w.println()
 
         // Step 13: Start?
+        promptAndStart(w, groupName, minInstances)
+
+        // Cleanup
+        try { Files.deleteIfExists(tempDir.resolve(mrpackPath.fileName)) } catch (_: Exception) {}
+    }
+
+    /**
+     * Handles import of a pre-built server pack ZIP (e.g. CurseForge server files).
+     */
+    private suspend fun runServerPackImport(w: java.io.PrintWriter, zipPath: Path) {
+        val info = installer.getServerPackInfo(zipPath)
+        if (info == null) {
+            w.println(ConsoleFormatter.error("Failed to analyze server pack ZIP."))
+            w.flush()
+            return
+        }
+
+        // Display info
+        w.println()
+        w.println("${ConsoleFormatter.colorize("Server Pack", ConsoleFormatter.BOLD)} ${ConsoleFormatter.hint(zipPath.fileName.toString())}")
+        w.println(ConsoleFormatter.hint("MC ${info.mcVersion} · ${info.modloader.name} ${info.modloaderVersion}"))
+        w.println(ConsoleFormatter.hint("${info.serverFiles} mods"))
+        w.println()
+
+        // Group name
+        val defaultName = info.name.replace(Regex("[^a-zA-Z0-9-]"), "").take(20).ifEmpty { "modpack" }
+        val groupName = promptGroupName(w, defaultName) ?: return
+
+        // Static or dynamic
+        w.println()
+        w.println(ConsoleFormatter.hint("Static services keep their data (world, configs) across restarts."))
+        w.println(ConsoleFormatter.hint("Dynamic services start fresh from the template every time."))
+        val staticOptions = listOf(
+            InteractivePicker.Option("static", "Static", "keep world, configs across restarts"),
+            InteractivePicker.Option("dynamic", "Dynamic", "start fresh from template every time")
+        )
+        val staticIndex = InteractivePicker.pickOne(terminal, staticOptions, 0)
+        val isStatic = if (staticIndex == InteractivePicker.BACK) true else staticOptions[staticIndex].id == "static"
+        w.println(ConsoleFormatter.successLine(if (isStatic) "Static" else "Dynamic"))
+
+        // Memory & instances
+        val memory = normalizeMemory(prompt("Memory per instance", "4G"))
+        val minInstances = promptInt("Min instances", if (isStatic) 1 else 0)
+        val maxInstances = promptInt("Max instances", 1)
+
+        w.println()
+        w.println(ConsoleFormatter.colorize("Installing...", ConsoleFormatter.BOLD))
+        w.println()
+
+        val templateDir = templatesDir.resolve(groupName.lowercase())
+        if (!templateDir.exists()) templateDir.toFile().mkdirs()
+
+        // Extract server pack files
+        w.print("${ConsoleFormatter.hint("↓")} Extracting server pack... ")
+        w.flush()
+        installer.extractServerPack(zipPath, templateDir)
+        w.println(ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN))
+        w.println(ConsoleFormatter.successLine("${info.serverFiles} mods extracted"))
+
+        // Install modloader
+        w.print("${ConsoleFormatter.hint("↓")} ${info.modloader.name} ${info.modloaderVersion} ")
+        w.flush()
+        val loaderOk = softwareResolver.ensureJarAvailable(
+            info.modloader, info.mcVersion, templateDir,
+            modloaderVersion = info.modloaderVersion
+        )
+        w.println(if (loaderOk) ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN) else ConsoleFormatter.colorize("✗", ConsoleFormatter.RED))
+
+        // Proxy mods
+        when (info.modloader) {
+            ServerSoftware.FABRIC -> {
+                w.print("${ConsoleFormatter.hint("↓")} Proxy mods ")
+                w.flush()
+                softwareResolver.ensureFabricProxyMod(templateDir, info.mcVersion)
+                w.println(ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN))
+            }
+            ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> {
+                w.print("${ConsoleFormatter.hint("↓")} Proxy mod ")
+                w.flush()
+                softwareResolver.ensureForwardingMod(info.modloader, info.mcVersion, templateDir)
+                w.println(ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN))
+            }
+            else -> {}
+        }
+
+        // EULA
+        val eulaFile = templateDir.resolve("eula.txt")
+        if (!eulaFile.exists()) eulaFile.toFile().writeText("eula=true\n")
+
+        // Write group TOML
+        w.println()
+        createGroupConfig(groupName, info, minInstances, maxInstances, memory, isStatic)
+        w.println(ConsoleFormatter.successLine("config/groups/${groupName.lowercase()}.toml"))
+
+        // Reload
+        val configs = ConfigLoader.loadGroupConfigs(groupsDir)
+        groupManager.reloadGroups(configs)
+        w.println(ConsoleFormatter.successLine("Group configs reloaded"))
+
+        w.println()
+        w.println(ConsoleFormatter.successLine("Server pack imported as group '$groupName'!"))
+        w.println()
+
+        // Start?
+        promptAndStart(w, groupName, minInstances)
+    }
+
+    // -- Shared helpers --------------------------------------------------------
+
+    private suspend fun promptAndStart(w: java.io.PrintWriter, groupName: String, minInstances: Int) {
         val shouldStart = if (minInstances > 0) {
             true
         } else {
@@ -216,9 +346,6 @@ class ImportCommand(
                 w.println(ConsoleFormatter.errorLine("Failed: ${e.message}"))
             }
         }
-
-        // Cleanup
-        try { Files.deleteIfExists(tempDir.resolve(mrpackPath.fileName)) } catch (_: Exception) {}
     }
 
     // -- Prompts (flush left) ------------------------------------------------
@@ -240,6 +367,18 @@ class ImportCommand(
         return prompt(label, default.toString()).toIntOrNull() ?: default
     }
 
+    /**
+     * Normalizes memory input: bare numbers (e.g. "8") get "G" appended, "512" stays as "512M".
+     */
+    private fun normalizeMemory(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.last().isDigit()) {
+            val num = trimmed.toIntOrNull() ?: return trimmed
+            return if (num >= 256) "${num}M" else "${num}G"
+        }
+        return trimmed
+    }
+
     private fun promptGroupName(w: java.io.PrintWriter, default: String): String? {
         while (true) {
             val name = prompt("Group name", default)
@@ -249,40 +388,27 @@ class ImportCommand(
         }
     }
 
-    // -- TOML writer ---------------------------------------------------------
+    // -- Group config writer ---------------------------------------------------
 
-    private fun writeGroupToml(name: String, info: dev.nimbuspowered.nimbus.template.ModpackInfo, minInstances: Int, maxInstances: Int, memory: String, isStatic: Boolean) {
+    private fun createGroupConfig(name: String, info: dev.nimbuspowered.nimbus.template.ModpackInfo, minInstances: Int, maxInstances: Int, memory: String, isStatic: Boolean) {
         Files.createDirectories(groupsDir)
         val templateName = name.lowercase()
-        val modloaderLine = if (info.modloaderVersion.isNotEmpty()) "modloader_version = \"${info.modloaderVersion}\"\n" else ""
-        val groupType = if (isStatic) "STATIC" else "DYNAMIC"
-        val content = """
-            |[group]
-            |name = "$name"
-            |type = "$groupType"
-            |template = "$templateName"
-            |software = "${info.modloader.name}"
-            |version = "${info.mcVersion}"
-            |${modloaderLine}
-            |[group.resources]
-            |memory = "$memory"
-            |max_players = 16
-            |
-            |[group.scaling]
-            |min_instances = $minInstances
-            |max_instances = $maxInstances
-            |players_per_instance = 16
-            |scale_threshold = 0.8
-            |idle_timeout = 300
-            |
-            |[group.lifecycle]
-            |stop_on_empty = true
-            |restart_on_crash = true
-            |max_restarts = 5
-            |
-            |[group.jvm]
-            |optimize = true
-        """.trimMargin() + "\n"
-        Files.writeString(groupsDir.resolve("$templateName.toml"), content)
+        val groupType = if (isStatic) GroupType.STATIC else GroupType.DYNAMIC
+        val request = CreateGroupRequest(
+            name = name,
+            type = groupType.name,
+            template = templateName,
+            software = info.modloader.name,
+            version = info.mcVersion,
+            modloaderVersion = info.modloaderVersion,
+            memory = memory,
+            minInstances = minInstances,
+            maxInstances = maxInstances,
+            maxPlayers = 16,
+            playersPerInstance = 16,
+            idleTimeout = 300
+        )
+        val toml = buildGroupToml(request, groupType, info.modloader)
+        Files.writeString(groupsDir.resolve("$templateName.toml"), toml)
     }
 }

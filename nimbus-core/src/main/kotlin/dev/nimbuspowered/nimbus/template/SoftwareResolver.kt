@@ -674,9 +674,12 @@ class SoftwareResolver {
             ServerSoftware.NEOFORGE -> "neoforge-"
             else -> return false
         }
-        return templateDir.toFile().listFiles()?.any {
+        val hasJar = templateDir.toFile().listFiles()?.any {
             it.name.startsWith(prefix) && it.name.endsWith(".jar") && !it.name.contains("installer")
         } ?: false
+        if (hasJar) return true
+        // Modern Forge/NeoForge: installer creates libraries/ with args file instead of a JAR
+        return findArgsFile(templateDir.resolve("libraries")) != null
     }
 
     suspend fun downloadJar(software: ServerSoftware, version: String, targetDir: Path): Path? {

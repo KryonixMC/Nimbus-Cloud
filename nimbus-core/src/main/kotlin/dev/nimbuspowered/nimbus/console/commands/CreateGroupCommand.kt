@@ -29,7 +29,8 @@ class CreateGroupCommand(
     private val softwareResolver: SoftwareResolver,
     private val groupsDir: Path,
     private val templatesDir: Path,
-    private val console: NimbusConsole
+    private val console: NimbusConsole,
+    private val curseForgeApiKey: String = ""
 ) : Command {
 
     override val name = "create"
@@ -55,8 +56,8 @@ class CreateGroupCommand(
 
             // Modpack → hand off to import wizard
             if (software == null) {
-                val importCmd = ImportCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, console)
-                val source = prompt("Modrinth URL or slug", "")
+                val importCmd = ImportCommand(terminal, groupManager, serviceManager, softwareResolver, groupsDir, templatesDir, console, curseForgeApiKey)
+                val source = prompt("Modrinth/CurseForge URL, slug, or path to .zip", "")
                 if (source.isBlank()) {
                     w.println(ConsoleFormatter.hint("Cancelled."))
                     return
@@ -157,7 +158,7 @@ class CreateGroupCommand(
             val minInstances = promptInt("Min instances", 1)
             val maxInstances = promptInt("Max instances", if (isStatic) 1 else 4)
             val defaultMemory = if (software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) "2G" else "1G"
-            val memory = prompt("Memory per instance", defaultMemory)
+            val memory = normalizeMemory(prompt("Memory per instance", defaultMemory))
 
             // Step 7: Via plugins (Paper/Purpur only)
             val viaPlugins = if (software in listOf(ServerSoftware.PAPER, ServerSoftware.PUFFERFISH, ServerSoftware.PURPUR, ServerSoftware.LEAF, ServerSoftware.FOLIA)) {
@@ -298,6 +299,15 @@ class CreateGroupCommand(
 
     private fun promptInt(label: String, default: Int): Int {
         return prompt(label, default.toString()).toIntOrNull() ?: default
+    }
+
+    private fun normalizeMemory(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.last().isDigit()) {
+            val num = trimmed.toIntOrNull() ?: return trimmed
+            return if (num >= 256) "${num}M" else "${num}G"
+        }
+        return trimmed
     }
 
     private fun promptGroupName(w: java.io.PrintWriter): String? {

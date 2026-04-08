@@ -40,14 +40,13 @@ class TemplateManager {
                 // Check if this is a top-level directory that should be symlinked
                 val topLevelName = relativePath.getName(0).toString()
                 if (topLevelName in symlinkDirs && source != sourceDir) {
-                    // If we're at the top-level symlink dir itself, create the symlink
+                    // If we're at the top-level symlink dir itself, link it
                     if (relativePath.nameCount == 1 && Files.isDirectory(source)) {
                         if (!destination.exists() && !destination.isSymbolicLink()) {
-                            Files.createSymbolicLink(destination, source.toAbsolutePath())
-                            logger.debug("Symlinked {} -> {}", destination, source.toAbsolutePath())
+                            linkDirectory(source.toAbsolutePath(), destination)
                         }
                     }
-                    // Skip all children of symlinked directories (the symlink covers them)
+                    // Skip all children — the link/copy covers them
                     return@forEach
                 }
 
@@ -133,5 +132,61 @@ class TemplateManager {
         }
 
         logger.debug("Applied global template '{}' to '{}'", globalDir.fileName, targetDir)
+    }
+
+    /**
+     * Links a directory from source to destination. Tries in order:
+     * 1. Windows junction (mklink /J) — no admin rights needed, works on NTFS
+     * 2. Symbolic link — works on Linux/macOS, Windows needs Developer Mode
+     * 3. Full recursive copy — always works, but uses more disk space
+     */
+    private fun linkDirectory(source: Path, destination: Path) {
+        val isWindows = System.getProperty("os.name").lowercase().contains("win")
+
+        // On Windows, try a directory junction first (no admin rights required)
+        if (isWindows) {
+            try {
+                val process = ProcessBuilder("cmd", "/c", "mklink", "/J",
+                    destination.toAbsolutePath().toString(),
+                    source.toAbsolutePath().toString())
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().readText()
+                val exitCode = process.waitFor()
+                if (exitCode == 0 && destination.exists()) {
+                    logger.debug("Created junction {} -> {}", destination, source)
+                    return
+                }
+                logger.debug("Junction failed (exit {}): {}", exitCode, output.trim())
+            } catch (e: Exception) {
+                logger.debug("Junction failed for {}: {}", destination, e.message)
+            }
+        }
+
+        // Try symbolic link (Linux/macOS, or Windows with Developer Mode)
+        try {
+            Files.createSymbolicLink(destination, source)
+            logger.debug("Symlinked {} -> {}", destination, source)
+            return
+        } catch (e: Exception) {
+            logger.debug("Symlink failed for {}: {}", destination, e.message)
+        }
+
+        // Last resort: full directory copy
+        logger.info("Copying directory {} -> {} (symlink/junction unavailable)", source.fileName, destination)
+        Files.walk(source).use { stream ->
+            stream.forEach { src ->
+                val dest = destination.resolve(source.relativize(src))
+                try {
+                    if (Files.isDirectory(src)) {
+                        Files.createDirectories(dest)
+                    } else {
+                        Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING)
+                    }
+                } catch (e: Exception) {
+                    logger.debug("Copy failed: {} ({})", dest, e.message)
+                }
+            }
+        }
     }
 }
