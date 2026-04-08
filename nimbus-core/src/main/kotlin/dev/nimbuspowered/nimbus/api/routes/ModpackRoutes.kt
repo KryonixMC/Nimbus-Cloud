@@ -229,14 +229,20 @@ fun Route.modpackRoutes(
                 when (part) {
                     is PartData.FileItem -> {
                         val fileName = part.originalFileName ?: "upload.zip"
-                        @Suppress("DEPRECATION")
-                        val bytes = part.streamProvider().readBytes()
-                        if (bytes.size > maxUploadBytes) {
-                            part.dispose()
-                            return@forEachPart
-                        }
                         val target = uploadDir.resolve(fileName)
-                        target.toFile().writeBytes(bytes)
+                        // Stream directly to disk — never buffer the full file in memory
+                        @Suppress("DEPRECATION")
+                        part.streamProvider().use { input ->
+                            java.io.FileOutputStream(target.toFile()).use { output ->
+                                val written = input.copyTo(output, bufferSize = 8192)
+                                if (written > maxUploadBytes) {
+                                    output.close()
+                                    Files.deleteIfExists(target)
+                                    part.dispose()
+                                    return@forEachPart
+                                }
+                            }
+                        }
                         zipPath = target
                     }
                     is PartData.FormItem -> {
