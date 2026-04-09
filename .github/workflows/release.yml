@@ -49,25 +49,12 @@ jobs:
       - name: Build project
         run: ./gradlew shadowJar
 
-      - name: Prepare release assets
+      - name: Verify release assets
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-
-          # Controller JAR (nimbus-core)
-          CORE_JAR=$(find nimbus-core/build/libs -name "*-all.jar" | head -1)
-          cp "$CORE_JAR" "nimbus-core-${VERSION}.jar"
-
-          # Agent JAR (nimbus-agent)
-          AGENT_JAR=$(find nimbus-agent/build/libs -name "*-all.jar" | head -1)
-          cp "$AGENT_JAR" "nimbus-agent-${VERSION}.jar"
-
-          # CLI JAR (nimbus-cli)
-          CLI_JAR=$(find nimbus-cli/build/libs -name "nimbus-cli-*.jar" ! -name "*-all.jar" | head -1)
-          cp "$CLI_JAR" "nimbus-cli-${VERSION}.jar"
-
-          echo "Controller: nimbus-core-${VERSION}.jar ($(du -h "nimbus-core-${VERSION}.jar" | cut -f1))"
-          echo "Agent: nimbus-agent-${VERSION}.jar ($(du -h "nimbus-agent-${VERSION}.jar" | cut -f1))"
-          echo "CLI: nimbus-cli-${VERSION}.jar ($(du -h "nimbus-cli-${VERSION}.jar" | cut -f1))"
+          echo "Controller: nimbus-core-${VERSION}.jar ($(du -h nimbus-core/build/libs/nimbus-core-${VERSION}.jar | cut -f1))"
+          echo "Agent: nimbus-agent-${VERSION}.jar ($(du -h nimbus-agent/build/libs/nimbus-agent-${VERSION}.jar | cut -f1))"
+          echo "CLI: nimbus-cli-${VERSION}.jar ($(du -h nimbus-cli/build/libs/nimbus-cli-${VERSION}.jar | cut -f1))"
 
       - name: Create Release Draft
         uses: softprops/action-gh-release@v2
@@ -78,9 +65,9 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           generate_release_notes: true
           files: |
-            nimbus-core-${{ steps.version.outputs.version }}.jar
-            nimbus-agent-${{ steps.version.outputs.version }}.jar
-            nimbus-cli-${{ steps.version.outputs.version }}.jar
+            nimbus-core/build/libs/nimbus-core-${{ steps.version.outputs.version }}.jar
+            nimbus-agent/build/libs/nimbus-agent-${{ steps.version.outputs.version }}.jar
+            nimbus-cli/build/libs/nimbus-cli-${{ steps.version.outputs.version }}.jar
           body: |
             ## Nimbus ${{ steps.version.outputs.tag }}
 

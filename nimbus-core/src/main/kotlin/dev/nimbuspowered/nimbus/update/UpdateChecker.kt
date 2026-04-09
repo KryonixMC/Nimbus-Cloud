@@ -328,17 +328,17 @@ class UpdateChecker(
                 val version = VersionInfo.parse(tagName) ?: return@mapNotNull null
                 val isPreRelease = obj["prerelease"]?.jsonPrimitive?.boolean ?: false
 
-                // Find controller JAR asset
+                // Find controller JAR asset (nimbus-core-*.jar)
                 val assets = obj["assets"]?.jsonArray ?: return@mapNotNull null
                 val jarAsset = assets.firstOrNull { asset ->
+                    val name = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
+                    name.startsWith("nimbus-core") && name.endsWith(".jar")
+                } ?: assets.firstOrNull { asset ->
                     val name = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
                     name.contains("controller") && name.endsWith(".jar")
                 } ?: assets.firstOrNull { asset ->
                     val name = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
                     name.endsWith("-all.jar")
-                } ?: assets.firstOrNull { asset ->
-                    val name = asset.jsonObject["name"]?.jsonPrimitive?.content ?: ""
-                    name.startsWith("nimbus") && name.endsWith(".jar")
                 }
 
                 val downloadUrl = jarAsset?.jsonObject?.get("browser_download_url")?.jsonPrimitive?.content
