@@ -16,17 +16,17 @@ export default function ConsolePage() {
   const [lines, setLines] = useState<string[]>([]);
   const [command, setCommand] = useState("");
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const sendRef = useRef<((msg: string) => void) | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const { getSocket, cleanup } = apiWebSocketReconnect(
+    const { send, cleanup } = apiWebSocketReconnect(
       "/api/console/stream",
       {
-        onOpen: (ws) => {
+        onOpen: () => {
           setConnected(true);
-          wsRef.current = ws;
-          ws.send(
+          sendRef.current = send;
+          send(
             JSON.stringify({
               type: "hello",
               text: JSON.stringify({
@@ -79,10 +79,10 @@ export default function ConsolePage() {
 
   function sendCommand(e: React.FormEvent) {
     e.preventDefault();
-    if (!command.trim() || !wsRef.current) return;
+    if (!command.trim() || !sendRef.current) return;
     const id = String(++messageId);
     // Server expects: { type: "execute", id: "...", input: "command" }
-    wsRef.current.send(
+    sendRef.current(
       JSON.stringify({ type: "execute", id, input: command.trim() })
     );
     setLines((prev) => [...prev, `> ${command}`]);
