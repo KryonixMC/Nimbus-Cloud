@@ -88,10 +88,15 @@ class ModuleManager(
         val metadataByJar = mutableMapOf<Path, ModuleInfo>()
         for (jar in jars) {
             val info = readModuleProperties(jar)
-            if (info != null) metadataByJar[jar] = info
+            if (info != null) {
+                metadataByJar[jar] = info
+            } else {
+                logger.warn("Could not read module.properties from {} — skipping", jar.fileName)
+            }
         }
 
         // Check version compatibility before loading
+        val skippedJars = mutableSetOf<Path>()
         val nimbusVersion = parseVersion(NimbusVersion.version)
         for ((jar, info) in metadataByJar) {
             if (info.minNimbusVersion != null && nimbusVersion != null) {
@@ -99,10 +104,11 @@ class ModuleManager(
                 if (minVersion != null && compareVersions(nimbusVersion, minVersion) < 0) {
                     logger.warn("Module '{}' requires Nimbus {} but running {} — skipping",
                         info.name, info.minNimbusVersion, NimbusVersion.version)
-                    continue
+                    skippedJars.add(jar)
                 }
             }
         }
+        for (jar in skippedJars) metadataByJar.remove(jar)
 
         // Sort by dependencies (modules with no deps first)
         val loadOrder = resolveDependencyOrder(metadataByJar)
@@ -116,7 +122,9 @@ class ModuleManager(
                 classLoaders.add(classLoader)
 
                 val loader = ServiceLoader.load(NimbusModule::class.java, classLoader)
+                var found = false
                 for (module in loader) {
+                    found = true
                     if (modules.containsKey(module.id)) {
                         logger.warn("Duplicate module id '{}' from {} — skipping", module.id, jar.fileName)
                         continue
@@ -125,7 +133,10 @@ class ModuleManager(
                     logger.info("Loaded module: {} v{} ({})", module.name, module.version, module.id)
                     runBlocking { eventBus.emit(NimbusEvent.ModuleLoaded(module.id, module.name, module.version)) }
                 }
-            } catch (e: Exception) {
+                if (!found) {
+                    logger.warn("No NimbusModule implementation found in {} — check META-INF/services", jar.fileName)
+                }
+            } catch (e: Throwable) {
                 logger.error("Failed to load module from {}: {}", jar.fileName, e.message, e)
             }
         }
@@ -146,7 +157,7 @@ class ModuleManager(
             try {
                 module.init(context)
                 logger.info("Initialized module: {}", module.name)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 logger.error("Failed to initialize module '{}': {}", id, e.message, e)
             }
         }
@@ -154,7 +165,7 @@ class ModuleManager(
             try {
                 module.enable()
                 eventBus.emit(NimbusEvent.ModuleEnabled(module.id, module.name))
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 logger.error("Failed to enable module '{}': {}", id, e.message, e)
             }
         }
@@ -289,10 +300,16 @@ class ModuleManager(
                 ?: emptyList()
         }
 
+        private val log = LoggerFactory.getLogger(ModuleManager::class.java)
+
         fun readModuleProperties(jarPath: Path): ModuleInfo? {
             return try {
                 JarFile(jarPath.toFile()).use { jar ->
-                    val entry = jar.getEntry("module.properties") ?: return null
+                    val entry = jar.getEntry("module.properties")
+                    if (entry == null) {
+                        log.debug("No module.properties in {}", jarPath.fileName)
+                        return null
+                    }
                     val props = Properties()
                     jar.getInputStream(entry).use { props.load(it) }
                     val pluginEntries = props.getProperty("plugins")?.split(",")
@@ -314,7 +331,8 @@ class ModuleManager(
                         plugins = pluginEntries
                     )
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                log.warn("Failed to read module.properties from {}: {}", jarPath.fileName, e.message)
                 null
             }
         }

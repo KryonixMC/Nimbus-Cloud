@@ -9,6 +9,20 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.4.4 (April 9, 2026)
+
+NeoForge symlink fix and module loading improvements.
+
+### Fixed
+- **NeoForge startup on Linux**: `Files.walk()` in `findArgsFile` now uses `FOLLOW_LINKS` so it traverses the symlinked `libraries/` directory correctly. Previously, NeoForge/Forge servers crashed instantly with exit code 1 because the args file was not found through the symlink, falling back to `-jar server.jar` which doesn't work for modded servers
+- **Module version skip logic**: Modules skipped due to version incompatibility were still attempted for loading. Fixed by properly removing skipped JARs from the load map before ServiceLoader runs
+- **Module loading error handling**: Changed `catch (Exception)` to `catch (Throwable)` in module load/init/enable phases to catch `NoClassDefFoundError` and similar linkage errors that previously crashed silently
+
+### Changed
+- **Module loading diagnostics**: Added warnings for JARs missing `module.properties`, JARs with no `NimbusModule` implementation, and failed property reads. Makes debugging broken module JARs much easier
+
+---
+
 ## v0.4.3 (April 9, 2026)
 
 Dashboard proxy and chunked modpack upload.

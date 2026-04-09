@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.nio.file.FileVisitOption
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -866,7 +867,7 @@ class SoftwareResolver {
         val isWindows = System.getProperty("os.name").lowercase().contains("win")
         val target = if (isWindows) "win_args.txt" else "unix_args.txt"
         return try {
-            Files.walk(libsDir).use { stream ->
+            Files.walk(libsDir, Int.MAX_VALUE, FileVisitOption.FOLLOW_LINKS).use { stream ->
                 stream.filter { it.fileName.toString() == target }
                     .findFirst()
                     .map { libsDir.parent.relativize(it).toString() }
