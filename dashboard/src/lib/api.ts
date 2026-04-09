@@ -104,32 +104,28 @@ export async function apiFetch<T = unknown>(
 
 /**
  * Upload a file as raw request body (streamed, no multipart buffering).
+ * In proxy mode, automatically uses chunked upload to bypass Vercel's body size limit.
  * Parameters should be passed as query params in the path.
  */
 export async function apiUpload<T = unknown>(
   path: string,
-  file: File | Blob
+  file: File | Blob,
+  onProgress?: (uploaded: number, total: number) => void
 ): Promise<T> {
+  // In proxy mode, use chunked upload to bypass hosting body size limits
+  if (needsProxy()) {
+    return apiChunkedUpload<T>(path, file, onProgress);
+  }
+
   const apiUrl = getApiUrl();
   const token = getToken();
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/octet-stream",
-  };
-
-  let url: string;
-  if (needsProxy()) {
-    url = `/api/proxy${path}`;
-    headers["X-Nimbus-Controller"] = apiUrl;
-    headers["X-Nimbus-Token"] = token;
-  } else {
-    url = `${apiUrl}${path}`;
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(url, {
+  const res = await fetch(`${apiUrl}${path}`, {
     method: "POST",
-    headers,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+    },
     body: file,
   });
 
@@ -145,6 +141,77 @@ export async function apiUpload<T = unknown>(
   }
 
   return res.json();
+}
+
+const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB — safe for Vercel's body limit
+
+/**
+ * Chunked upload through the server-side proxy.
+ * 1. POST /api/modpacks/upload/init → get uploadId
+ * 2. POST /api/modpacks/upload/chunk (sequential, 4MB each) → append on server
+ * 3. POST /api/modpacks/upload/finalize → trigger import
+ *
+ * File.slice() is zero-copy — no RAM usage on the client.
+ */
+async function apiChunkedUpload<T = unknown>(
+  path: string,
+  file: File | Blob,
+  onProgress?: (uploaded: number, total: number) => void
+): Promise<T> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const fileName = file instanceof File ? file.name : "upload.zip";
+
+  // Extract query params from the original path (e.g. groupName, type, memory...)
+  const [, queryString] = path.split("?");
+  const originalParams = new URLSearchParams(queryString || "");
+
+  // Step 1: Initialize chunked upload
+  const initParams = new URLSearchParams({ fileName, totalChunks: String(totalChunks) });
+  const init = await apiFetch<{ uploadId: string; totalChunks: number }>(
+    `/api/modpacks/upload/init?${initParams.toString()}`,
+    { method: "POST" }
+  );
+
+  // Step 2: Send chunks sequentially
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const chunk = file.slice(start, end);
+
+    const chunkParams = new URLSearchParams({
+      uploadId: init.uploadId,
+      index: String(i),
+    });
+
+    const { url, init: fetchInit } = buildRequest(
+      `/api/modpacks/upload/chunk?${chunkParams.toString()}`,
+      { method: "POST" }
+    );
+
+    // Override Content-Type for binary chunk
+    const headers = { ...fetchInit.headers } as Record<string, string>;
+    headers["Content-Type"] = "application/octet-stream";
+
+    const res = await fetch(url, {
+      ...fetchInit,
+      headers,
+      body: chunk,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Chunk ${i} upload failed: ${res.status}`);
+    }
+
+    onProgress?.(end, file.size);
+  }
+
+  // Step 3: Finalize — pass original params (groupName, type, etc.)
+  originalParams.set("uploadId", init.uploadId);
+  return apiFetch<T>(
+    `/api/modpacks/upload/finalize?${originalParams.toString()}`,
+    { method: "POST" }
+  );
 }
 
 export function apiWebSocket(path: string): WebSocket {
