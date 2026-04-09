@@ -20,6 +20,35 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
+import java.util.concurrent.ConcurrentHashMap
+
+@Serializable
+data class ChunkedUploadInit(
+    val uploadId: String,
+    val totalChunks: Int
+)
+
+@Serializable
+data class ChunkedUploadStatus(
+    val uploadId: String,
+    val receivedChunks: Int,
+    val totalChunks: Int,
+    val complete: Boolean
+)
+
+/**
+ * Tracks active chunked uploads. Entries are cleaned up on finalize or after timeout.
+ */
+private data class ChunkedUploadState(
+    val uploadId: String,
+    val filePath: Path,
+    val totalChunks: Int,
+    val receivedChunks: MutableSet<Int> = mutableSetOf(),
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+private val chunkedUploads = ConcurrentHashMap<String, ChunkedUploadState>()
 
 @Serializable
 data class ModpackResolveRequest(
@@ -261,6 +290,174 @@ fun Route.modpackRoutes(
                 if (index == null) {
                     Files.deleteIfExists(uploadedZip)
                     return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file — not a server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                }
+                val info = installer.getInfo(index)
+
+                softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, templateDir, info.modloaderVersion)
+                val result = installer.installFiles(index, templateDir) { _, _, _ -> }
+                installer.extractOverrides(uploadedZip, templateDir)
+
+                when (info.modloader) {
+                    ServerSoftware.FABRIC -> softwareResolver.ensureFabricProxyMod(templateDir, info.mcVersion)
+                    ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.ensureForwardingMod(info.modloader, info.mcVersion, templateDir)
+                    else -> {}
+                }
+
+                templateDir.resolve("eula.txt").toFile().writeText("eula=true\n")
+
+                val groupRequest = CreateGroupRequest(
+                    name = groupName, type = type, template = templateName,
+                    software = info.modloader.name, version = info.mcVersion,
+                    modloaderVersion = info.modloaderVersion, memory = memory,
+                    minInstances = minInstances, maxInstances = maxInstances
+                )
+                val groupType = try { GroupType.valueOf(type.uppercase()) } catch (_: Exception) { GroupType.DYNAMIC }
+                val toml = buildGroupToml(groupRequest, groupType, info.modloader)
+                groupsDir.resolve("${templateName}.toml").toFile().writeText(toml)
+                val groupConfig = buildGroupConfig(groupRequest, groupType, info.modloader)
+                groupManager.reloadGroups(groupManager.getAllGroups().map { it.config } + groupConfig)
+
+                Files.deleteIfExists(uploadedZip)
+                call.respond(HttpStatusCode.Created, ModpackImportResponse(
+                    success = result.success,
+                    message = if (result.success) "Modpack '${info.name}' uploaded and imported as group '$groupName'"
+                             else "Import completed with ${result.filesFailed} failed downloads",
+                    groupName = groupName,
+                    filesDownloaded = result.filesDownloaded,
+                    filesFailed = result.filesFailed
+                ))
+            } else {
+                Files.deleteIfExists(uploadedZip)
+                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+            }
+        }
+
+        // ── Chunked upload ────────────────────────────────────────────
+        // POST /api/modpacks/upload/init?fileName=X&totalChunks=N
+        // Returns an uploadId. Chunks are then sent individually and finalized.
+        post("upload/init") {
+            val fileName = call.request.queryParameters["fileName"] ?: "upload.zip"
+            val totalChunks = call.request.queryParameters["totalChunks"]?.toIntOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing totalChunks parameter", ApiErrors.VALIDATION_FAILED))
+
+            if (totalChunks < 1 || totalChunks > 100_000) {
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid totalChunks value", ApiErrors.VALIDATION_FAILED))
+            }
+
+            val uploadId = java.util.UUID.randomUUID().toString()
+            val uploadDir = templatesDir.resolve(".modpack-uploads")
+            Files.createDirectories(uploadDir)
+            val filePath = uploadDir.resolve("$uploadId-$fileName")
+
+            // Create empty file
+            Files.createFile(filePath)
+
+            chunkedUploads[uploadId] = ChunkedUploadState(
+                uploadId = uploadId,
+                filePath = filePath,
+                totalChunks = totalChunks
+            )
+
+            // Clean up stale uploads (older than 1 hour)
+            val now = System.currentTimeMillis()
+            chunkedUploads.entries.removeIf { (_, state) ->
+                now - state.createdAt > 3_600_000 && state.uploadId != uploadId
+            }
+
+            call.respond(ChunkedUploadInit(uploadId = uploadId, totalChunks = totalChunks))
+        }
+
+        // POST /api/modpacks/upload/chunk?uploadId=X&index=N
+        // Body: raw chunk bytes (application/octet-stream)
+        post("upload/chunk") {
+            val uploadId = call.request.queryParameters["uploadId"] ?: ""
+            val chunkIndex = call.request.queryParameters["index"]?.toIntOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing index parameter", ApiErrors.VALIDATION_FAILED))
+
+            val state = chunkedUploads[uploadId]
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiErrors.CHUNKED_UPLOAD_NOT_FOUND))
+
+            if (chunkIndex < 0 || chunkIndex >= state.totalChunks) {
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid chunk index", ApiErrors.CHUNKED_UPLOAD_INVALID))
+            }
+
+            // Chunks must arrive in order for simple file append
+            // If out of order, reject — the client should send sequentially
+            val expectedIndex = state.receivedChunks.size
+            if (chunkIndex != expectedIndex) {
+                return@post call.respond(HttpStatusCode.BadRequest,
+                    apiError("Expected chunk $expectedIndex, got $chunkIndex. Chunks must be sent in order.", ApiErrors.CHUNKED_UPLOAD_INVALID))
+            }
+
+            try {
+                call.receiveStream().use { input ->
+                    Files.newOutputStream(state.filePath, StandardOpenOption.APPEND).use { output ->
+                        val buf = ByteArray(65536)
+                        var read: Int
+                        while (input.read(buf).also { read = it } != -1) {
+                            output.write(buf, 0, read)
+                        }
+                    }
+                }
+                state.receivedChunks.add(chunkIndex)
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.InternalServerError,
+                    apiError("Failed to write chunk: ${e.message}", ApiErrors.MODPACK_UPLOAD_FAILED))
+            }
+
+            call.respond(ChunkedUploadStatus(
+                uploadId = uploadId,
+                receivedChunks = state.receivedChunks.size,
+                totalChunks = state.totalChunks,
+                complete = state.receivedChunks.size == state.totalChunks
+            ))
+        }
+
+        // POST /api/modpacks/upload/finalize?uploadId=X&groupName=X&type=X&memory=X&...
+        // Triggers the same import logic as the single-shot upload endpoint.
+        post("upload/finalize") {
+            val uploadId = call.request.queryParameters["uploadId"] ?: ""
+            val groupName = call.request.queryParameters["groupName"] ?: ""
+            val type = call.request.queryParameters["type"] ?: "DYNAMIC"
+            val memory = call.request.queryParameters["memory"] ?: "2G"
+            val minInstances = call.request.queryParameters["minInstances"]?.toIntOrNull() ?: 1
+            val maxInstances = call.request.queryParameters["maxInstances"]?.toIntOrNull() ?: 2
+
+            val state = chunkedUploads.remove(uploadId)
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiErrors.CHUNKED_UPLOAD_NOT_FOUND))
+
+            if (state.receivedChunks.size != state.totalChunks) {
+                Files.deleteIfExists(state.filePath)
+                return@post call.respond(HttpStatusCode.BadRequest,
+                    apiError("Upload incomplete: ${state.receivedChunks.size}/${state.totalChunks} chunks received", ApiErrors.CHUNKED_UPLOAD_INVALID))
+            }
+
+            if (groupName.isBlank() || !groupName.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
+                Files.deleteIfExists(state.filePath)
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
+            }
+            if (groupManager.getGroup(groupName) != null) {
+                Files.deleteIfExists(state.filePath)
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+            }
+
+            val uploadedZip = state.filePath
+            val templateName = groupName.lowercase()
+            val templateDir = templatesDir.resolve(templateName)
+            Files.createDirectories(templateDir)
+
+            // Same import logic as single-shot upload
+            if (installer.isServerPack(uploadedZip)) {
+                handleServerPackImport(
+                    call, installer, softwareResolver, groupManager,
+                    uploadedZip, groupName, templateDir, groupsDir,
+                    type, memory, minInstances, maxInstances
+                )
+            } else if (uploadedZip.fileName.toString().endsWith(".mrpack") || installer.parseIndex(uploadedZip) != null) {
+                val index = installer.parseIndex(uploadedZip)
+                if (index == null) {
+                    Files.deleteIfExists(uploadedZip)
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file", ApiErrors.MODPACK_INVALID))
                 }
                 val info = installer.getInfo(index)
 
