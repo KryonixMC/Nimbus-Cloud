@@ -19,6 +19,18 @@ java {
     }
 }
 
+// Override the annotation-generated velocity-plugin.json with the correct version from gradle.properties
+tasks.named<JavaCompile>("compileJava") {
+    doLast {
+        val jsonFile = destinationDirectory.file("velocity-plugin.json").get().asFile
+        if (jsonFile.exists()) {
+            val nimbusVersion = project.rootProject.property("nimbusVersion").toString()
+            val content = jsonFile.readText().replace(Regex(""""version"\s*:\s*"[^"]*""""), """"version":"$nimbusVersion"""")
+            jsonFile.writeText(content)
+        }
+    }
+}
+
 tasks.shadowJar {
     archiveClassifier.set("")
     // Gson is provided by Velocity runtime — exclude from shadow to avoid zip entry issues

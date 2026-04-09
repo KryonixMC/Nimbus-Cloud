@@ -9,6 +9,22 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.5.1 (April 9, 2026)
+
+Modded client routing hotfixes.
+
+### Fixed
+- **NeoForge forwarding mod**: NeoForge 1.20.2+ now auto-installs [NeoForwarding](https://modrinth.com/mod/neoforwarding) instead of proxy-compatible-forge, which caused `Empty key` errors on modern NeoForge servers
+- **Modded client detection**: Uses Velocity's internal `ConnectionType` (set during FML handshake) instead of `player.getModInfo()` which was empty at initial server selection time
+- **Modded groups API parsing**: Bridge now correctly parses the `{"groups": [...]}` wrapper from `/api/groups` (was trying to parse as plain array)
+- **Kick loop for modded clients**: Modded clients kicked from a modded server are no longer redirected to a vanilla lobby where they'd get kicked again
+- **Bridge version**: Now shows the actual Nimbus version (from `gradle.properties`) instead of hardcoded `0.2.0`
+
+### Changed
+- **ConfigPatcher**: Auto-detects NeoForwarding vs proxy-compatible-forge in the `mods/` directory and patches the correct config file (`neoforwarding-server.toml` or `proxy-compatible-forge-server.toml`)
+
+---
+
 ## v0.5.0 (April 9, 2026)
 
 Modded client support: automatic routing and Velocity configuration for Forge/NeoForge/Fabric players.

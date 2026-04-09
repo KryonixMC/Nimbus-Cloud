@@ -304,13 +304,56 @@ class ConfigPatcher {
     }
 
     /**
-     * Configures proxy-compatible-forge for proxy forwarding on Forge/NeoForge servers.
-     * Supports both modern (Velocity secret) and legacy (BungeeCord) modes.
+     * Configures proxy forwarding on Forge/NeoForge servers.
+     * - NeoForge 1.20.2+: patches neoforwarding-server.toml (NeoForwarding mod)
+     * - Forge / older NeoForge: patches proxy-compatible-forge-server.toml (PCF)
      */
     fun patchForgeProxy(workDir: Path, velocityTemplateDir: Path, forwardingMode: String) {
         val configDir = workDir.resolve("config")
         if (!configDir.exists()) configDir.createDirectories()
 
+        // Detect which forwarding mod is installed
+        val modsDir = workDir.resolve("mods")
+        val hasNeoForwarding = modsDir.toFile().listFiles()?.any {
+            it.name.lowercase().contains("neoforwarding")
+        } ?: false
+
+        if (hasNeoForwarding) {
+            patchNeoForwarding(configDir, velocityTemplateDir, forwardingMode)
+        } else {
+            patchProxyCompatibleForge(configDir, velocityTemplateDir, forwardingMode)
+        }
+    }
+
+    private fun patchNeoForwarding(configDir: Path, velocityTemplateDir: Path, forwardingMode: String) {
+        val configFile = configDir.resolve("neoforwarding-server.toml")
+
+        if (forwardingMode == "modern") {
+            val secret = readForwardingSecret(velocityTemplateDir)
+            if (secret.isEmpty()) {
+                logger.warn("No forwarding.secret found — NeoForwarding modern forwarding will not work")
+                return
+            }
+            configFile.writeText(buildString {
+                appendLine("#NeoForwarding Server Configuration")
+                appendLine("enableForwarding = true")
+                appendLine("forwardingSecret = \"$secret\"")
+                appendLine("enableEmbeddedCrossStitch = true")
+            })
+            logger.info("NeoForwarding configured for modern forwarding")
+        } else {
+            // NeoForwarding only supports modern forwarding — disable it for legacy
+            configFile.writeText(buildString {
+                appendLine("#NeoForwarding Server Configuration")
+                appendLine("enableForwarding = false")
+                appendLine("forwardingSecret = \"\"")
+                appendLine("enableEmbeddedCrossStitch = true")
+            })
+            logger.warn("NeoForwarding does not support legacy forwarding — forwarding disabled")
+        }
+    }
+
+    private fun patchProxyCompatibleForge(configDir: Path, velocityTemplateDir: Path, forwardingMode: String) {
         val configFile = configDir.resolve("proxy-compatible-forge-server.toml")
 
         if (forwardingMode == "modern") {

@@ -413,6 +413,8 @@ class SoftwareResolver {
 
     /**
      * Auto-downloads the correct proxy forwarding mod for Forge/NeoForge servers.
+     * - NeoForge 1.20.2+: NeoForwarding (dedicated NeoForge support, includes CrossStitch)
+     * - Forge (all versions): proxy-compatible-forge
      */
     suspend fun ensureForwardingMod(software: ServerSoftware, mcVersion: String, templateDir: Path) {
         val modsDir = templateDir.resolve("mods")
@@ -420,18 +422,34 @@ class SoftwareResolver {
 
         val hasForwardingMod = modsDir.toFile().listFiles()?.any {
             val name = it.name.lowercase()
-            name.contains("proxy-compatible") || name.contains("bungeeforge") || name.contains("neovelocity")
+            name.contains("proxy-compatible") || name.contains("bungeeforge")
+                    || name.contains("neovelocity") || name.contains("neoforwarding")
         } ?: false
         if (hasForwardingMod) return
 
-        val loader = when (software) {
-            ServerSoftware.FORGE -> "forge"
-            ServerSoftware.NEOFORGE -> "neoforge"
-            else -> return
+        if (software == ServerSoftware.NEOFORGE && isVersionAtLeast(mcVersion, "1.20.2")) {
+            // NeoForge 1.20.2+: use NeoForwarding (better compatibility than PCF)
+            downloadModrinthMod("neoforwarding", "neoforge", modsDir, "NeoForwarding", mcVersion)
+        } else {
+            val loader = when (software) {
+                ServerSoftware.FORGE -> "forge"
+                ServerSoftware.NEOFORGE -> "neoforge"
+                else -> return
+            }
+            downloadModrinthMod("proxy-compatible-forge", loader, modsDir, "Proxy Compatible Forge", mcVersion)
         }
+    }
 
-        // proxy-compatible-forge supports both Forge and NeoForge
-        downloadModrinthMod("proxy-compatible-forge", loader, modsDir, "Proxy Compatible Forge", mcVersion)
+    /** Compares Minecraft version strings (e.g. "1.20.2" >= "1.20.2"). */
+    private fun isVersionAtLeast(version: String, minimum: String): Boolean {
+        val v = version.split(".").map { it.toIntOrNull() ?: 0 }
+        val m = minimum.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(v.size, m.size)) {
+            val a = v.getOrElse(i) { 0 }
+            val b = m.getOrElse(i) { 0 }
+            if (a != b) return a > b
+        }
+        return true // equal
     }
 
     /**

@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Plugin(
     id = "nimbus-bridge",
     name = "Nimbus Bridge",
-    version = "0.2.0",
+    version = "0.0.0",  // overridden by build.gradle.kts from nimbusVersion
     description = "Hub commands & Cloud Bridge for Nimbus networks",
     authors = {"NimbusPowered"}
 )
@@ -315,7 +315,9 @@ public class NimbusBridgePlugin {
         sharedApiClient.get("/api/groups").thenAccept(result -> {
             if (!result.isSuccess()) return;
             try {
-                var array = new com.google.gson.Gson().fromJson(result.body(), com.google.gson.JsonArray.class);
+                var wrapper = new com.google.gson.Gson().fromJson(result.body(), com.google.gson.JsonObject.class);
+                var array = wrapper.getAsJsonArray("groups");
+                if (array == null) return;
                 moddedGroups.clear();
                 for (var element : array) {
                     var obj = element.getAsJsonObject();
@@ -445,17 +447,15 @@ public class NimbusBridgePlugin {
                 }
             }
 
-            // Modded client detection: if the client has mods, try to route to a modded server
-            // NeoForge/Forge clients get kicked from Paper/vanilla servers due to mod channel mismatch
-            boolean isModdedClient = player.getModInfo().isPresent();
-            if (isModdedClient) {
+            // Modded client detection: NeoForge/Forge clients cannot connect to Paper servers.
+            // Detect via Velocity internal ConnectionType (set during handshake from FML marker).
+            if (isModdedClient(player)) {
                 Optional<RegisteredServer> modded = moddedServerFinder.get();
                 if (modded.isPresent()) {
                     event.setInitialServer(modded.get());
                     logger.info("Routed modded client {} to {}", player.getUsername(), modded.get().getServerInfo().getName());
                     return;
                 }
-                // No modded server available — fall through to lobby (may work for Forge, will fail for NeoForge)
                 logger.warn("Modded client {} has no modded server available, falling back to lobby", player.getUsername());
             }
 
@@ -471,10 +471,43 @@ public class NimbusBridgePlugin {
             }
         }
 
+        /**
+         * Detects modded clients by accessing Velocity's internal ConnectionType.
+         * Forge/NeoForge clients send an FML marker in the handshake which Velocity stores as
+         * LEGACY_FORGE or MODERN_FORGE on the MinecraftConnection.
+         */
+        private boolean isModdedClient(Player player) {
+            try {
+                // ConnectedPlayer.getConnection() → MinecraftConnection
+                var getConnection = player.getClass().getMethod("getConnection");
+                var connection = getConnection.invoke(player);
+                // MinecraftConnection.getType() → ConnectionType
+                var getType = connection.getClass().getMethod("getType");
+                var type = getType.invoke(connection);
+                String typeName = type.getClass().getSimpleName();
+                // ConnectionTypes: VANILLA, LEGACY_FORGE, MODERN_FORGE
+                return typeName.contains("Forge") || typeName.contains("FORGE")
+                        || !type.toString().equalsIgnoreCase("VANILLA");
+            } catch (Exception e) {
+                logger.debug("Could not detect modded client for {}: {}", player.getUsername(), e.getMessage());
+                return false;
+            }
+        }
+
         @Subscribe
         public void onKickedFromServer(KickedFromServerEvent event) {
             Player player = event.getPlayer();
             String kickedFrom = event.getServer().getServerInfo().getName();
+
+            // Don't redirect modded clients to a vanilla lobby — they'll just get kicked again
+            if (isModdedClient(player) && !kickedFrom.toLowerCase().startsWith("lobby")) {
+                Component reason = event.getServerKickReason().orElse(
+                    Component.text("Connection failed.", NamedTextColor.RED)
+                );
+                event.setResult(KickedFromServerEvent.DisconnectPlayer.create(reason));
+                logger.info("Modded client {} disconnected after kick from {} (no lobby redirect)", player.getUsername(), kickedFrom);
+                return;
+            }
 
             if (kickedFrom.toLowerCase().startsWith("lobby")) {
                 // Kicked from a lobby — try to find a different lobby
