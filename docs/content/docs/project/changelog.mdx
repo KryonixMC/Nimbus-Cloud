@@ -9,6 +9,16 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.4.7 (April 9, 2026)
+
+Module startup ordering fix.
+
+### Fixed
+- **Permissions module crash on fresh installs**: `PermissionManager.init()` queried the `permission_groups` table during module `init()`, but database migrations hadn't run yet. Moved DB-dependent initialization to `enable()` which runs after migrations
+- **Module lifecycle ordering**: Split `enableAll()` into `initAll()` (registers migrations, commands, routes) and `enableAll()` (DB-dependent setup). Migrations now run between the two phases, guaranteeing tables exist before modules query them
+
+---
+
 ## v0.4.6 (April 9, 2026)
 
 Module loading hotfix — bypasses broken ServiceLoader entirely.

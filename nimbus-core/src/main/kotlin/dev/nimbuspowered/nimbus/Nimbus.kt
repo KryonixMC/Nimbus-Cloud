@@ -260,10 +260,13 @@ fun nimbusMain() = runBlocking {
     val moduleManager = ModuleManager(controllerModulesDir, moduleContext, eventBus)
     moduleManager.syncEmbeddedModules()
     moduleManager.loadAll()
-    moduleManager.enableAll()
+    moduleManager.initAll()
 
     // Run database migrations (core + module) after all modules have registered theirs
     databaseManager.runMigrations(moduleContext.migrations)
+
+    // Enable modules after migrations have created all required tables
+    moduleManager.enableAll()
 
     // Register audit command (uses DatabaseManager directly)
     if (config.audit.enabled) {

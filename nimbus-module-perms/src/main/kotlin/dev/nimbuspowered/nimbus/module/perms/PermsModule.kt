@@ -40,28 +40,19 @@ class PermsModule : NimbusModule {
     )
 
     private lateinit var permissionManager: PermissionManager
+    private lateinit var moduleContext: ModuleContext
 
     override suspend fun init(context: ModuleContext) {
+        moduleContext = context
         val db = context.service<DatabaseManager>()!!
         val eventBus = context.service<EventBus>()!!
 
-        // Register permission table migrations
+        // Register permission table migrations (run before enable())
         context.registerMigrations(listOf(
             dev.nimbuspowered.nimbus.module.perms.migrations.PermsV1_Baseline
         ))
 
         permissionManager = PermissionManager(db)
-        permissionManager.init()
-
-        // Auto-cleanup expired permission contexts every 60 seconds
-        context.scope.launch {
-            while (isActive) {
-                delay(60_000)
-                try {
-                    permissionManager.cleanupExpired()
-                } catch (_: Exception) {}
-            }
-        }
 
         // Register plugin deployments (respects deploy_plugin config as opt-out)
         val config = context.service<NimbusConfig>()
@@ -133,7 +124,20 @@ class PermsModule : NimbusModule {
         }
     }
 
-    override suspend fun enable() {}
+    override suspend fun enable() {
+        // Load data from DB (tables guaranteed to exist — migrations run between init and enable)
+        permissionManager.init()
+
+        // Auto-cleanup expired permission contexts every 60 seconds
+        moduleContext.scope.launch {
+            while (isActive) {
+                delay(60_000)
+                try {
+                    permissionManager.cleanupExpired()
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     override fun disable() {}
 }

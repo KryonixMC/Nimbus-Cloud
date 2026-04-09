@@ -153,8 +153,8 @@ class ModuleManager(
         }
     }
 
-    /** Initialize and enable all loaded modules. */
-    suspend fun enableAll() {
+    /** Initialize all loaded modules (registers migrations, commands, routes). */
+    suspend fun initAll() {
         for ((id, module) in modules) {
             try {
                 module.init(context)
@@ -163,6 +163,10 @@ class ModuleManager(
                 logger.error("Failed to initialize module '{}': {}", id, e.message, e)
             }
         }
+    }
+
+    /** Enable all initialized modules (called after migrations have run). */
+    suspend fun enableAll() {
         for ((id, module) in modules) {
             try {
                 module.enable()
