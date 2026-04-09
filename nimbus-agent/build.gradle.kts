@@ -40,7 +40,7 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveClassifier.set("all")
+    archiveClassifier.set("")
     mergeServiceFiles()
 }
 

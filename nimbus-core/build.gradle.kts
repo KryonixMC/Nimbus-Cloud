@@ -147,7 +147,7 @@ val embeddedModules = mapOf(
 )
 
 tasks.shadowJar {
-    archiveClassifier.set("all")
+    archiveClassifier.set("")
     mergeServiceFiles()
     dependsOn(pluginJar, sdkJar, displayJar, permsJar, downloadFancyNpcs)
 
