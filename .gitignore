@@ -1,9 +1,7 @@
 # Gradle
 .gradle/
 build/
-nimbus-core/build/
-nimbus-core/bin/
-nimbus-bridge/bin/
+**/bin/
 .kotlin/
 
 # IDE
