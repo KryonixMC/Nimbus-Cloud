@@ -46,7 +46,8 @@ data class GroupResponse(
     val lifecycle: GroupLifecycleResponse,
     val jvmArgs: List<String>,
     val jvmOptimize: Boolean,
-    val activeInstances: Int
+    val activeInstances: Int,
+    val modIds: List<String> = emptyList()
 )
 
 @Serializable

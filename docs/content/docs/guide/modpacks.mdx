@@ -113,7 +113,7 @@ One of Nimbus's strongest features for modded servers: **proxy forwarding mods a
 |---|---|---|
 | **Fabric / Quilt** | [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-lite) | Fabric API (also auto-installed) |
 | **Forge** | [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) | None |
-| **NeoForge** | [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) | None |
+| **NeoForge** | [NeoForwarding](https://modrinth.com/mod/neoforwarding) | None |
 
 When Nimbus starts a modded service, it:
 
@@ -126,6 +126,21 @@ No manual configuration needed. Players connect to your Velocity proxy on port `
 
 <Callout type="info">
 This works for both imported modpacks AND manually created modded groups. Any Forge, Fabric, or NeoForge group automatically gets proxy forwarding support.
+</Callout>
+
+## Smart Client Routing
+
+When you run multiple modded groups (e.g. ATM10 on NeoForge 1.21.1 **and** a Forge 1.20.1 pack), Nimbus automatically routes each connecting client to the correct group using **mod list matching**:
+
+1. **Protocol version filter** -- A Forge 1.20.1 client (protocol 763) won't match a NeoForge 1.21.4 group (protocol 769)
+2. **Connection type filter** -- Legacy Forge clients only match Forge groups; modern Forge/NeoForge clients match both
+3. **Mod overlap scoring** -- The client's mod list (from the Forge handshake) is compared against each group's server mods. The group with the highest overlap ratio wins (minimum 50% match required)
+4. **Fallback** -- If no group scores above 50%, the player falls back to the lobby
+
+This happens automatically. Nimbus scans the `mods/` directory of each modded group's template on startup and caches the mod IDs. The mod list is also exposed via `GET /api/groups` in the `modIds` field.
+
+<Callout type="info">
+Fabric clients appear as **vanilla** to Velocity (no FML marker in the handshake) and are routed to the lobby like any other vanilla client. This is a Fabric design choice -- Fabric doesn't modify the Minecraft protocol handshake.
 </Callout>
 
 ## Updating a Modpack

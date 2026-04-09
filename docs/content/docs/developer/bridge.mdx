@@ -113,12 +113,34 @@ The hub command finds the lobby server with the **fewest players** (least-player
 The bridge manages player connections automatically:
 
 ### Initial connection
-When a player joins the proxy, the bridge checks if the client is a modded client (Forge/NeoForge/Fabric) via `player.getModInfo()`. **Modded clients** are routed to the least-loaded server from a modded group (software = FORGE, NEOFORGE, or FABRIC). **Vanilla clients** are routed to the lobby with the fewest players. If no suitable server is available, the player is disconnected with an error message.
+When a player joins the proxy, the bridge detects the connection type via Velocity's internal `ConnectionType` (set during the FML handshake). Connection types are:
 
-The modded groups cache is fetched from `GET /api/groups` on startup and refreshed on controller reconnect.
+| Type | Description |
+|---|---|
+| `VANILLA` | Standard Minecraft client (including Fabric+Sodium — Fabric appears as vanilla) |
+| `LEGACY_FORGE` | Forge client using the legacy FML handshake (1.12.2 and older) |
+| `MODERN_FORGE` | Forge/NeoForge client using the modern FML handshake (1.13+) |
+
+**Modded clients** (`LEGACY_FORGE` or `MODERN_FORGE`) are routed using **mod list matching**:
+
+1. Filter modded groups by **protocol version** (client protocol must match the group's MC version)
+2. Filter by **connection type compatibility** (`LEGACY_FORGE` only matches Forge; `MODERN_FORGE` matches Forge or NeoForge)
+3. Read the client's mod list via `player.getModInfo()` and compute a **match score** against each group's server mod list: `|clientMods ∩ serverMods| / |serverMods|`
+4. The group with the highest score (minimum 0.5) wins — the client is sent to the least-loaded instance of that group
+5. If no group scores above 0.5 but exactly one group matches protocol + type, route there (fallback for older Forge versions that don't report mod lists)
+6. If no match is found, fall back to lobby
+
+**Vanilla clients** are routed to the lobby with the fewest players. If no suitable server is available, the player is disconnected with an error message.
+
+The modded groups cache (including mod IDs from `ModScanner`) is fetched from `GET /api/groups` on startup and refreshed on controller reconnect.
 
 ### Kicked from server
-When a player is kicked from a non-lobby server:
+When a **modded client** is kicked from a modded server:
+1. The bridge tries to find an alternate modded group at the same protocol version
+2. If an alternate exists, the client is redirected there
+3. If no alternate is found, the client is disconnected (not sent to a vanilla lobby where they'd get kicked again)
+
+When a **vanilla client** is kicked from a non-lobby server:
 1. The bridge attempts to redirect them to the lobby with the fewest players
 2. If a lobby is available, the player is sent there with a message
 3. If no lobby is available, the player is disconnected

@@ -9,6 +9,24 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.5.3 (April 9, 2026)
+
+Smart modded client routing via mod list matching.
+
+### Added
+- **Mod list matching for modded client routing**: The proxy now reads the client's mod list (from the Forge handshake) and routes to the group whose server mods best overlap, instead of blindly sending all modded clients to the least-loaded modded server. Prevents a Forge 1.20.1 client from landing on a NeoForge 1.21.1 ATM10 server
+- **ModScanner**: New utility (`nimbus-core/.../template/ModScanner.kt`) scans a template's `mods/` directory on group load, extracting mod IDs from NeoForge/Forge `mods.toml`, Fabric `fabric.mod.json`, and legacy `mcmod.info`. Mod IDs are cached on `ServerGroup` and exposed via `GET /api/groups` as `modIds`
+- **Protocol version filtering**: Modded client routing now filters groups by Minecraft protocol version — a 1.20.1 Forge client (protocol 763) won't match a 1.21.4 NeoForge group (protocol 769)
+- **Connection type compatibility**: `LEGACY_FORGE` clients only match Forge groups; `MODERN_FORGE` clients match both Forge and NeoForge groups
+- **Alternate group fallback on kick**: When a modded client is kicked from a modded server, the bridge now tries to find a different modded group at the same protocol version before disconnecting
+
+### Changed
+- **`GET /api/groups` response**: Now includes `modIds` field (sorted list of mod IDs scanned from the group's template)
+- **GroupManager**: Now accepts `templatesDir` and scans mod IDs for FORGE/NEOFORGE/FABRIC groups during `loadGroups()` and `reloadGroups()`
+- **Bridge ConnectionListener**: `moddedServerFinder` now accepts connection type, protocol version, and client mod IDs instead of returning a simple `Optional<RegisteredServer>`
+
+---
+
 ## v0.5.2 (April 9, 2026)
 
 Auto-configure Velocity for large modpacks.

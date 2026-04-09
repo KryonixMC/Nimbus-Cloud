@@ -21,9 +21,13 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 @Plugin(
     id = "nimbus-bridge",
@@ -63,7 +67,7 @@ public class NimbusBridgePlugin {
         registerBridge(commandManager);
 
         // Register event listeners (maintenance handler may be null if no bridge config)
-        server.getEventManager().register(this, new ConnectionListener(server, logger, () -> maintenanceHandler, () -> findModdedServer(server)));
+        server.getEventManager().register(this, new ConnectionListener(server, logger, () -> maintenanceHandler, this::findModdedServerForClient));
 
         // Unsubscribe players from event feed on disconnect
         server.getEventManager().register(this, new Object() {
@@ -206,9 +210,23 @@ public class NimbusBridgePlugin {
     private CloudCommand cloudCommand;
     private volatile boolean controllerReachable = false;
 
-    /** Group names whose software is FORGE, NEOFORGE, or FABRIC — cached from /api/groups. */
-    private final Set<String> moddedGroups = ConcurrentHashMap.newKeySet();
+    /** Enriched modded group info cached from /api/groups. */
+    private record ModdedGroupInfo(String name, String software, String version, int protocolVersion, Set<String> modIds) {}
+    private final List<ModdedGroupInfo> moddedGroups = new CopyOnWriteArrayList<>();
     private static final Set<String> MODDED_SOFTWARE = Set.of("FORGE", "NEOFORGE", "FABRIC");
+
+    /** Minecraft version → protocol version mapping. */
+    private static final Map<String, Integer> MC_PROTOCOL = Map.ofEntries(
+        Map.entry("1.7.10", 5), Map.entry("1.12.2", 340),
+        Map.entry("1.16.5", 754), Map.entry("1.18.2", 758),
+        Map.entry("1.19.2", 760), Map.entry("1.19.4", 762),
+        Map.entry("1.20", 763), Map.entry("1.20.1", 763),
+        Map.entry("1.20.2", 764), Map.entry("1.20.3", 765), Map.entry("1.20.4", 765),
+        Map.entry("1.20.5", 766), Map.entry("1.20.6", 766),
+        Map.entry("1.21", 767), Map.entry("1.21.1", 767),
+        Map.entry("1.21.2", 768), Map.entry("1.21.3", 768),
+        Map.entry("1.21.4", 769), Map.entry("1.21.5", 770)
+    );
 
     private void ensureSharedClients(BridgeConfig config) {
         if (sharedSdkClient == null) {
@@ -318,17 +336,31 @@ public class NimbusBridgePlugin {
                 var wrapper = new com.google.gson.Gson().fromJson(result.body(), com.google.gson.JsonObject.class);
                 var array = wrapper.getAsJsonArray("groups");
                 if (array == null) return;
-                moddedGroups.clear();
+                var newGroups = new java.util.ArrayList<ModdedGroupInfo>();
                 for (var element : array) {
                     var obj = element.getAsJsonObject();
                     String name = obj.get("name").getAsString();
                     String software = obj.has("software") ? obj.get("software").getAsString() : "";
-                    if (MODDED_SOFTWARE.contains(software.toUpperCase())) {
-                        moddedGroups.add(name);
+                    if (!MODDED_SOFTWARE.contains(software.toUpperCase())) continue;
+
+                    String version = obj.has("version") ? obj.get("version").getAsString() : "";
+                    int protocol = MC_PROTOCOL.getOrDefault(version, -1);
+
+                    Set<String> modIds = Set.of();
+                    if (obj.has("modIds") && obj.get("modIds").isJsonArray()) {
+                        modIds = obj.getAsJsonArray("modIds").asList().stream()
+                            .map(e -> e.getAsString().toLowerCase())
+                            .collect(Collectors.toSet());
                     }
+
+                    newGroups.add(new ModdedGroupInfo(name, software.toUpperCase(), version, protocol, modIds));
                 }
+                moddedGroups.clear();
+                moddedGroups.addAll(newGroups);
                 if (!moddedGroups.isEmpty()) {
-                    logger.info("Modded groups: {}", moddedGroups);
+                    logger.info("Modded groups: {}", moddedGroups.stream()
+                        .map(g -> g.name() + " (" + g.software() + " " + g.version() + ", " + g.modIds().size() + " mods)")
+                        .collect(Collectors.joining(", ")));
                 }
             } catch (Exception e) {
                 logger.debug("Failed to parse groups response: {}", e.getMessage());
@@ -354,17 +386,64 @@ public class NimbusBridgePlugin {
     }
 
     /**
-     * Finds the least-loaded server from a modded group for Forge/NeoForge clients.
-     * Matches registered Velocity servers whose name starts with any modded group name.
+     * Finds the best modded server for a client based on connection type, protocol version, and mod list overlap.
      */
-    private Optional<RegisteredServer> findModdedServer(ProxyServer server) {
+    private Optional<RegisteredServer> findModdedServerForClient(String connType, int clientProtocol, Set<String> clientModIds) {
         if (moddedGroups.isEmpty()) return Optional.empty();
+
+        // Filter by protocol version and connection type compatibility
+        var candidates = moddedGroups.stream()
+            .filter(g -> g.protocolVersion() == clientProtocol || g.protocolVersion() == -1)
+            .filter(g -> isConnectionTypeCompatible(connType, g.software()))
+            .toList();
+
+        if (candidates.isEmpty()) return Optional.empty();
+
+        // Score each group by mod list overlap
+        String bestGroup = null;
+        double bestScore = -1;
+
+        for (var group : candidates) {
+            if (group.modIds().isEmpty()) continue;
+            long overlap = clientModIds.stream().filter(group.modIds()::contains).count();
+            double score = overlap / (double) group.modIds().size();
+            if (score > bestScore) {
+                bestScore = score;
+                bestGroup = group.name();
+            }
+        }
+
+        // Best score >= 0.5 → route to that group
+        if (bestGroup != null && bestScore >= 0.5) {
+            return findLeastLoadedInGroup(bestGroup);
+        }
+
+        // Fallback: if exactly one group matches protocol+type, route there
+        // (handles case where getModInfo() returns empty on older Forge versions)
+        if (candidates.size() == 1) {
+            return findLeastLoadedInGroup(candidates.get(0).name());
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Checks if a client connection type is compatible with a server's modloader software.
+     */
+    private static boolean isConnectionTypeCompatible(String connType, String software) {
+        return switch (connType) {
+            case "LEGACY_FORGE" -> "FORGE".equals(software);
+            case "MODERN_FORGE" -> "FORGE".equals(software) || "NEOFORGE".equals(software);
+            default -> false;
+        };
+    }
+
+    /**
+     * Finds the least-loaded registered server belonging to a group.
+     */
+    private Optional<RegisteredServer> findLeastLoadedInGroup(String groupName) {
         return server.getAllServers().stream()
-            .filter(s -> {
-                String name = s.getServerInfo().getName();
-                String group = extractGroupName(name);
-                return moddedGroups.contains(group);
-            })
+            .filter(s -> groupName.equals(extractGroupName(s.getServerInfo().getName())))
             .min(java.util.Comparator.comparingInt(s -> s.getPlayersConnected().size()));
     }
 
@@ -387,19 +466,24 @@ public class NimbusBridgePlugin {
      * Handles initial connection (force lobby) and kicked-from-server (fallback to lobby).
      * Also enforces global and group maintenance mode.
      */
+    @FunctionalInterface
+    private interface ModdedServerFinder {
+        Optional<RegisteredServer> find(String connType, int protocol, Set<String> clientModIds);
+    }
+
     private static class ConnectionListener {
 
         private final ProxyServer server;
         private final Logger logger;
         private final java.util.function.Supplier<MaintenanceHandler> maintenanceSupplier;
-        private final java.util.function.Supplier<Optional<RegisteredServer>> moddedServerFinder;
+        private final ModdedServerFinder moddedServerFinder;
         private final net.kyori.adventure.text.minimessage.MiniMessage miniMessage = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage();
         private final boolean loadBalancerEnabled;
         private final int servicePort;
 
         ConnectionListener(ProxyServer server, Logger logger,
                            java.util.function.Supplier<MaintenanceHandler> maintenanceSupplier,
-                           java.util.function.Supplier<Optional<RegisteredServer>> moddedServerFinder) {
+                           ModdedServerFinder moddedServerFinder) {
             this.server = server;
             this.logger = logger;
             this.maintenanceSupplier = maintenanceSupplier;
@@ -449,14 +533,20 @@ public class NimbusBridgePlugin {
 
             // Modded client detection: NeoForge/Forge clients cannot connect to Paper servers.
             // Detect via Velocity internal ConnectionType (set during handshake from FML marker).
-            if (isModdedClient(player)) {
-                Optional<RegisteredServer> modded = moddedServerFinder.get();
+            String connType = getConnectionType(player);
+            if (!"VANILLA".equals(connType)) {
+                int protocol = player.getProtocolVersion().getProtocol();
+                Set<String> clientMods = getClientModIds(player);
+                Optional<RegisteredServer> modded = moddedServerFinder.find(connType, protocol, clientMods);
                 if (modded.isPresent()) {
                     event.setInitialServer(modded.get());
-                    logger.info("Routed modded client {} to {}", player.getUsername(), modded.get().getServerInfo().getName());
+                    logger.info("Routed {} client {} (protocol {}, {} mods) to {}",
+                        connType, player.getUsername(), protocol, clientMods.size(),
+                        modded.get().getServerInfo().getName());
                     return;
                 }
-                logger.warn("Modded client {} has no modded server available, falling back to lobby", player.getUsername());
+                logger.info("No matching modded group for {} client {} (protocol {}, {} mods), falling back to lobby",
+                    connType, player.getUsername(), protocol, clientMods.size());
             }
 
             Optional<RegisteredServer> lobby = findLobby(server);
@@ -472,11 +562,10 @@ public class NimbusBridgePlugin {
         }
 
         /**
-         * Detects modded clients by accessing Velocity's internal ConnectionType.
-         * Forge/NeoForge clients send an FML marker in the handshake which Velocity stores as
-         * LEGACY_FORGE or MODERN_FORGE on the MinecraftConnection.
+         * Detects the connection type of a player by accessing Velocity's internal ConnectionType.
+         * Returns "VANILLA", "LEGACY_FORGE", or "MODERN_FORGE".
          */
-        private boolean isModdedClient(Player player) {
+        private String getConnectionType(Player player) {
             try {
                 // ConnectedPlayer.getConnection() → MinecraftConnection
                 var getConnection = player.getClass().getMethod("getConnection");
@@ -486,12 +575,29 @@ public class NimbusBridgePlugin {
                 var type = getType.invoke(connection);
                 String typeName = type.getClass().getSimpleName();
                 // ConnectionTypes: VANILLA, LEGACY_FORGE, MODERN_FORGE
-                return typeName.contains("Forge") || typeName.contains("FORGE")
-                        || !type.toString().equalsIgnoreCase("VANILLA");
+                if (typeName.contains("LegacyForge") || typeName.contains("LEGACY_FORGE")) {
+                    return "LEGACY_FORGE";
+                }
+                if (typeName.contains("Forge") || typeName.contains("FORGE")
+                        || !type.toString().equalsIgnoreCase("VANILLA")) {
+                    return "MODERN_FORGE";
+                }
+                return "VANILLA";
             } catch (Exception e) {
-                logger.debug("Could not detect modded client for {}: {}", player.getUsername(), e.getMessage());
-                return false;
+                logger.debug("Could not detect connection type for {}: {}", player.getUsername(), e.getMessage());
+                return "VANILLA";
             }
+        }
+
+        /**
+         * Extracts the set of mod IDs from a player's mod info (provided by Forge handshake).
+         */
+        private Set<String> getClientModIds(Player player) {
+            return player.getModInfo()
+                .map(info -> info.getMods().stream()
+                    .map(mod -> mod.getId().toLowerCase())
+                    .collect(Collectors.toSet()))
+                .orElse(Set.of());
         }
 
         @Subscribe
@@ -499,13 +605,43 @@ public class NimbusBridgePlugin {
             Player player = event.getPlayer();
             String kickedFrom = event.getServer().getServerInfo().getName();
 
-            // Don't redirect modded clients to a vanilla lobby — they'll just get kicked again
-            if (isModdedClient(player) && !kickedFrom.toLowerCase().startsWith("lobby")) {
+            // Don't redirect modded clients to a vanilla lobby — they'll just get kicked again.
+            // Instead, try to find an alternate modded group at the same protocol version.
+            String connType = getConnectionType(player);
+            if (!"VANILLA".equals(connType) && !kickedFrom.toLowerCase().startsWith("lobby")) {
+                int protocol = player.getProtocolVersion().getProtocol();
+                Set<String> clientMods = getClientModIds(player);
+                String kickedGroup = deriveGroupName(kickedFrom);
+
+                // Try routing to a different modded group (exclude the one we were kicked from)
+                Optional<RegisteredServer> alternate = server.getAllServers().stream()
+                    .filter(s -> {
+                        String group = deriveGroupName(s.getServerInfo().getName());
+                        return !group.equals(kickedGroup) && !group.toLowerCase().startsWith("lobby");
+                    })
+                    .filter(s -> !s.getServerInfo().getName().equals(kickedFrom))
+                    .min(java.util.Comparator.comparingInt(s -> s.getPlayersConnected().size()));
+
+                // Only redirect if the alternate is actually from a modded group
+                if (alternate.isPresent()) {
+                    String altGroup = deriveGroupName(alternate.get().getServerInfo().getName());
+                    // Re-use the modded server finder to verify this is a valid modded target
+                    Optional<RegisteredServer> validAlt = moddedServerFinder.find(connType, protocol, clientMods);
+                    if (validAlt.isPresent() && !deriveGroupName(validAlt.get().getServerInfo().getName()).equals(kickedGroup)) {
+                        event.setResult(KickedFromServerEvent.RedirectPlayer.create(
+                            validAlt.get(),
+                            Component.text("Redirected to alternate modded server.", NamedTextColor.YELLOW)
+                        ));
+                        logger.info("Redirected modded client {} to {} after kick from {}", player.getUsername(), validAlt.get().getServerInfo().getName(), kickedFrom);
+                        return;
+                    }
+                }
+
                 Component reason = event.getServerKickReason().orElse(
                     Component.text("Connection failed.", NamedTextColor.RED)
                 );
                 event.setResult(KickedFromServerEvent.DisconnectPlayer.create(reason));
-                logger.info("Modded client {} disconnected after kick from {} (no lobby redirect)", player.getUsername(), kickedFrom);
+                logger.info("Modded client {} disconnected after kick from {} (no alternate modded server)", player.getUsername(), kickedFrom);
                 return;
             }
 

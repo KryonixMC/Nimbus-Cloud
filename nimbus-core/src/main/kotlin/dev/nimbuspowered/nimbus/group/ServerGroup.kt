@@ -14,4 +14,7 @@ class ServerGroup(val config: GroupConfig) {
     val minInstances: Int get() = config.group.scaling.minInstances
 
     val maxInstances: Int get() = config.group.scaling.maxInstances
+
+    /** Mod IDs scanned from this group's template mods/ directory. Empty for non-modded groups. */
+    var modIds: Set<String> = emptySet()
 }

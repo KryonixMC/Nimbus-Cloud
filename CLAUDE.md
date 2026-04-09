@@ -104,7 +104,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 ├── service/               # Service lifecycle, ProcessHandle, PortAllocator, ServerListPing, WarmPoolManager (warm pool)
 ├── setup/                 # First-run interactive SetupWizard
 ├── stress/                # StressTestManager (simulated player load testing)
-├── template/              # TemplateManager, ConfigPatcher, SoftwareResolver (auto-download), ServiceDeployer (deploy-back)
+├── template/              # TemplateManager, ConfigPatcher, SoftwareResolver (auto-download), ServiceDeployer (deploy-back), ModScanner (mod ID extraction)
 ├── cluster/               # RemoteFileProxy (remote file proxy for agent nodes)
 ├── update/                # UpdateChecker (GitHub Releases auto-updater)
 └── velocity/              # VelocityConfigGen (auto-manage proxy server list, modded client config)
@@ -142,7 +142,7 @@ dashboard/src/              # Web Dashboard (Next.js, ALPHA)
 - Services named `<GroupName>-<N>` (e.g., `Lobby-1`, `BedWars-3`)
 - Proxy ports: 25565+, backend ports: 30000+
 - Velocity forwarding: `modern` if all backends >=1.13, else `legacy` (BungeeCord)
-- Modded client routing: Bridge detects Forge/NeoForge/Fabric clients via `player.getModInfo()` and routes to modded backend instead of Paper lobby
+- Modded client routing: Bridge detects Forge/NeoForge clients via Velocity's internal `ConnectionType` (FML handshake marker), filters groups by protocol version + connection type, then scores by mod list overlap (`|clientMods ∩ serverMods| / |serverMods|`, threshold 0.5). ModScanner extracts mod IDs from template `mods/` JARs on group load
 - VelocityConfigGen auto-sets `announce-forge = true` and increases timeouts when modded backends are present
 - Via plugins (ViaVersion/ViaBackwards) only on backend servers, never on proxy
 - Via plugin dependencies enforced: ViaBackwards auto-includes ViaVersion, ViaRewind requires ViaBackwards

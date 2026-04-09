@@ -263,6 +263,7 @@ private fun ServerGroup.toResponse(registry: ServiceRegistry): GroupResponse {
         lifecycle = GroupLifecycleResponse(def.lifecycle.stopOnEmpty, def.lifecycle.restartOnCrash, def.lifecycle.maxRestarts),
         jvmArgs = def.jvm.args,
         jvmOptimize = def.jvm.optimize,
-        activeInstances = registry.countByGroup(name)
+        activeInstances = registry.countByGroup(name),
+        modIds = modIds.sorted()
     )
 }

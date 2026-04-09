@@ -206,7 +206,7 @@ fun nimbusMain() = runBlocking {
         bedrockBasePort = config.bedrock.basePort
     )
     val templateManager = TemplateManager()
-    val groupManager = GroupManager()
+    val groupManager = GroupManager(templatesDir)
 
     // Start metrics collector
     val metricsCollector = MetricsCollector(databaseManager, eventBus, scope)
