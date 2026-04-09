@@ -177,6 +177,7 @@ export default function GroupsPage() {
         body: JSON.stringify({
           name: newName.trim(),
           type: newType,
+          template: newName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, ""),
           software: newSoftware,
           version: newVersion,
           modloaderVersion: newModloaderVersion,
