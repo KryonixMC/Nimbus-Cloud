@@ -186,18 +186,13 @@ download_nimbus() {
         exit 1
     }
 
-    # Find the controller JAR asset
+    # Find the controller JAR asset (nimbus-core-*.jar)
     local jar_url
-    jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*controller[^"]*\.jar' | head -1)
+    jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*nimbus-core-[^"]*\.jar' | head -1)
 
     if [[ -z "$jar_url" ]]; then
-        # Fallback: *-all.jar
-        jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*-all\.jar' | head -1)
-    fi
-
-    if [[ -z "$jar_url" ]]; then
-        # Fallback: any nimbus*.jar
-        jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*nimbus[^"]*\.jar' | head -1)
+        # Fallback: *controller*.jar (future naming)
+        jar_url=$(echo "$release_json" | grep -oP '"browser_download_url"\s*:\s*"\K[^"]*controller[^"]*\.jar' | head -1)
     fi
 
     if [[ -z "$jar_url" ]]; then
@@ -264,7 +259,7 @@ done
 # Find the latest nimbus JAR by semver comparison
 find_latest_jar() {
     local best="" best_major=0 best_minor=0 best_patch=0
-    for jar in nimbus-core-*.jar nimbus-core-*-all.jar; do
+    for jar in nimbus-core-*.jar; do
         [[ -f "$jar" ]] || continue
         local ver
         ver=$(echo "$jar" | grep -oP '\d+\.\d+\.\d+')

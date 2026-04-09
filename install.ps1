@@ -126,13 +126,11 @@ function Install-Nimbus {
     $release = $releases[$idx]
     Write-Info "Selected: $($release.tag_name)"
 
-    # Find controller JAR asset
-    $jarAsset = $release.assets | Where-Object { $_.name -like "*controller*.jar" } | Select-Object -First 1
+    # Find controller JAR asset (nimbus-core-*.jar)
+    $jarAsset = $release.assets | Where-Object { $_.name -like "nimbus-core-*.jar" } | Select-Object -First 1
     if (-not $jarAsset) {
-        $jarAsset = $release.assets | Where-Object { $_.name -like "*-all.jar" } | Select-Object -First 1
-    }
-    if (-not $jarAsset) {
-        $jarAsset = $release.assets | Where-Object { $_.name -like "nimbus*.jar" } | Select-Object -First 1
+        # Fallback: *controller*.jar (future naming)
+        $jarAsset = $release.assets | Where-Object { $_.name -like "*controller*.jar" } | Select-Object -First 1
     }
     if (-not $jarAsset) {
         Write-Err "No JAR asset found in release $($release.tag_name)"
@@ -178,7 +176,7 @@ set "NIMBUS_JAR="
 set "BEST_MAJOR=0"
 set "BEST_MINOR=0"
 set "BEST_PATCH=0"
-for %%F in (nimbus-core-*.jar nimbus-core-*-all.jar) do call :check_jar "%%F"
+for %%F in (nimbus-core-*.jar) do call :check_jar "%%F"
 if not defined NIMBUS_JAR (
     if exist nimbus.jar (
         set "NIMBUS_JAR=nimbus.jar"
@@ -228,7 +226,7 @@ Set-Location $PSScriptRoot
 function Find-LatestJar {
     $best = $null
     $bestVer = [Version]"0.0.0"
-    foreach ($jar in (Get-ChildItem -Filter "nimbus-core-*.jar") + (Get-ChildItem -Filter "nimbus-core-*-all.jar")) {
+    foreach ($jar in Get-ChildItem -Filter "nimbus-core-*.jar") {
         if ($jar.Name -match '(\d+\.\d+\.\d+)') {
             $ver = [Version]$Matches[1]
             if ($ver -gt $bestVer) {
