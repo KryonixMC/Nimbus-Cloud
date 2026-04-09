@@ -22,6 +22,8 @@ import org.slf4j.Logger;
 
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Plugin(
     id = "nimbus-bridge",
@@ -61,7 +63,7 @@ public class NimbusBridgePlugin {
         registerBridge(commandManager);
 
         // Register event listeners (maintenance handler may be null if no bridge config)
-        server.getEventManager().register(this, new ConnectionListener(server, logger, () -> maintenanceHandler));
+        server.getEventManager().register(this, new ConnectionListener(server, logger, () -> maintenanceHandler, () -> findModdedServer(server)));
 
         // Unsubscribe players from event feed on disconnect
         server.getEventManager().register(this, new Object() {
@@ -151,6 +153,7 @@ public class NimbusBridgePlugin {
                 if (maintenanceHandler != null && sharedApiClient != null) {
                     maintenanceHandler.refreshFromApi(sharedApiClient);
                 }
+                refreshModdedGroups();
             });
 
             try {
@@ -174,6 +177,7 @@ public class NimbusBridgePlugin {
                             logger.info("Controller is now reachable");
                             // Refresh remote commands on (re)connect
                             if (cloudCommand != null) cloudCommand.refreshRemoteCommands();
+                            refreshModdedGroups();
                         }
                         controllerReachable = true;
                     } else {
@@ -201,6 +205,10 @@ public class NimbusBridgePlugin {
     private MaintenanceHandler maintenanceHandler;
     private CloudCommand cloudCommand;
     private volatile boolean controllerReachable = false;
+
+    /** Group names whose software is FORGE, NEOFORGE, or FABRIC — cached from /api/groups. */
+    private final Set<String> moddedGroups = ConcurrentHashMap.newKeySet();
+    private static final Set<String> MODDED_SOFTWARE = Set.of("FORGE", "NEOFORGE", "FABRIC");
 
     private void ensureSharedClients(BridgeConfig config) {
         if (sharedSdkClient == null) {
@@ -300,6 +308,33 @@ public class NimbusBridgePlugin {
     }
 
     /**
+     * Fetches group list from the controller API and updates the modded groups cache.
+     */
+    private void refreshModdedGroups() {
+        if (sharedApiClient == null) return;
+        sharedApiClient.get("/api/groups").thenAccept(result -> {
+            if (!result.isSuccess()) return;
+            try {
+                var array = new com.google.gson.Gson().fromJson(result.body(), com.google.gson.JsonArray.class);
+                moddedGroups.clear();
+                for (var element : array) {
+                    var obj = element.getAsJsonObject();
+                    String name = obj.get("name").getAsString();
+                    String software = obj.has("software") ? obj.get("software").getAsString() : "";
+                    if (MODDED_SOFTWARE.contains(software.toUpperCase())) {
+                        moddedGroups.add(name);
+                    }
+                }
+                if (!moddedGroups.isEmpty()) {
+                    logger.info("Modded groups: {}", moddedGroups);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to parse groups response: {}", e.getMessage());
+            }
+        });
+    }
+
+    /**
      * Finds the lobby server with the fewest players (least-players load balancing).
      */
     private static Optional<RegisteredServer> findLobby(ProxyServer server) {
@@ -317,6 +352,36 @@ public class NimbusBridgePlugin {
     }
 
     /**
+     * Finds the least-loaded server from a modded group for Forge/NeoForge clients.
+     * Matches registered Velocity servers whose name starts with any modded group name.
+     */
+    private Optional<RegisteredServer> findModdedServer(ProxyServer server) {
+        if (moddedGroups.isEmpty()) return Optional.empty();
+        return server.getAllServers().stream()
+            .filter(s -> {
+                String name = s.getServerInfo().getName();
+                String group = extractGroupName(name);
+                return moddedGroups.contains(group);
+            })
+            .min(java.util.Comparator.comparingInt(s -> s.getPlayersConnected().size()));
+    }
+
+    /** Extracts group name from service name (e.g. "Modded-1" → "Modded"). */
+    private static String extractGroupName(String serverName) {
+        int lastDash = serverName.lastIndexOf('-');
+        if (lastDash > 0) {
+            String suffix = serverName.substring(lastDash + 1);
+            try {
+                Integer.parseInt(suffix);
+                return serverName.substring(0, lastDash);
+            } catch (NumberFormatException e) {
+                return serverName;
+            }
+        }
+        return serverName;
+    }
+
+    /**
      * Handles initial connection (force lobby) and kicked-from-server (fallback to lobby).
      * Also enforces global and group maintenance mode.
      */
@@ -325,14 +390,18 @@ public class NimbusBridgePlugin {
         private final ProxyServer server;
         private final Logger logger;
         private final java.util.function.Supplier<MaintenanceHandler> maintenanceSupplier;
+        private final java.util.function.Supplier<Optional<RegisteredServer>> moddedServerFinder;
         private final net.kyori.adventure.text.minimessage.MiniMessage miniMessage = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage();
         private final boolean loadBalancerEnabled;
         private final int servicePort;
 
-        ConnectionListener(ProxyServer server, Logger logger, java.util.function.Supplier<MaintenanceHandler> maintenanceSupplier) {
+        ConnectionListener(ProxyServer server, Logger logger,
+                           java.util.function.Supplier<MaintenanceHandler> maintenanceSupplier,
+                           java.util.function.Supplier<Optional<RegisteredServer>> moddedServerFinder) {
             this.server = server;
             this.logger = logger;
             this.maintenanceSupplier = maintenanceSupplier;
+            this.moddedServerFinder = moddedServerFinder;
             this.loadBalancerEnabled = Boolean.getBoolean("nimbus.loadbalancer.enabled");
             this.servicePort = Integer.getInteger("nimbus.service.port", -1);
         }
@@ -374,6 +443,20 @@ public class NimbusBridgePlugin {
                     logger.info("Blocked {} from joining (global maintenance)", player.getUsername());
                     return;
                 }
+            }
+
+            // Modded client detection: if the client has mods, try to route to a modded server
+            // NeoForge/Forge clients get kicked from Paper/vanilla servers due to mod channel mismatch
+            boolean isModdedClient = player.getModInfo().isPresent();
+            if (isModdedClient) {
+                Optional<RegisteredServer> modded = moddedServerFinder.get();
+                if (modded.isPresent()) {
+                    event.setInitialServer(modded.get());
+                    logger.info("Routed modded client {} to {}", player.getUsername(), modded.get().getServerInfo().getName());
+                    return;
+                }
+                // No modded server available — fall through to lobby (may work for Forge, will fail for NeoForge)
+                logger.warn("Modded client {} has no modded server available, falling back to lobby", player.getUsername());
             }
 
             Optional<RegisteredServer> lobby = findLobby(server);

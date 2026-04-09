@@ -113,7 +113,9 @@ The hub command finds the lobby server with the **fewest players** (least-player
 The bridge manages player connections automatically:
 
 ### Initial connection
-When a player joins the proxy, they are routed to the lobby with the **fewest players**. If no lobby is available, the player is disconnected with an error message.
+When a player joins the proxy, the bridge checks if the client is a modded client (Forge/NeoForge/Fabric) via `player.getModInfo()`. **Modded clients** are routed to the least-loaded server from a modded group (software = FORGE, NEOFORGE, or FABRIC). **Vanilla clients** are routed to the lobby with the fewest players. If no suitable server is available, the player is disconnected with an error message.
+
+The modded groups cache is fetched from `GET /api/groups` on startup and refreshed on controller reconnect.
 
 ### Kicked from server
 When a player is kicked from a non-lobby server:

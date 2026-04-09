@@ -334,6 +334,7 @@ The base permission `nimbus.cloud` is required to use any `/cloud` subcommand. T
 ### Connection handling
 
 - Players are automatically sent to a lobby server on connect
+- **Modded client routing**: NeoForge/Forge/Fabric clients are automatically detected via `player.getModInfo()` and routed to a server from a modded group instead of the Paper lobby. This prevents the "incompatible mods" kick that happens when NeoForge clients connect to vanilla/Paper servers
 - If kicked from a non-lobby server, players are redirected back to the lobby
 - If no lobby is available, the player is disconnected with an error message
 - Lobby servers are identified by group names starting with "Lobby" (case-insensitive)
@@ -346,6 +347,47 @@ The bridge integrates with Nimbus's [permission system](/docs/config/permissions
 - Real-time permission updates via WebSocket events
 - Wildcard permission matching (e.g., `nimbus.cloud.*`)
 - Permission cache that invalidates on disconnect
+
+## Modded Client Support (Forge / NeoForge / Fabric)
+
+Nimbus automatically configures Velocity and routes players so that modded clients can connect to your network without any manual setup.
+
+### What happens automatically
+
+When any backend group uses `FORGE`, `NEOFORGE`, or `FABRIC` software:
+
+1. **Velocity config patching** — `announce-forge = true` is set in `velocity.toml` so Velocity advertises Forge compatibility in the server list ping. Connection and read timeouts are increased to handle large mod lists
+2. **Modded client routing** — The bridge plugin detects modded clients on login (via Velocity's `ModInfo` API) and routes them to the least-loaded server from a modded group, instead of the Paper lobby
+3. **Forwarding mods** — [proxy-compatible-forge](https://modrinth.com/mod/proxy-compatible-forge) or [FabricProxy-Lite](https://modrinth.com/mod/fabricproxy-lite) are auto-installed on modded backends (see [Automatic Proxy Forwarding Mods](#automatic-proxy-forwarding-mods))
+
+<Callout type="warn">
+NeoForge clients **cannot** join vanilla/Paper servers — they get kicked with "incompatible mods". This is a NeoForge protocol limitation, not a Nimbus bug. You need at least one NeoForge backend group for NeoForge players to connect to.
+</Callout>
+
+### Example setup
+
+A typical mixed network with both vanilla and modded players:
+
+```toml title="config/groups/lobby.toml"
+[group]
+name = "Lobby"
+software = "PAPER"       # Vanilla players land here
+version = "1.21.4"
+```
+
+```toml title="config/groups/modded-lobby.toml"
+[group]
+name = "ModdedLobby"
+software = "NEOFORGE"    # NeoForge players land here automatically
+version = "1.21.1"
+modloader_version = "21.1.172"
+```
+
+Vanilla clients → `Lobby-1`, NeoForge clients → `ModdedLobby-1`. Fully automatic, no configuration needed beyond the group definitions.
+
+<Callout type="info">
+The modded groups cache is refreshed automatically when the controller becomes reachable and on WebSocket reconnect. Changes to group software types take effect without a proxy restart.
+</Callout>
 
 ## Bedrock Edition Support
 

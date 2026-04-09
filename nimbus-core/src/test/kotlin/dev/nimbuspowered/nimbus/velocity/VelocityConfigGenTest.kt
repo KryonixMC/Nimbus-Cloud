@@ -246,6 +246,101 @@ class VelocityConfigGenTest {
     }
 
     @Test
+    fun `setModdedSettings updates existing announce-forge at root level`() {
+        val content = """
+            announce-forge = false
+
+            [advanced]
+            compression-threshold = 256
+            connection-timeout = 5000
+            read-timeout = 30000
+        """.trimIndent()
+
+        val result = configGen.setModdedSettings(content, true)
+        assertTrue(result.contains("announce-forge = true"))
+        assertFalse(result.contains("announce-forge = false"))
+        assertTrue(result.contains("connection-timeout = 10000"))
+        assertTrue(result.contains("read-timeout = 60000"))
+    }
+
+    @Test
+    fun `setModdedSettings inserts announce-forge before first section when missing`() {
+        val content = """
+            [advanced]
+            compression-threshold = 256
+        """.trimIndent()
+
+        val result = configGen.setModdedSettings(content, true)
+        assertTrue(result.contains("announce-forge = true"))
+        // announce-forge should be before [advanced]
+        assertTrue(result.indexOf("announce-forge") < result.indexOf("[advanced]"))
+    }
+
+    @Test
+    fun `setModdedSettings disabled does not change timeouts`() {
+        val content = """
+            announce-forge = true
+
+            [advanced]
+            connection-timeout = 5000
+            read-timeout = 30000
+        """.trimIndent()
+
+        val result = configGen.setModdedSettings(content, false)
+        assertTrue(result.contains("announce-forge = false"))
+        // Timeouts should remain unchanged
+        assertTrue(result.contains("connection-timeout = 5000"))
+        assertTrue(result.contains("read-timeout = 30000"))
+    }
+
+    @Test
+    fun `setModdedSettings creates advanced section for timeouts when missing`() {
+        val content = """
+            announce-forge = false
+        """.trimIndent()
+
+        val result = configGen.setModdedSettings(content, true)
+        assertTrue(result.contains("announce-forge = true"))
+        assertTrue(result.contains("[advanced]"))
+        assertTrue(result.contains("connection-timeout = 10000"))
+        assertTrue(result.contains("read-timeout = 60000"))
+    }
+
+    @Test
+    fun `modded backend enables announce-forge and increases timeouts`() {
+        writeVelocityToml()
+
+        val lobby = createService("Lobby-1", "Lobby", 30001, ServiceState.READY)
+        val modded = createService("Modded-1", "Modded", 30010, ServiceState.READY)
+
+        every { registry.getAll() } returns listOf(lobby, modded)
+        mockGroupWithSoftware("Lobby", ServerSoftware.PAPER)
+        mockGroupWithSoftware("Modded", ServerSoftware.FORGE)
+
+        configGen.regenerateServerList(tempDir)
+
+        val result = tempDir.resolve("velocity.toml").readText()
+        assertTrue(result.contains("announce-forge = true"))
+        assertTrue(result.contains("connection-timeout = 10000"))
+        assertTrue(result.contains("read-timeout = 60000"))
+    }
+
+    @Test
+    fun `no modded backends sets announce-forge to false`() {
+        writeVelocityToml()
+
+        val lobby = createService("Lobby-1", "Lobby", 30001, ServiceState.READY)
+
+        every { registry.getAll() } returns listOf(lobby)
+        mockGroupWithSoftware("Lobby", ServerSoftware.PAPER)
+
+        configGen.regenerateServerList(tempDir)
+
+        val result = tempDir.resolve("velocity.toml").readText()
+        assertTrue(result.contains("announce-forge = false"))
+    }
+
+    @Test
     fun `replaceTOMLSection appends when section not found`() {
         val original = """
             [version]

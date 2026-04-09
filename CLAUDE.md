@@ -107,7 +107,7 @@ nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/
 ├── template/              # TemplateManager, ConfigPatcher, SoftwareResolver (auto-download), ServiceDeployer (deploy-back)
 ├── cluster/               # RemoteFileProxy (remote file proxy for agent nodes)
 ├── update/                # UpdateChecker (GitHub Releases auto-updater)
-└── velocity/              # VelocityConfigGen (auto-manage proxy server list)
+└── velocity/              # VelocityConfigGen (auto-manage proxy server list, modded client config)
 # Note: permissions, display code now lives in their respective module JARs
 
 dashboard/src/              # Web Dashboard (Next.js, ALPHA)
@@ -142,6 +142,8 @@ dashboard/src/              # Web Dashboard (Next.js, ALPHA)
 - Services named `<GroupName>-<N>` (e.g., `Lobby-1`, `BedWars-3`)
 - Proxy ports: 25565+, backend ports: 30000+
 - Velocity forwarding: `modern` if all backends >=1.13, else `legacy` (BungeeCord)
+- Modded client routing: Bridge detects Forge/NeoForge/Fabric clients via `player.getModInfo()` and routes to modded backend instead of Paper lobby
+- VelocityConfigGen auto-sets `announce-forge = true` and increases timeouts when modded backends are present
 - Via plugins (ViaVersion/ViaBackwards) only on backend servers, never on proxy
 - Via plugin dependencies enforced: ViaBackwards auto-includes ViaVersion, ViaRewind requires ViaBackwards
 - EULA auto-accepted for Paper/Purpur/Pufferfish/Leaf/Folia templates

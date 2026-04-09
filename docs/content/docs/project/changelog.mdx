@@ -9,6 +9,24 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.5.0 (April 9, 2026)
+
+Modded client support: automatic routing and Velocity configuration for Forge/NeoForge/Fabric players.
+
+### Added
+- **Modded client routing**: Bridge plugin detects Forge/NeoForge/Fabric clients via Velocity's `player.getModInfo()` API and automatically routes them to the least-loaded server from a modded group instead of the Paper lobby. Prevents the "incompatible mods" kick that NeoForge clients get when connecting to vanilla/Paper servers
+- **Automatic Velocity modded config**: `VelocityConfigGen` detects modded backend groups and auto-sets `announce-forge = true` (root level) and increases `connection-timeout` (10s) and `read-timeout` (60s) under `[advanced]` for large modpack handshakes
+- **Modded groups cache**: Bridge fetches group software types from `/api/groups` on startup and refreshes on controller reconnect. No proxy restart needed when modded groups are added
+
+### Fixed
+- **`announce-forge` placement**: Correctly placed at TOML root level (not under `[advanced]`) matching Velocity's default config structure
+- **Dashboard**: Service console commands now use `send()` instead of raw WebSocket writes
+- **Dashboard**: Fixed non-null assertion for group in save dialog
+- **Dashboard**: Fixed proxy body forwarding, WebSocket session reuse, and missing API fields
+- **ScalingEngineTest**: Added missing `PREPARED` branch in exhaustive `when` expression
+
+---
+
 ## v0.4.7 (April 9, 2026)
 
 Module startup ordering fix.
