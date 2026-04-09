@@ -95,7 +95,8 @@ export default function GroupDetailPage({
       await apiFetch(`/api/groups/${name}`, {
         method: "PUT",
         body: JSON.stringify({
-          name, software, version, memory, maxPlayers, minInstances, maxInstances,
+          name, type: group.type, template: group.template,
+          software, version, memory, maxPlayers, minInstances, maxInstances,
           playersPerInstance, scaleThreshold, idleTimeout, stopOnEmpty,
           restartOnCrash, maxRestarts, jvmOptimize,
         }),

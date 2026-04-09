@@ -25,6 +25,20 @@ import { toast } from "sonner";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Save } from "lucide-react";
 
+interface NpcResponse {
+  displayName: string;
+  subtitle: string;
+  subtitleOffline: string;
+  floatingItem: string;
+  statusItems: Record<string, string>;
+  inventory: {
+    title: string;
+    size: number;
+    itemName: string;
+    itemLore: string[];
+  };
+}
+
 interface DisplayResponse {
   name: string;
   sign: {
@@ -34,7 +48,7 @@ interface DisplayResponse {
     line4Online: string;
     line4Offline: string;
   };
-  npc: { displayName: string };
+  npc: NpcResponse;
 }
 
 interface DisplayListResponse {
@@ -90,7 +104,7 @@ export default function DisplayPage() {
         method: "PUT",
         body: JSON.stringify({
           sign: { line1, line2, line3, line4Online, line4Offline },
-          npc: { displayName: npcName },
+          npc: { ...editDisplay.npc, displayName: npcName },
         }),
       });
       toast.success(`'${editDisplay.name}' saved`);
