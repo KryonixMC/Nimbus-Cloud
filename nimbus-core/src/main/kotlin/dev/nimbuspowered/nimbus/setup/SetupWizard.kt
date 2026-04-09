@@ -674,6 +674,7 @@ class SetupWizard(
             |bind = "127.0.0.1"
             |port = 8080
             |token = "$token"
+            |allowed_origins = ["dashboard.nimbuspowered.org"]
             |
             |[database]
             |# Supported types: sqlite, mysql, postgresql

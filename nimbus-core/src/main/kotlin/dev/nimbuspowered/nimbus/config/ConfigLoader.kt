@@ -1,6 +1,7 @@
 package dev.nimbuspowered.nimbus.config
 
 import com.akuleshov7.ktoml.Toml
+import com.akuleshov7.ktoml.TomlInputConfig
 import kotlinx.serialization.serializer
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
@@ -12,7 +13,7 @@ import kotlin.io.path.readText
 object ConfigLoader {
 
     private val logger = LoggerFactory.getLogger(ConfigLoader::class.java)
-    private val toml = Toml()
+    private val toml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
 
     fun loadNimbusConfig(path: Path): NimbusConfig {
         if (!path.exists()) {

@@ -62,7 +62,7 @@ data class ApiConfig(
     @SerialName("jwt_enabled")
     val jwtEnabled: Boolean = false,
     @SerialName("allowed_origins")
-    val allowedOrigins: List<String> = emptyList()
+    val allowedOrigins: List<String> = listOf("dashboard.nimbuspowered.org")
 )
 
 @Serializable

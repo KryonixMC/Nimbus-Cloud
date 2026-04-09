@@ -56,7 +56,7 @@ enabled = true
 bind = "127.0.0.1"
 port = 8080
 token = ""
-allowed_origins = []
+allowed_origins = ["dashboard.nimbuspowered.org"]
 
 [database]
 type = "sqlite"
@@ -197,7 +197,7 @@ REST API and WebSocket server configuration.
 | `bind` | String | `"127.0.0.1"` | Bind address for the API server. Use `127.0.0.1` for local-only access (recommended) or `0.0.0.0` for remote access. |
 | `port` | Int | `8080` | Port for the API server. |
 | `token` | String | `""` | Bearer token for API authentication. If empty, Nimbus auto-generates a random token on **every start** and logs it to the console. Set a permanent token for production. |
-| `allowed_origins` | List\<String\> | `[]` | CORS allowed origins. Empty list allows all origins (with a warning). Set explicit origins for production (e.g., `["https://dashboard.example.com"]`). |
+| `allowed_origins` | List\<String\> | `["dashboard.nimbuspowered.org"]` | CORS allowed origins. The official dashboard is included by default. Empty list allows all origins (with a warning). Use hostnames without scheme — both `http` and `https` are allowed automatically. |
 | `jwt_enabled` | Boolean | `false` | Enable JWT scoped token generation. When enabled, the `POST /api/tokens` endpoint becomes available for generating scoped JWT tokens with fine-grained permissions. Legacy bearer tokens always work regardless of this setting. |
 
 ```toml title="config/nimbus.toml"
@@ -206,7 +206,7 @@ enabled = true
 bind = "127.0.0.1"
 port = 8080
 token = "my-secret-token"
-allowed_origins = ["http://localhost:3000"]
+allowed_origins = ["dashboard.nimbuspowered.org", "localhost:3000"]
 ```
 
 <Callout type="warn">
