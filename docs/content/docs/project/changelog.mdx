@@ -9,6 +9,22 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.4.3 (April 9, 2026)
+
+Dashboard proxy and chunked modpack upload.
+
+### Added
+- **Server-side proxy**: Hosted dashboard (`https://dashboard.nimbuspowered.org`) can now connect to HTTP controllers without users needing TLS certificates. REST requests are proxied through Next.js API routes, bypassing browser mixed-content restrictions
+- **WebSocket SSE bridge**: Server-Sent Events bridge for WebSocket connections (console, live events) through the proxy — transparent to the user, auto-detected
+- **Chunked modpack upload**: Large modpack uploads (up to 2 GB) work through the proxy by splitting files into 4 MB chunks. Zero RAM usage on client (`File.slice`), proxy (streamed), and controller (direct disk append). Upload progress percentage shown in UI
+- **Chunked upload API**: Three new endpoints on the controller — `POST /api/modpacks/upload/init`, `POST /api/modpacks/upload/chunk`, `POST /api/modpacks/upload/finalize`. Stale uploads auto-cleaned after 1 hour
+
+### Changed
+- **Login form simplified**: Only requires IP/hostname instead of full URL. Port defaults to 8080 if not specified. No default values in fields
+- **Direct uploads preserved**: Non-proxy connections (localhost, same network) still use single-shot streaming for best performance
+
+---
+
 ## v0.4.2 (April 9, 2026)
 
 CORS configuration hotfix for new installations.
