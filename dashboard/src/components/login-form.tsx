@@ -20,11 +20,36 @@ import {
 import { Input } from "@/components/ui/input";
 import { setCredentials } from "@/lib/api";
 
+/**
+ * Parse a host input (IP/hostname with optional port) into a full URL.
+ * Examples:
+ *   "152.53.124.143"       → "http://152.53.124.143:8080"
+ *   "152.53.124.143:9090"  → "http://152.53.124.143:9090"
+ *   "my.server.com"        → "http://my.server.com:8080"
+ *   "my.server.com:443"    → "http://my.server.com:443"
+ */
+function buildControllerUrl(host: string): string {
+  const trimmed = host.trim().replace(/\/+$/, "");
+
+  // If the user already typed a full URL, use it as-is
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+
+  // Check if a port is included (handle IPv6 bracket notation too)
+  const hasPort = trimmed.includes("]:") || (!trimmed.startsWith("[") && trimmed.includes(":"));
+  if (hasPort) {
+    return `http://${trimmed}`;
+  }
+
+  return `http://${trimmed}:8080`;
+}
+
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const [apiUrl, setApiUrl] = useState("http://localhost:8080");
+  const [host, setHost] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,10 +61,26 @@ export function LoginForm({
     setLoading(true);
 
     try {
-      const url = apiUrl.replace(/\/+$/, "");
-      const res = await fetch(`${url}/api/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const url = buildControllerUrl(host);
+
+      // Determine if we need to proxy (HTTPS dashboard -> HTTP controller)
+      const dashboardHttps = window.location.protocol === "https:";
+      const controllerHttp = url.startsWith("http://");
+      const useProxy = dashboardHttps && controllerHttp;
+
+      let res: Response;
+      if (useProxy) {
+        res = await fetch("/api/proxy/api/status", {
+          headers: {
+            "X-Nimbus-Controller": url,
+            "X-Nimbus-Token": token,
+          },
+        });
+      } else {
+        res = await fetch(`${url}/api/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       if (res.status === 401) {
         setError("Invalid API token");
@@ -75,15 +116,18 @@ export function LoginForm({
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="apiUrl">Controller URL</FieldLabel>
+                <FieldLabel htmlFor="host">Controller Address</FieldLabel>
                 <Input
-                  id="apiUrl"
-                  type="url"
-                  placeholder="http://localhost:8080"
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
+                  id="host"
+                  type="text"
+                  placeholder="IP or hostname (e.g. 192.168.1.100)"
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Port defaults to 8080 if not specified
+                </p>
               </Field>
               <Field>
                 <FieldLabel htmlFor="token">API Token</FieldLabel>
