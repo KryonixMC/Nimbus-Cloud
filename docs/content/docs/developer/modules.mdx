@@ -88,24 +88,30 @@ class MyModule : NimbusModule {
 
 ### Required Resources
 
-Your JAR must include two resource files:
+Your JAR must include a `module.properties` resource file:
 
-**`META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule`** — ServiceLoader descriptor pointing to your implementation class:
-
-```text title="META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule"
-dev.example.mymodule.MyModule
-```
-
-**`module.properties`** — metadata used by the setup wizard and `modules` command:
+**`module.properties`** — metadata and entry point used by the module loader:
 
 ```properties title="module.properties"
 id=my-module
 name=My Module
 description=A minimal example module
 default=false
+main_class=dev.example.mymodule.MyModule
 ```
 
-The `default` property controls whether the module is enabled by default in the first-run setup wizard. Set to `true` for modules that should be on by default.
+| Property | Required | Description |
+|----------|----------|-------------|
+| `id` | Yes | Unique module identifier |
+| `name` | Yes | Human-readable name |
+| `description` | No | Short description for setup wizard |
+| `default` | No | Whether enabled by default in setup wizard |
+| `main_class` | Recommended | Fully qualified class name of the `NimbusModule` implementation |
+| `min_nimbus_version` | No | Minimum compatible Nimbus version (e.g. `0.4.0`) |
+| `dependencies` | No | Comma-separated list of required module IDs |
+| `plugins` | No | Plugin deployments (`DisplayName:fileName:resourcePath`) |
+
+If `main_class` is not set, Nimbus falls back to the legacy `META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule` ServiceLoader descriptor.
 
 ## Lifecycle
 
@@ -519,17 +525,13 @@ fun Route.uptimeRoutes(db: Database) {
 
 ### Resource Files
 
-**`src/main/resources/META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule`**
-```text title="META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule"
-dev.example.uptime.UptimeModule
-```
-
 **`src/main/resources/module.properties`**
 ```properties title="module.properties"
 id=uptime
 name=Uptime Tracker
 description=Tracks service start/stop times
 default=false
+main_class=dev.example.uptime.UptimeModule
 ```
 
 ### Project Structure
@@ -545,7 +547,5 @@ my-uptime-module/
     │   ├── UptimeCommand.kt
     │   └── UptimeRoutes.kt
     └── resources/
-        ├── module.properties
-        └── META-INF/services/
-            └── dev.nimbuspowered.nimbus.module.NimbusModule
+        └── module.properties
 ```

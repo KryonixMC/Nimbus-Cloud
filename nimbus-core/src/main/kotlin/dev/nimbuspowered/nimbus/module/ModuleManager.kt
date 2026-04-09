@@ -120,23 +120,24 @@ class ModuleManager(
                 )
                 classLoaders.add(classLoader)
 
-                val classNames = loadServiceClassNames(jar)
-                if (classNames.isEmpty()) {
-                    logger.warn("No NimbusModule implementation found in {} — check META-INF/services", jar.fileName)
+                // Use main_class from module.properties (preferred) or fall back to META-INF/services
+                val info = metadataByJar[jar]
+                val className = info?.mainClass
+                    ?: loadServiceClassNames(jar).firstOrNull()
+                if (className == null) {
+                    logger.warn("No NimbusModule implementation found in {} — add main_class to module.properties", jar.fileName)
                     continue
                 }
 
-                for (className in classNames) {
-                    val clazz = Class.forName(className, true, classLoader)
-                    val module = clazz.getDeclaredConstructor().newInstance() as NimbusModule
-                    if (modules.containsKey(module.id)) {
-                        logger.warn("Duplicate module id '{}' from {} — skipping", module.id, jar.fileName)
-                        continue
-                    }
-                    modules[module.id] = module
-                    logger.info("Loaded module: {} v{} ({})", module.name, module.version, module.id)
-                    runBlocking { eventBus.emit(NimbusEvent.ModuleLoaded(module.id, module.name, module.version)) }
+                val clazz = Class.forName(className, true, classLoader)
+                val module = clazz.getDeclaredConstructor().newInstance() as NimbusModule
+                if (modules.containsKey(module.id)) {
+                    logger.warn("Duplicate module id '{}' from {} — skipping", module.id, jar.fileName)
+                    continue
                 }
+                modules[module.id] = module
+                logger.info("Loaded module: {} v{} ({})", module.name, module.version, module.id)
+                runBlocking { eventBus.emit(NimbusEvent.ModuleLoaded(module.id, module.name, module.version)) }
             } catch (e: Throwable) {
                 logger.error("Failed to load module from {}: {}", jar.fileName, e.message, e)
             }
@@ -348,6 +349,7 @@ class ModuleManager(
                         fileName = jarPath.fileName.toString(),
                         dependencies = props.getProperty("dependencies")?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
                         minNimbusVersion = props.getProperty("min_nimbus_version"),
+                        mainClass = props.getProperty("main_class"),
                         plugins = pluginEntries
                     )
                 }
@@ -368,6 +370,8 @@ data class ModuleInfo(
     val fileName: String,
     val dependencies: List<String> = emptyList(),
     val minNimbusVersion: String? = null,
+    /** Fully qualified class name of the NimbusModule implementation */
+    val mainClass: String? = null,
     /** Plugin mappings declared in module.properties (displayName:fileName:resourcePath) */
     val plugins: List<ModulePluginInfo> = emptyList()
 )

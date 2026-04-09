@@ -9,14 +9,23 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
-## v0.4.5 (April 9, 2026)
+## v0.4.6 (April 9, 2026)
 
-Module loading hotfix — replaces broken ServiceLoader with direct JAR class loading.
+Module loading hotfix — bypasses broken ServiceLoader entirely.
 
 ### Fixed
-- **Module loading on Java 21**: `ServiceLoader` silently returned empty iterators on certain Java 21 configurations (especially fresh VPS installs), causing all controller modules (Permissions, Display, Players) to fail loading without any error. Replaced with direct `META-INF/services` file reading and `Class.forName()` — more robust and produces clear error messages when something goes wrong
+- **Module loading on Java 21**: `ServiceLoader` AND direct `META-INF/services` file reading both failed silently on certain Java 21 VPS configurations. Module classes are now declared via `main_class` in `module.properties` and loaded directly with `Class.forName()` — completely bypasses the broken service discovery mechanism
 - **Version compatibility skip was a no-op**: Modules flagged for version incompatibility were still loaded because `continue` only exited the version-check loop, not the actual loading loop. Now properly removes incompatible modules before loading
 - **Silent `Error` subclass crashes**: `catch (Exception)` in module load/init/enable missed `ServiceConfigurationError`, `NoClassDefFoundError`, and other `Error` subclasses. Changed to `catch (Throwable)` so these are logged instead of crashing or vanishing
+
+### Changed
+- **Module properties**: All built-in modules now declare `main_class` in `module.properties`. Third-party modules can use either `main_class` (preferred) or the legacy `META-INF/services` file as fallback
+
+---
+
+## v0.4.5 (April 9, 2026)
+
+Intermediate hotfix — improved module loading diagnostics (superseded by v0.4.6).
 
 ---
 
