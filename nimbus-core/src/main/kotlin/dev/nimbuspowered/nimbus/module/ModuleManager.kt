@@ -9,7 +9,6 @@ import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.util.ServiceLoader
 import java.util.jar.JarFile
 import java.util.Properties
 import kotlin.io.path.deleteIfExists
@@ -121,10 +120,15 @@ class ModuleManager(
                 )
                 classLoaders.add(classLoader)
 
-                val loader = ServiceLoader.load(NimbusModule::class.java, classLoader)
-                var found = false
-                for (module in loader) {
-                    found = true
+                val classNames = loadServiceClassNames(jar)
+                if (classNames.isEmpty()) {
+                    logger.warn("No NimbusModule implementation found in {} — check META-INF/services", jar.fileName)
+                    continue
+                }
+
+                for (className in classNames) {
+                    val clazz = Class.forName(className, true, classLoader)
+                    val module = clazz.getDeclaredConstructor().newInstance() as NimbusModule
                     if (modules.containsKey(module.id)) {
                         logger.warn("Duplicate module id '{}' from {} — skipping", module.id, jar.fileName)
                         continue
@@ -132,9 +136,6 @@ class ModuleManager(
                     modules[module.id] = module
                     logger.info("Loaded module: {} v{} ({})", module.name, module.version, module.id)
                     runBlocking { eventBus.emit(NimbusEvent.ModuleLoaded(module.id, module.name, module.version)) }
-                }
-                if (!found) {
-                    logger.warn("No NimbusModule implementation found in {} — check META-INF/services", jar.fileName)
                 }
             } catch (e: Throwable) {
                 logger.error("Failed to load module from {}: {}", jar.fileName, e.message, e)
@@ -242,6 +243,25 @@ class ModuleManager(
     }
 
     enum class InstallResult { INSTALLED, ALREADY_INSTALLED, NOT_FOUND }
+
+    // ── Service file loading ─────────────────────────────────
+
+    private val SERVICE_FILE = "META-INF/services/${NimbusModule::class.java.name}"
+
+    /** Reads class names from the META-INF/services file inside a JAR, bypassing ServiceLoader. */
+    private fun loadServiceClassNames(jarPath: Path): List<String> {
+        return try {
+            JarFile(jarPath.toFile()).use { jar ->
+                val entry = jar.getEntry(SERVICE_FILE) ?: return emptyList()
+                jar.getInputStream(entry).bufferedReader().readLines()
+                    .map { it.substringBefore('#').trim() }
+                    .filter { it.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to read service file from {}: {}", jarPath.fileName, e.message)
+            emptyList()
+        }
+    }
 
     // ── Dependency resolution ──────────────────────────────
 
