@@ -771,9 +771,8 @@ class SetupWizard(
 
     private fun writeStartScript(os: OperatingSystem) {
         // Find the Nimbus JAR in the current directory
-        val jarPattern = "nimbus-core-*-all.jar"
-        val jarFile = baseDir.listDirectoryEntries(jarPattern).firstOrNull()
-        val jarName = jarFile?.fileName?.toString() ?: "nimbus-core-*-all.jar"
+        val jarFile = baseDir.listDirectoryEntries("nimbus-core-*.jar").firstOrNull()
+        val jarName = jarFile?.fileName?.toString() ?: "nimbus-core.jar"
 
         when (os) {
             OperatingSystem.LINUX, OperatingSystem.MACOS -> {

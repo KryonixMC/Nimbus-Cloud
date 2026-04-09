@@ -3,6 +3,9 @@ set -euo pipefail
 
 # ── Nimbus Cloud Installer ──────────────────────────────────────
 # Usage: curl -fsSL https://raw.githubusercontent.com/NimbusPowered/Nimbus/main/install.sh | bash
+#
+# Downloads the latest Nimbus release and starts it once.
+# The built-in setup wizard handles configuration and start script creation.
 
 # Ensure interactive prompts work when piped via curl | bash
 if [[ -e /dev/tty ]]; then
@@ -200,7 +203,7 @@ download_nimbus() {
         exit 1
     fi
 
-    # Keep the original versioned filename (e.g. nimbus-core-0.1.2.jar)
+    # Keep the original versioned filename (e.g. nimbus-core-0.4.2.jar)
     local jar_name
     jar_name=$(basename "$jar_url")
     info "Downloading Nimbus ${selected_version}..."
@@ -212,172 +215,9 @@ download_nimbus() {
     sudo mkdir -p "$INSTALL_DIR"/{config/groups,config/modules,templates,services,logs}
     sudo chown -R "$real_user:$(id -gn "$real_user")" "$INSTALL_DIR"
     success "Downloaded to $INSTALL_DIR/$jar_name"
-}
 
-# ── Install screen ──────────────────────────────────────────────
-
-install_screen() {
-    if command -v screen &>/dev/null; then
-        return
-    fi
-
-    info "Installing screen..."
-    case "$PKG_MANAGER" in
-        apt)    sudo apt-get install -y -qq screen ;;
-        dnf|yum) sudo "$PKG_MANAGER" install -y screen ;;
-        pacman) sudo pacman -S --noconfirm screen ;;
-        zypper) sudo zypper install -y screen ;;
-        brew)   brew install screen ;;
-        *)      warn "Cannot auto-install screen. Please install it manually." ;;
-    esac
-}
-
-# ── Create start script ─────────────────────────────────────────
-
-create_start_script() {
-    info "Creating start scripts..."
-
-    # start.sh — starts Nimbus in screen and attaches, or reattaches if already running
-    # Usage: start.sh           → start + attach (interactive)
-    #        start.sh --detach  → start detached (for systemd)
-    #        start.sh --run     → internal: restart loop (called by screen)
-    sudo tee "$INSTALL_DIR/start.sh" >/dev/null <<'SCRIPT'
-#!/usr/bin/env bash
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-cd "$SCRIPT_DIR"
-
-SESSION="nimbus"
-DETACH=false
-RUN_MODE=false
-for arg in "$@"; do
-    case "$arg" in
-        --detach) DETACH=true ;;
-        --run) RUN_MODE=true ;;
-    esac
-done
-
-# Find the latest nimbus JAR by semver comparison
-find_latest_jar() {
-    local best="" best_major=0 best_minor=0 best_patch=0
-    for jar in nimbus-core-*.jar; do
-        [[ -f "$jar" ]] || continue
-        local ver
-        ver=$(echo "$jar" | grep -oP '\d+\.\d+\.\d+')
-        [[ -z "$ver" ]] && continue
-        IFS='.' read -r major minor patch <<< "$ver"
-        if (( major > best_major || (major == best_major && minor > best_minor) || (major == best_major && minor == best_minor && patch > best_patch) )); then
-            best="$jar"
-            best_major=$major; best_minor=$minor; best_patch=$patch
-        fi
-    done
-    # Fallback: unversioned nimbus.jar (legacy installs)
-    if [[ -z "$best" && -f "nimbus.jar" ]]; then
-        best="nimbus.jar"
-    fi
-    echo "$best"
-}
-
-JAVA_OPTS="-Xms512M -Xmx1G"
-
-# Aikar's flags for better GC
-JAVA_OPTS="$JAVA_OPTS -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200"
-JAVA_OPTS="$JAVA_OPTS -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC"
-JAVA_OPTS="$JAVA_OPTS -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40"
-JAVA_OPTS="$JAVA_OPTS -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20"
-JAVA_OPTS="$JAVA_OPTS -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15"
-JAVA_OPTS="$JAVA_OPTS -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5"
-JAVA_OPTS="$JAVA_OPTS -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1"
-
-# --run mode: called by screen session, handles restart loop
-if [[ "$RUN_MODE" == true ]]; then
-    while true; do
-        NIMBUS_JAR=$(find_latest_jar)
-        if [[ -z "$NIMBUS_JAR" ]]; then
-            echo "Error: No nimbus JAR found in $SCRIPT_DIR"
-            exit 1
-        fi
-        echo "Starting $NIMBUS_JAR..."
-        java $JAVA_OPTS -jar "$NIMBUS_JAR"
-        EXIT_CODE=$?
-        if [[ $EXIT_CODE -ne 10 ]]; then
-            exit $EXIT_CODE
-        fi
-        echo "Update detected, restarting with latest version..."
-    done
-fi
-
-# Already running? Attach if interactive, exit if detached.
-if screen -list | grep -q "\.$SESSION\b"; then
-    if [[ "$DETACH" == true ]]; then
-        echo "Nimbus is already running."
-        exit 0
-    fi
-    exec screen -r "$SESSION"
-fi
-
-if [[ "$DETACH" == true ]]; then
-    # Detached mode (systemd): start in background and return
-    screen -dmS "$SESSION" "$0" --run
-else
-    # Interactive mode: start and attach immediately (Ctrl+A, D to detach)
-    exec screen -S "$SESSION" "$0" --run
-fi
-SCRIPT
-    sudo chmod +x "$INSTALL_DIR/start.sh"
-
-    # nimbus command — just calls start.sh (which handles attach-or-start)
-    # Remove old symlink first (previous installs created a symlink here)
-    sudo rm -f /usr/local/bin/nimbus
-    sudo tee /usr/local/bin/nimbus >/dev/null <<'CMD'
-#!/usr/bin/env bash
-exec /opt/nimbus/start.sh "$@"
-CMD
-    sudo chmod +x /usr/local/bin/nimbus
-    success "Created 'nimbus' command"
-}
-
-# ── Create systemd service (optional) ───────────────────────────
-
-create_systemd_service() {
-    if [[ "$OS" != "linux" ]] || ! command -v systemctl &>/dev/null; then
-        return
-    fi
-
-    echo ""
-    read -rp "$(echo -e "${CYAN}[nimbus]${RESET} Create systemd service for auto-start? [y/N]: ")" create_service <"$TTY"
-    if [[ "${create_service,,}" != "y" && "${create_service,,}" != "yes" ]]; then
-        return
-    fi
-
-    # Use the invoking user for the service (not a separate system user)
-    local service_user="${SUDO_USER:-$(whoami)}"
-    sudo chown -R "$service_user:$(id -gn "$service_user")" "$INSTALL_DIR"
-
-    sudo tee /etc/systemd/system/nimbus.service >/dev/null <<EOF
-[Unit]
-Description=Nimbus Cloud
-After=network.target
-
-[Service]
-Type=forking
-User=$service_user
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/start.sh --detach
-ExecStop=/usr/bin/screen -S nimbus -X stuff "shutdown\nshutdown confirm\n"
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo systemctl daemon-reload
-    sudo systemctl enable nimbus.service
-    success "Systemd service created and enabled"
-    info "  Start:   sudo systemctl start nimbus"
-    info "  Attach:  nimbus  ${DIM}(or: screen -r nimbus)${RESET}"
-    info "  Detach:  Ctrl+A, then D"
-    info "  Status:  sudo systemctl status nimbus"
+    # Export for main() to use
+    NIMBUS_JAR="$jar_name"
 }
 
 # ── Main ────────────────────────────────────────────────────────
@@ -404,35 +244,28 @@ main() {
     if ! check_java; then
         install_java
     fi
-    install_screen
 
     # Download
     download_nimbus
 
-    # Start script
-    create_start_script
-
-    # Systemd (Linux only)
-    create_systemd_service
-
     echo ""
-    echo -e "${GREEN}${BOLD}Nimbus installed successfully!${RESET}"
+    echo -e "${GREEN}${BOLD}Nimbus downloaded successfully!${RESET}"
     echo ""
     echo -e "  ${CYAN}Installation:${RESET}  $INSTALL_DIR"
-    echo -e "  ${CYAN}Start:${RESET}         nimbus"
-    echo -e "  ${CYAN}Attach:${RESET}        nimbus  ${DIM}(auto-attaches if already running)${RESET}"
-    echo -e "  ${CYAN}Detach:${RESET}        Ctrl+A, then D"
+    echo -e "  ${DIM}The setup wizard will guide you through configuration on first start.${RESET}"
     echo ""
 
-    # Offer to start now
+    # Start Nimbus (setup wizard runs on first start)
     read -rp "$(echo -e "${CYAN}[nimbus]${RESET} Start Nimbus now? [Y/n]: ")" start_now <"$TTY"
     if [[ "${start_now,,}" != "n" && "${start_now,,}" != "no" ]]; then
         echo ""
-        echo -e "  ${DIM}Starting Nimbus... (Ctrl+A, D to detach from console)${RESET}"
+        echo -e "  ${DIM}Starting Nimbus...${RESET}"
         echo ""
-        "$INSTALL_DIR/start.sh"
+        cd "$INSTALL_DIR"
+        java -Xms256M -Xmx256M --enable-native-access=ALL-UNNAMED -jar "$NIMBUS_JAR"
     else
-        echo -e "  ${DIM}Run 'nimbus' when you're ready to start.${RESET}"
+        echo -e "  ${DIM}To start manually:${RESET}"
+        echo -e "    cd $INSTALL_DIR && java -jar $NIMBUS_JAR"
     fi
     echo ""
 }
