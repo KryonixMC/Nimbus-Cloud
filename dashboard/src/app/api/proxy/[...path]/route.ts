@@ -43,15 +43,17 @@ async function proxyRequest(
     headers.set("Content-Type", contentType);
   }
 
-  const contentLength = request.headers.get("content-length");
-  if (contentLength) {
-    headers.set("Content-Length", contentLength);
-  }
-
+  // Buffer the body for non-GET methods. Piping request.body as a ReadableStream
+  // is unreliable in Next.js App Router — the stream may already be consumed or
+  // locked, causing write requests (PUT/POST/PATCH/DELETE) to send empty bodies.
   const hasBody = !["GET", "HEAD", "OPTIONS"].includes(request.method);
   let body: BodyInit | null = null;
-  if (hasBody && request.body) {
-    body = request.body;
+  if (hasBody) {
+    const buf = await request.arrayBuffer();
+    if (buf.byteLength > 0) {
+      body = buf;
+      headers.set("Content-Length", buf.byteLength.toString());
+    }
   }
 
   try {
@@ -59,8 +61,6 @@ async function proxyRequest(
       method: request.method,
       headers,
       body,
-      // @ts-expect-error -- Node fetch supports duplex for streaming request bodies
-      duplex: hasBody ? "half" : undefined,
     });
 
     const responseHeaders = new Headers();

@@ -5,6 +5,17 @@ const HEADER_CONTROLLER_URL = "x-nimbus-controller";
 const HEADER_CONTROLLER_TOKEN = "x-nimbus-token";
 
 /**
+ * Active WebSocket connections keyed by "controllerUrl + path".
+ * The GET handler registers its WS here so the POST handler can
+ * send messages through the same connection instead of opening a new one.
+ */
+const activeConnections = new Map<string, WebSocket>();
+
+function connectionKey(controllerUrl: string, targetPath: string): string {
+  return `${controllerUrl}${targetPath}`;
+}
+
+/**
  * Extract controller URL and token from either headers (POST) or
  * query params (GET/EventSource, which can't send custom headers).
  */
@@ -45,6 +56,7 @@ function buildWsUrl(
  *   Browser  --SSE (HTTPS)-->  Next.js  --WebSocket (HTTP)--> Controller
  *
  * GET reads credentials from query params (EventSource limitation).
+ * The WebSocket is stored in activeConnections so POST can reuse it.
  */
 export async function GET(
   request: NextRequest,
@@ -62,6 +74,7 @@ export async function GET(
   const { path } = await params;
   const targetPath = "/" + path.join("/");
   const wsUrl = buildWsUrl(controllerUrl, controllerToken, targetPath);
+  const key = connectionKey(controllerUrl, targetPath);
 
   const encoder = new TextEncoder();
   let ws: WebSocket | null = null;
@@ -71,6 +84,7 @@ export async function GET(
       ws = new WebSocket(wsUrl);
 
       ws.on("open", () => {
+        activeConnections.set(key, ws!);
         controller.enqueue(encoder.encode("event: open\ndata: connected\n\n"));
       });
 
@@ -85,6 +99,7 @@ export async function GET(
       });
 
       ws.on("close", () => {
+        activeConnections.delete(key);
         controller.enqueue(
           encoder.encode("event: close\ndata: disconnected\n\n")
         );
@@ -92,6 +107,7 @@ export async function GET(
       });
 
       ws.on("error", (err) => {
+        activeConnections.delete(key);
         controller.enqueue(
           encoder.encode(
             `event: error\ndata: ${err.message || "WebSocket error"}\n\n`
@@ -102,10 +118,12 @@ export async function GET(
 
       // Close WebSocket when client disconnects
       request.signal.addEventListener("abort", () => {
+        activeConnections.delete(key);
         ws?.close();
       });
     },
     cancel() {
+      activeConnections.delete(key);
       ws?.close();
     },
   });
@@ -123,7 +141,8 @@ export async function GET(
  * Send a message to the controller WebSocket via POST.
  * Body: { "message": "..." }
  *
- * POST reads credentials from headers (normal fetch can send headers).
+ * Reuses the WebSocket opened by the GET handler so commands and responses
+ * stay on the same controller session.
  */
 export async function POST(
   request: NextRequest,
@@ -140,7 +159,7 @@ export async function POST(
 
   const { path } = await params;
   const targetPath = "/" + path.join("/");
-  const wsUrl = buildWsUrl(controllerUrl, controllerToken, targetPath);
+  const key = connectionKey(controllerUrl, targetPath);
 
   const body = await request.json();
   const message = body.message;
@@ -149,23 +168,34 @@ export async function POST(
     return Response.json({ error: "Missing message field" }, { status: 400 });
   }
 
+  // Reuse the existing WebSocket from the GET/SSE handler
+  const ws = activeConnections.get(key);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof message === "string" ? message : JSON.stringify(message));
+    return Response.json({ ok: true });
+  }
+
+  // Fallback: open a short-lived connection if no SSE bridge is active
+  const wsUrl = buildWsUrl(controllerUrl, controllerToken, targetPath);
   return new Promise<Response>((resolve) => {
-    const ws = new WebSocket(wsUrl);
+    const fallbackWs = new WebSocket(wsUrl);
     const timeout = setTimeout(() => {
-      ws.close();
+      fallbackWs.close();
       resolve(
         Response.json({ error: "Connection timeout" }, { status: 504 })
       );
     }, 10000);
 
-    ws.on("open", () => {
-      ws.send(typeof message === "string" ? message : JSON.stringify(message));
+    fallbackWs.on("open", () => {
+      fallbackWs.send(
+        typeof message === "string" ? message : JSON.stringify(message)
+      );
       clearTimeout(timeout);
-      ws.close();
+      fallbackWs.close();
       resolve(Response.json({ ok: true }));
     });
 
-    ws.on("error", (err) => {
+    fallbackWs.on("error", (err) => {
       clearTimeout(timeout);
       resolve(
         Response.json(
