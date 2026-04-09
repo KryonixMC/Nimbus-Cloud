@@ -5,14 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -24,6 +16,7 @@ import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Save } from "lucide-react";
+import { MinecraftSign } from "@/components/minecraft-sign";
 
 interface NpcResponse {
   displayName: string;
@@ -69,6 +62,7 @@ export default function DisplayPage() {
   const [line4Online, setLine4Online] = useState("");
   const [line4Offline, setLine4Offline] = useState("");
   const [npcName, setNpcName] = useState("");
+  const [showOffline, setShowOffline] = useState(false);
 
   async function load() {
     try {
@@ -93,6 +87,7 @@ export default function DisplayPage() {
     setLine4Online(d.sign.line4Online);
     setLine4Offline(d.sign.line4Offline);
     setNpcName(d.npc.displayName);
+    setShowOffline(false);
     setEditOpen(true);
   }
 
@@ -131,24 +126,16 @@ export default function DisplayPage() {
               No display configurations. Is the Display module loaded?
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Group</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {displays.map((d) => (
-                  <TableRow
-                    key={d.name}
-                    className="cursor-pointer"
-                    onClick={() => openEdit(d)}
-                  >
-                    <TableCell className="font-medium">{d.name}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="flex flex-wrap gap-6">
+              {displays.map((d) => (
+                <MinecraftSign
+                  key={d.name}
+                  lines={[d.sign.line1, d.sign.line2, d.sign.line3, d.sign.line4Online]}
+                  label={d.name}
+                  onClick={() => openEdit(d)}
+                />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -162,6 +149,39 @@ export default function DisplayPage() {
           </div>
           <ScrollArea className="h-[calc(100vh-6rem)]">
             <div className="space-y-4 p-6">
+              {/* Live sign preview */}
+              <div className="flex justify-center pb-2">
+                <MinecraftSign
+                  lines={[line1, line2, line3, showOffline ? line4Offline : line4Online]}
+                />
+              </div>
+
+              {/* Online/Offline toggle for preview */}
+              <div className="flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOffline(false)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    !showOffline
+                      ? "bg-green-500/20 text-green-400 border border-green-500/40"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Online
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowOffline(true)}
+                  className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                    showOffline
+                      ? "bg-red-500/20 text-red-400 border border-red-500/40"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Offline
+                </button>
+              </div>
+
               <h3 className="text-sm font-semibold">Sign Lines</h3>
               <Field>
                 <FieldLabel>Line 1</FieldLabel>
