@@ -53,6 +53,7 @@ import {
   Package,
   Upload,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 
@@ -146,6 +147,59 @@ export default function DedicatedPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [actioning, setActioning] = useState<string | null>(null);
+
+  // Edit state
+  const [editTarget, setEditTarget] = useState<DedicatedService | null>(null);
+  const [editPort, setEditPort] = useState(25570);
+  const [editMemory, setEditMemory] = useState("2G");
+  const [editProxyEnabled, setEditProxyEnabled] = useState(true);
+  const [editRestartOnCrash, setEditRestartOnCrash] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  function openEdit(service: DedicatedService) {
+    setEditTarget(service);
+    setEditPort(service.port);
+    setEditMemory(service.memory);
+    setEditProxyEnabled(service.proxyEnabled);
+    setEditRestartOnCrash(service.restartOnCrash);
+  }
+
+  async function saveEdit() {
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      // Backend PUT accepts the full CreateDedicatedRequest shape; send existing
+      // values for fields we don't expose in the edit dialog.
+      const result = await apiFetch<{ success: boolean; message: string }>(
+        `/api/dedicated/${editTarget.name}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: editTarget.name,
+            port: editPort,
+            software: editTarget.software,
+            version: editTarget.version,
+            jarName: "",
+            readyPattern: "",
+            javaPath: "",
+            proxyEnabled: editProxyEnabled,
+            memory: editMemory,
+            restartOnCrash: editRestartOnCrash,
+            maxRestarts: editTarget.maxRestarts,
+            jvmArgs: editTarget.jvmArgs,
+            jvmOptimize: editTarget.jvmOptimize,
+          }),
+        }
+      );
+      toast.success(result.message);
+      setEditTarget(null);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function load() {
     try {
@@ -896,6 +950,9 @@ export default function DedicatedPage() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openEdit(s)}>
+                              <Pencil className="mr-2 size-4" /> Edit
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => setDeleteTarget(s.name)}
                               className="text-destructive"
@@ -913,6 +970,93 @@ export default function DedicatedPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit {editTarget?.name}</DialogTitle>
+            <DialogDescription>
+              Update port, memory and proxy settings. If the service is running, it
+              will be stopped — restart it manually to apply changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel>Port</FieldLabel>
+                <Input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={editPort}
+                  onChange={(e) => setEditPort(Number(e.target.value))}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Memory</FieldLabel>
+                <Input
+                  value={editMemory}
+                  onChange={(e) => setEditMemory(e.target.value)}
+                  placeholder="2G"
+                />
+              </Field>
+            </div>
+            <Field>
+              <div className="flex items-center justify-between">
+                <div>
+                  <FieldLabel>Proxy Enabled</FieldLabel>
+                  <FieldDescription>
+                    Register with Velocity proxy.
+                  </FieldDescription>
+                </div>
+                <Switch
+                  checked={editProxyEnabled}
+                  onCheckedChange={setEditProxyEnabled}
+                />
+              </div>
+            </Field>
+            <Field>
+              <div className="flex items-center justify-between">
+                <div>
+                  <FieldLabel>Restart on Crash</FieldLabel>
+                  <FieldDescription>
+                    Automatically restart if the process exits unexpectedly.
+                  </FieldDescription>
+                </div>
+                <Switch
+                  checked={editRestartOnCrash}
+                  onCheckedChange={setEditRestartOnCrash}
+                />
+              </div>
+            </Field>
+            <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+              <div>
+                <span className="font-medium text-foreground">Software:</span>{" "}
+                {editTarget?.software} {editTarget?.version}
+              </div>
+              <div>
+                <span className="font-medium text-foreground">Directory:</span>{" "}
+                <code className="font-mono">{editTarget?.directory}</code>
+              </div>
+              <div className="pt-1">
+                To change software or version, delete and recreate the service.
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!deleteTarget}

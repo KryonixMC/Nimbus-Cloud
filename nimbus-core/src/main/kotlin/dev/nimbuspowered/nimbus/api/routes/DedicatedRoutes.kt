@@ -106,22 +106,31 @@ fun Route.dedicatedRoutes(
             call.respond(HttpStatusCode.Created, ApiMessage(true, "Dedicated service '${request.name}' created"))
         }
 
-        // PUT /api/dedicated/{name} — Update config
+        // PUT /api/dedicated/{name} — Update config (name is immutable, taken from URL)
         put("{name}") {
             val name = call.parameters["name"]!!
             dedicatedServiceManager.getConfig(name)
                 ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
 
-            val request = call.receive<CreateDedicatedRequest>()
+            val request = call.receive<CreateDedicatedRequest>().copy(name = name)
 
             val errors = validateDedicatedRequest(request)
             if (errors.isNotEmpty()) {
                 return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
             }
 
-            // Stop if running
+            // Check for port conflict with OTHER dedicated services
+            val portConflict = dedicatedServiceManager.getAllConfigs().find {
+                it.dedicated.name != name && it.dedicated.port == request.port
+            }
+            if (portConflict != null) {
+                return@put call.respond(HttpStatusCode.Conflict, apiError("Port ${request.port} is already used by dedicated service '${portConflict.dedicated.name}'", ApiErrors.DEDICATED_PORT_IN_USE))
+            }
+
+            // Stop if running — user must manually restart after update
             val running = registry.get(name)
-            if (running != null && running.state != ServiceState.STOPPED && running.state != ServiceState.CRASHED) {
+            val wasRunning = running != null && running.state != ServiceState.STOPPED && running.state != ServiceState.CRASHED
+            if (wasRunning) {
                 serviceManager.stopService(name)
             }
 
@@ -129,7 +138,7 @@ fun Route.dedicatedRoutes(
 
             val config = DedicatedServiceConfig(
                 dedicated = DedicatedDefinition(
-                    name = request.name,
+                    name = name,
                     port = request.port,
                     software = software,
                     version = request.version,
@@ -147,7 +156,9 @@ fun Route.dedicatedRoutes(
             dedicatedServiceManager.writeTOML(config)
             dedicatedServiceManager.addConfig(config)
 
-            call.respond(ApiMessage(true, "Dedicated service '$name' updated"))
+            val msg = if (wasRunning) "Dedicated service '$name' updated (was running, stopped — restart to apply)"
+                      else "Dedicated service '$name' updated"
+            call.respond(ApiMessage(true, msg))
         }
 
         // DELETE /api/dedicated/{name} — Delete
