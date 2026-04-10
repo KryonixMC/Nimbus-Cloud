@@ -191,9 +191,7 @@ export default function ServicesPage() {
                         {s.name}
                       </Link>
                       {s.isDedicated && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          DEDICATED
-                        </Badge>
+                        <Badge variant="outline">Dedicated</Badge>
                       )}
                     </div>
                   </TableCell>

@@ -5,14 +5,17 @@ import { usePathname } from "next/navigation"
 import {
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
 export function NavMain({
+  label,
   items,
 }: {
+  label?: string
   items: {
     title: string
     url: string
@@ -21,8 +24,9 @@ export function NavMain({
 }) {
   const pathname = usePathname()
   return (
-    <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-2">
+    <SidebarGroup className="py-0">
+      {label && <SidebarGroupLabel className="h-6">{label}</SidebarGroupLabel>}
+      <SidebarGroupContent className="flex flex-col">
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>

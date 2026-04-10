@@ -10,7 +10,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Field,
@@ -105,9 +104,15 @@ export function LoginForm({
       <Card>
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
-            <Image src="/icon.png" alt="Nimbus" width={48} height={48} />
+            <Image
+              src="/banner.svg"
+              alt="Nimbus"
+              width={320}
+              height={88}
+              priority
+              className="h-auto w-[320px]"
+            />
           </div>
-          <CardTitle>Nimbus Dashboard</CardTitle>
           <CardDescription>
             Connect to your Nimbus controller
           </CardDescription>

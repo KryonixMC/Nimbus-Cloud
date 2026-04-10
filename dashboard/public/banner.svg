@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="110" viewBox="0 0 400 110">
+  <style>
+    text { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace; font-size: 15px; }
+  </style>
+  <text xml:space="preserve" x="50" y="20" fill="#7aa2f7">   _  __ __ _   __ ___  _ __  ___</text>
+  <text xml:space="preserve" x="50" y="38" fill="#89b4fa">  / |/ // // \,' // o.)/// /,' _/</text>
+  <text xml:space="preserve" x="50" y="56" fill="#7dcfff"> / || // // \,' // o \/ U /_\ \`.</text>
+  <text xml:space="preserve" x="50" y="74" fill="#89ddff">/_/|_//_//_/ /_//___,'\_,'/___,'</text>
+  <text xml:space="preserve" x="140" y="100" fill="#565f89" letter-spacing="3px">C L O U D</text>
+</svg>

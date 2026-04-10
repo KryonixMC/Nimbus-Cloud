@@ -22,8 +22,8 @@ export function NavDocuments({
   const pathname = usePathname()
   if (items.length === 0) return null
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Modules</SidebarGroupLabel>
+    <SidebarGroup className="py-0 group-data-[collapsible=icon]:hidden">
+      <SidebarGroupLabel className="h-6">Modules</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
