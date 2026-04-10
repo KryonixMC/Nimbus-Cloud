@@ -22,7 +22,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | [v0.3.0 – v0.3.1](#v03x--competitive-features) | Released | Template stacking, warm pool, player module, remote CLI |
 | [v0.4.0 – v0.4.7](#v04x--web-dashboard) | Released (ALPHA) | Web Dashboard, modpack import, module loading fixes |
 | [v0.5.0 – v0.5.3](#v05x--modded-support) | Released | Modded client routing, mod list matching |
-| [v0.6.0 – v0.6.3](#v06x--dedicated-services) | Released | Dedicated services, unified memory, dashboard design system, overview telemetry |
+| [v0.6.0 – v0.6.2](#v06x--dedicated-services) | Released | Dedicated services, unified memory, dashboard design system, overview telemetry |
 | [Vision](#vision--cloud-native) | Planned | Docker, S3 storage, multi-controller HA |
 
 ---
@@ -269,7 +269,7 @@ Smart routing based on mod list overlap — the key feature for networks running
 - **Dashboard breadcrumbs** now mirror the sidebar labels exactly, including the missing `Dedicated` mapping
 - **Audit log dashboard empty-state bug fixed** — Root cause was `/api/audit` returning `mapOf<String, Any?>`, which kotlinx.serialization can't serialize, so every request silently 500'd. Proper `@Serializable` DTOs now
 
-### v0.6.3 — Overview Telemetry & Phosphor Icons (April 10, 2026)
+### v0.6.2 — Overview Telemetry & Phosphor Icons (April 10, 2026)
 
 - **Controller host telemetry on the Overview page** — New `SystemInfoCollector` reads OS name/version, CPU model + cores, live system/process CPU load, system RAM used/total, Java version/vendor and hostname from the controller's host. Exposed as `system` on `GET /api/controller/info`. Rendered in a new `<SystemStatsCard>` with CPU and RAM bars plus a specs grid. The old slide-out Info Sheet is gone — all runtime data lives on Overview now
 - **Cluster nodes show full system specs** — The cluster protocol's `AuthRequest` gained `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`. `HeartbeatResponse` gained `processCpuLoad`. Agents report all of this at auth time; the Nodes page became a grid of `<SystemStatsCard>` (one card per node) so every remote agent shows the same rich telemetry as the controller host

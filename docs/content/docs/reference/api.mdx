@@ -764,7 +764,7 @@ Runtime stats for the controller itself, plus an update-check result. Used by th
 
 ```json title="Response"
 {
-  "version": "0.6.3",
+  "version": "0.6.2",
   "startedAt": "2026-04-10T12:00:00Z",
   "uptimeSeconds": 3600,
   "jvmMemoryUsedMb": 180,
@@ -801,7 +801,7 @@ Runtime stats for the controller itself, plus an update-check result. Used by th
 | `servicesMaxMemoryMb` | Long | Memory budget for all services, from `controller.max_memory` in `nimbus.toml` |
 | `servicesAllocatedMemoryMb` | Long | Sum of configured `-Xmx` for currently running services |
 | `servicesUsedMemoryMb` | Long | Sum of actual process RSS for currently running services (best effort) |
-| `system` | Object | Host specs + live CPU/memory. Added in v0.6.3. Static fields (hostname, OS, CPU model) are read once and cached; `systemCpuLoad`, `processCpuLoad` and `systemMemoryUsedMb` are resampled on every request |
+| `system` | Object | Host specs + live CPU/memory. Added in v0.6.2. Static fields (hostname, OS, CPU model) are read once and cached; `systemCpuLoad`, `processCpuLoad` and `systemMemoryUsedMb` are resampled on every request |
 | `updateAvailable` | Boolean | `true` when `UpdateChecker` found a newer release on GitHub. Never throws — any failure in the update check is silently ignored so this endpoint can't fail because GitHub is down |
 
 ---
@@ -816,8 +816,8 @@ Parses the docs changelog (`docs/content/docs/project/changelog.mdx` on GitHub `
 {
   "entries": [
     {
-      "version": "0.6.3",
-      "title": "v0.6.3 (April 10, 2026)",
+      "version": "0.6.2",
+      "title": "v0.6.2 (April 10, 2026)",
       "body": "### Added\n- **Controller host system stats**: ..."
     }
   ]
@@ -2088,7 +2088,7 @@ List all connected cluster nodes. Returns `404` if cluster mode is not enabled.
       "memoryUsedMb": 3200,
       "memoryTotalMb": 8192,
       "isConnected": true,
-      "agentVersion": "0.6.3",
+      "agentVersion": "0.6.2",
       "os": "Linux",
       "arch": "amd64",
       "services": ["Lobby-2", "BedWars-1", "BedWars-2"],
@@ -2116,7 +2116,7 @@ List all connected cluster nodes. Returns `404` if cluster mode is not enabled.
 |-------|------|-------------|
 | `cpuUsage` | Double | System-wide CPU load (0.0 – 1.0), pushed in the agent heartbeat. `-1` if unavailable |
 | `memoryUsedMb` / `memoryTotalMb` | Long | Host system memory (not agent JVM heap) |
-| `system` | Object | Static host specs reported at auth time plus live CPU/memory snapshot from the latest heartbeat. Available since v0.6.3 — null for older agents |
+| `system` | Object | Static host specs reported at auth time plus live CPU/memory snapshot from the latest heartbeat. Available since v0.6.2 — null for older agents |
 | `system.systemCpuLoad` | Double | System-wide CPU load (0.0 – 1.0), `-1` if unavailable |
 | `system.processCpuLoad` | Double | Agent JVM's own CPU load (0.0 – 1.0), `-1` if unavailable |
 | `system.availableProcessors` | Int | Logical core count (`Runtime.availableProcessors()`) |
