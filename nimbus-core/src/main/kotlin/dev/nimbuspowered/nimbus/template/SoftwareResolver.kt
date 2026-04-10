@@ -414,20 +414,37 @@ class SoftwareResolver {
     /**
      * Auto-downloads the correct proxy forwarding mod for Forge/NeoForge servers.
      * - NeoForge 1.20.2+: NeoForwarding (dedicated NeoForge support, includes CrossStitch)
-     * - Forge (all versions): proxy-compatible-forge
+     * - Forge (all versions) / older NeoForge: proxy-compatible-forge
+     *
+     * If a forwarding mod from the "wrong" family is present (e.g. PCF when the version
+     * now calls for NeoForwarding), it is removed before installing the correct one.
      */
     suspend fun ensureForwardingMod(software: ServerSoftware, mcVersion: String, templateDir: Path) {
         val modsDir = templateDir.resolve("mods")
         if (!modsDir.exists()) modsDir.createDirectories()
 
-        val hasForwardingMod = modsDir.toFile().listFiles()?.any {
-            val name = it.name.lowercase()
-            name.contains("proxy-compatible") || name.contains("bungeeforge")
-                    || name.contains("neovelocity") || name.contains("neoforwarding")
-        } ?: false
-        if (hasForwardingMod) return
+        val useNeoForwarding = software == ServerSoftware.NEOFORGE && isVersionAtLeast(mcVersion, "1.20.2")
+        val expectedNeedle = if (useNeoForwarding) "neoforwarding" else "proxy-compatible"
 
-        if (software == ServerSoftware.NEOFORGE && isVersionAtLeast(mcVersion, "1.20.2")) {
+        // Short-circuit if the correct mod is already installed
+        val hasExpectedMod = modsDir.toFile().listFiles()?.any {
+            val name = it.name.lowercase()
+            name.contains(expectedNeedle) && name.endsWith(".jar")
+        } ?: false
+        if (hasExpectedMod) return
+
+        // Remove any stale forwarding mods from the wrong family (e.g. PCF when we now need NeoForwarding)
+        modsDir.toFile().listFiles()?.filter {
+            val name = it.name.lowercase()
+            if (!name.endsWith(".jar")) return@filter false
+            val isForwarding = name.contains("proxy-compatible") || name.contains("bungeeforge")
+                || name.contains("neovelocity") || name.contains("neoforwarding")
+            isForwarding && !name.contains(expectedNeedle)
+        }?.forEach {
+            if (it.delete()) logger.info("Removed outdated forwarding mod: {}", it.name)
+        }
+
+        if (useNeoForwarding) {
             // NeoForge 1.20.2+: use NeoForwarding (better compatibility than PCF)
             downloadModrinthMod("neoforwarding", "neoforge", modsDir, "NeoForwarding", mcVersion)
         } else {
