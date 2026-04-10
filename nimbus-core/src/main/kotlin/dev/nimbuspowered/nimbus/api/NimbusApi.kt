@@ -71,6 +71,11 @@ class NimbusApi(
 
     val startedAt: Instant = Instant.now()
 
+    // Long-lived update checker for the /api/controller/info endpoint.
+    // Separate from the one used at bootstrap (which is closed after the initial check).
+    private val apiUpdateChecker: dev.nimbuspowered.nimbus.update.UpdateChecker =
+        dev.nimbuspowered.nimbus.update.UpdateChecker(baseDir)
+
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
     val isRunning: Boolean get() = server != null
@@ -126,6 +131,7 @@ class NimbusApi(
 
         server?.stop(1000, 5000)
         server = null
+        try { apiUpdateChecker.close() } catch (_: Exception) {}
         logger.info("REST API stopped")
 
         scope.launch {
@@ -275,6 +281,7 @@ class NimbusApi(
                 proxySyncRoutes(proxySyncManager, eventBus)
                 groupRoutes(registry, groupManager, groupsDir, eventBus)
                 networkRoutes(config, registry, groupManager, serviceManager, startedAt)
+                controllerInfoRoutes(startedAt, apiUpdateChecker)
                 maintenanceRoutes(proxySyncManager, eventBus)
                 metricsRoutes(registry, groupManager, nodeManager, loadBalancer, proxySyncManager, startedAt)
                 // Command proxy routes (for Bridge dynamic commands)

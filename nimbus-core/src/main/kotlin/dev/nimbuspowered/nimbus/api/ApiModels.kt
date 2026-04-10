@@ -160,6 +160,34 @@ data class StatusResponse(
     val groups: List<GroupStatusResponse>
 )
 
+// ── Controller Info DTOs ─────────────────────────────────────────────
+
+@Serializable
+data class ControllerInfoResponse(
+    val version: String,
+    val startedAt: String,
+    val uptimeSeconds: Long,
+    val jvmMemoryUsedMb: Long,
+    val jvmMemoryMaxMb: Long,
+    val jvmMemoryAllocatedMb: Long,
+    val updateAvailable: Boolean,
+    val latestVersion: String? = null,
+    val updateType: String? = null,
+    val releaseUrl: String? = null
+)
+
+@Serializable
+data class ChangelogEntry(
+    val version: String,
+    val title: String,
+    val body: String
+)
+
+@Serializable
+data class ChangelogResponse(
+    val entries: List<ChangelogEntry>
+)
+
 @Serializable
 data class GroupStatusResponse(
     val name: String,
