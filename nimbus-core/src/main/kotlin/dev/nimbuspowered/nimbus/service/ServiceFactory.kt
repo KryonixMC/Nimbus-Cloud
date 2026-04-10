@@ -146,12 +146,10 @@ class ServiceFactory(
             return null
         }
 
-        // Auto-deploy proxy forwarding mods for modded servers
-        if (software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) {
-            softwareResolver.ensureForwardingMod(software, group.config.group.version, templateDir)
-        } else if (software == ServerSoftware.FABRIC) {
-            softwareResolver.ensureFabricProxyMod(templateDir, group.config.group.version)
-        }
+        // Sync proxy forwarding mods on the template (installs the correct mod for
+        // the current software, removes any stale mods from other modloaders in case
+        // the group's software was changed). Groups always run behind the proxy.
+        syncProxyForwardingMods(templateDir, software, group.config.group.version, proxyEnabled = true)
 
         // Auto-create eula.txt for all game servers
         if (software != ServerSoftware.VELOCITY) {
@@ -352,8 +350,47 @@ class ServiceFactory(
     }
 
     /**
-     * Installs or removes the appropriate proxy forwarding mod for a modded dedicated
-     * service and patches its server-side config. No-op for non-modded software.
+     * Installs the correct proxy forwarding mod for the given software and removes
+     * any mods belonging to OTHER modloaders (handles software changes, e.g. Forge→Fabric).
+     * Operates on whatever directory is passed — template dir for groups, service dir
+     * for dedicated services.
+     *
+     * No-op for non-modded software. If [proxyEnabled] is false, all proxy forwarding
+     * mods are removed regardless of software.
+     */
+    suspend fun syncProxyForwardingMods(
+        dir: Path,
+        software: ServerSoftware,
+        version: String,
+        proxyEnabled: Boolean
+    ) {
+        // Cleanup stale mods from other modloaders (e.g. group software changed)
+        if (software != ServerSoftware.FABRIC) {
+            softwareResolver.removeFabricProxyMod(dir)
+        }
+        if (software !in setOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE)) {
+            softwareResolver.removeForwardingMod(dir)
+        }
+
+        if (!proxyEnabled) {
+            // Ensure everything is gone if proxy is disabled
+            softwareResolver.removeFabricProxyMod(dir)
+            softwareResolver.removeForwardingMod(dir)
+            return
+        }
+
+        // Install the correct forwarding mod for the current software
+        when (software) {
+            ServerSoftware.FABRIC -> softwareResolver.ensureFabricProxyMod(dir, version)
+            ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.ensureForwardingMod(software, version, dir)
+            else -> {} // paper/velocity/etc. don't need forwarding mods
+        }
+    }
+
+    /**
+     * Dedicated-specific: syncs both the forwarding mods AND the server-side forwarding
+     * config file (neoforwarding-server.toml / proxy-compatible-forge-server.toml /
+     * FabricProxy-Lite.toml) with the current Velocity secret.
      * Used by both [prepareDedicated] (start-time sync) and the edit REST endpoint
      * (immediate sync when the proxyEnabled flag is toggled).
      */
@@ -363,28 +400,14 @@ class ServiceFactory(
         version: String,
         proxyEnabled: Boolean
     ) {
-        if (software !in setOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE, ServerSoftware.FABRIC)) return
+        syncProxyForwardingMods(workDir, software, version, proxyEnabled)
 
-        if (proxyEnabled) {
-            // Install mod(s)
-            when (software) {
-                ServerSoftware.FABRIC -> softwareResolver.ensureFabricProxyMod(workDir, version)
-                ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.ensureForwardingMod(software, version, workDir)
-                else -> {}
-            }
-            // Patch forwarding config with the velocity secret
+        if (proxyEnabled && software in setOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE, ServerSoftware.FABRIC)) {
             val velocityTemplateDir = Path(config.paths.templates).resolve("proxy")
             val forwardingMode = compatibilityChecker.determineForwardingMode()
             when (software) {
                 ServerSoftware.FABRIC -> configPatcher.patchFabricProxyLite(workDir, velocityTemplateDir, forwardingMode)
                 ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> configPatcher.patchForgeProxy(workDir, velocityTemplateDir, forwardingMode)
-                else -> {}
-            }
-        } else {
-            // Remove mod(s) — config files are left in place (harmless without the mod)
-            when (software) {
-                ServerSoftware.FABRIC -> softwareResolver.removeFabricProxyMod(workDir)
-                ServerSoftware.FORGE, ServerSoftware.NEOFORGE -> softwareResolver.removeForwardingMod(workDir)
                 else -> {}
             }
         }
