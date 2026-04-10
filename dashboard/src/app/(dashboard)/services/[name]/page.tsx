@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { use } from "react";
+import { useEffect, useRef, useState, use } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,12 +12,19 @@ import { AnsiLine } from "@/components/ansi-line";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
 } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { useServiceMetrics } from "@/lib/metrics";
 import { Play, Square, RotateCw, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { MemoryBar } from "@/components/memory-bar";
+import { Server, Plug, Users } from "lucide-react";
 
 interface ServiceDetail {
   name: string;
@@ -26,15 +32,16 @@ interface ServiceDetail {
   state: string;
   port: number;
   playerCount: number;
-  tps: number;
   memoryUsedMb: number;
   memoryMaxMb: number;
   healthy: boolean;
   uptime: string | null;
 }
 
-const tpsConfig: ChartConfig = { tps: { label: "TPS", color: "var(--chart-1)" } };
-const memConfig: ChartConfig = { memory: { label: "Memory (MB)", color: "var(--chart-2)" } };
+const memConfig: ChartConfig = {
+  memory: { label: "Memory (MB)", color: "var(--chart-1)" },
+  memoryMax: { label: "Limit (MB)", color: "var(--chart-3)" },
+};
 
 export default function ServiceDetailPage({
   params,
@@ -54,15 +61,17 @@ export default function ServiceDetailPage({
   useEffect(() => {
     apiFetch<ServiceDetail>(`/api/services/${name}`)
       .then(setService)
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load service"))
+      .catch((e) =>
+        toast.error(e instanceof Error ? e.message : "Failed to load service")
+      )
       .finally(() => setLoading(false));
     apiFetch<{ lines: string[] }>(`/api/services/${name}/logs?lines=200`)
       .then((data) => setLogLines(data.lines))
-      .catch(() => {}); // logs are optional
+      .catch(() => {});
     const interval = setInterval(() => {
       apiFetch<ServiceDetail>(`/api/services/${name}`)
         .then(setService)
-        .catch(() => {}); // silent on periodic refresh
+        .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
   }, [name]);
@@ -71,7 +80,9 @@ export default function ServiceDetailPage({
     const { send, cleanup } = apiWebSocketReconnect(
       `/api/services/${name}/console`,
       {
-        onOpen: () => { sendRef.current = send; },
+        onOpen: () => {
+          sendRef.current = send;
+        },
         onMessage: (event) => {
           setConsoleLines((prev) => {
             const next = [...prev, event.data];
@@ -79,7 +90,10 @@ export default function ServiceDetailPage({
           });
         },
         onError: () => toast.error("Console connection failed"),
-        onClose: () => { sendRef.current = null; setConsoleLines((prev) => [...prev, "--- disconnected ---"]); },
+        onClose: () => {
+          sendRef.current = null;
+          setConsoleLines((prev) => [...prev, "--- disconnected ---"]);
+        },
       }
     );
     sendRef.current = send;
@@ -107,85 +121,112 @@ export default function ServiceDetailPage({
   }
 
   if (loading) return <Skeleton className="h-96 rounded-xl" />;
-  if (!service) return <p className="text-muted-foreground">Service not found</p>;
+  if (!service)
+    return <p className="text-muted-foreground">Service not found</p>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/services" className="inline-flex items-center justify-center size-8 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-            <ArrowLeft className="size-4" />
-          </Link>
-          <h2 className="text-2xl font-bold">{service.name}</h2>
-          <Badge variant="outline" className={serviceStateColors[service.state] ?? ""}>
-            {service.state}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => serviceAction("start")}>
-            <Play className="mr-1 size-4" /> Start
-          </Button>
-          <Button variant="outline" onClick={() => serviceAction("restart")}>
-            <RotateCw className="mr-1 size-4" /> Restart
-          </Button>
-          <Button variant="destructive" onClick={() => serviceAction("stop")}>
-            <Square className="mr-1 size-4" /> Stop
-          </Button>
-        </div>
+    <>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-3">
+            <Link
+              href="/services"
+              className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <ArrowLeft className="size-4" />
+            </Link>
+            <span>{service.name}</span>
+            <Badge
+              variant="outline"
+              className={serviceStateColors[service.state] ?? ""}
+            >
+              {service.state}
+            </Badge>
+          </span>
+        }
+        description={`${service.groupName} · port ${service.port}`}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => serviceAction("start")}>
+              <Play className="mr-1 size-4" /> Start
+            </Button>
+            <Button variant="outline" onClick={() => serviceAction("restart")}>
+              <RotateCw className="mr-1 size-4" /> Restart
+            </Button>
+            <Button variant="destructive" onClick={() => serviceAction("stop")}>
+              <Square className="mr-1 size-4" /> Stop
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 grid-cols-3">
+        <StatCard
+          label="Group"
+          icon={Server}
+          value={service.groupName}
+          hint={service.healthy ? "healthy" : "unhealthy"}
+        />
+        <StatCard
+          label="Port"
+          icon={Plug}
+          value={service.port}
+          hint={service.uptime ? `up ${service.uptime}` : "not running"}
+        />
+        <StatCard
+          label="Players"
+          icon={Users}
+          value={service.playerCount}
+          hint="online"
+        />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Group</CardTitle></CardHeader>
-          <CardContent className="text-xl font-bold">{service.groupName}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Port</CardTitle></CardHeader>
-          <CardContent className="text-xl font-bold">{service.port}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Players</CardTitle></CardHeader>
-          <CardContent className="text-xl font-bold">{service.playerCount}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">TPS</CardTitle></CardHeader>
-          <CardContent className="text-xl font-bold">{service.tps?.toFixed(1) ?? "-"}</CardContent>
-        </Card>
-      </div>
-
-      {/* Charts from shared metrics */}
-      {metrics.length >= 2 && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">TPS</CardTitle></CardHeader>
-            <CardContent>
-              <ChartContainer config={tpsConfig} className="h-48 w-full">
-                <AreaChart data={metrics}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9 }} domain={[0, 20]} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Area type="monotone" dataKey="tps" fill="var(--color-tps)" fillOpacity={0.2} stroke="var(--color-tps)" strokeWidth={2} />
-                </AreaChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Memory (MB)</CardTitle></CardHeader>
-            <CardContent>
-              <ChartContainer config={memConfig} className="h-48 w-full">
-                <AreaChart data={metrics}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 9 }} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Area type="monotone" dataKey="memory" fill="var(--color-memory)" fillOpacity={0.2} stroke="var(--color-memory)" strokeWidth={2} />
-                </AreaChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-3">
+          <CardTitle className="text-sm font-medium">Memory</CardTitle>
+          <MemoryBar
+            usedMb={service.memoryUsedMb}
+            maxMb={service.memoryMaxMb}
+            className="w-80"
+          />
+        </CardHeader>
+        <CardContent className="pb-4">
+          {metrics.length < 2 ? (
+            <div className="flex h-40 items-center justify-center text-xs text-muted-foreground">
+              Collecting samples… (history needs at least one full sampling
+              interval of ~30 s)
+            </div>
+          ) : (
+            // ChartContainer forces `aspect-video` which, at full card width,
+            // makes the chart ~500px tall. Override with !aspect-auto + a
+            // fixed height so the graph stays compact.
+            <ChartContainer
+              config={memConfig}
+              className="!aspect-auto h-40 w-full"
+            >
+              <AreaChart data={metrics}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  interval="preserveStartEnd"
+                  minTickGap={32}
+                />
+                <YAxis tick={{ fontSize: 10 }} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area
+                  type="monotone"
+                  dataKey="memory"
+                  fill="var(--color-memory)"
+                  fillOpacity={0.25}
+                  stroke="var(--color-memory)"
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="console">
         <TabsList>
@@ -194,28 +235,42 @@ export default function ServiceDetailPage({
         </TabsList>
         <TabsContent value="console" className="mt-4">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-6">
               <div className="h-96 overflow-y-auto rounded-md bg-black p-3 font-mono text-xs text-gray-300 scrollbar-thin">
-                {consoleLines.map((line, i) => (<AnsiLine key={i} text={line} />))}
+                {consoleLines.map((line, i) => (
+                  <AnsiLine key={i} text={line} />
+                ))}
                 <div ref={consoleEndRef} />
               </div>
-              <form onSubmit={sendCommand} className="mt-2 flex items-center gap-2">
-                <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Enter command..." className="font-mono" />
-                <Button type="submit" size="icon"><Send className="size-4" /></Button>
+              <form
+                onSubmit={sendCommand}
+                className="mt-2 flex items-center gap-2"
+              >
+                <Input
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  placeholder="Enter command…"
+                  className="font-mono"
+                />
+                <Button type="submit" size="icon">
+                  <Send className="size-4" />
+                </Button>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="logs" className="mt-4">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-6">
               <div className="h-96 overflow-y-auto rounded-md bg-black p-3 font-mono text-xs text-gray-300 scrollbar-thin">
-                {logLines.map((line, i) => (<AnsiLine key={i} text={line} />))}
+                {logLines.map((line, i) => (
+                  <AnsiLine key={i} text={line} />
+                ))}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </>
   );
 }

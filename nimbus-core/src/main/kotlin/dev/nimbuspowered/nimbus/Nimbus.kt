@@ -328,6 +328,10 @@ fun nimbusMain() = runBlocking {
     serviceManager.dedicatedServiceManager = dedicatedServiceManager
     serviceManager.serviceFactory.dedicatedServiceManager = dedicatedServiceManager
 
+    // Start periodic memory sampling once we can resolve services.
+    // Writes to service_metric_samples so the dashboard can render history.
+    metricsCollector.startMemorySampling(registry, groupManager, dedicatedServiceManager)
+
     // Recover local services from previous session
     val (recoveredServices, protectedDirs) = serviceManager.recoverLocalServices()
 

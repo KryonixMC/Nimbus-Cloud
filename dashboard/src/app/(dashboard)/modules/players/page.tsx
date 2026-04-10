@@ -16,7 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { statusColors } from "@/lib/status";
 import { PlayerSheet } from "@/components/player-sheet";
-import { Search } from "lucide-react";
+import { Search, Users, UserCheck, Server } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { EmptyState } from "@/components/empty-state";
 
 interface PlayerEntry {
   uuid: string;
@@ -79,123 +82,150 @@ export default function PlayersModulePage() {
     return () => clearTimeout(timeout);
   }, [search, load]);
 
-  if (loading) return <Skeleton className="h-96 rounded-xl" />;
+  const searchInput = (
+    <div className="relative w-64">
+      <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search players…"
+        className="pl-9"
+      />
+    </div>
+  );
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Online</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.online ?? 0}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Total Unique</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalUnique ?? 0}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Per Service</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-1">
-                {stats?.perService &&
-                  Object.entries(stats.perService).map(([service, count]) => (
-                    <Badge key={service} variant="secondary" className="text-xs">
-                      {service}: {count}
-                    </Badge>
-                  ))}
-                {(!stats?.perService || Object.keys(stats.perService).length === 0) && (
-                  <span className="text-sm text-muted-foreground">-</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <PageHeader
+        title="Players"
+        description="Centralised player tracking, session history and per-service breakdown."
+        actions={searchInput}
+      />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Players</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search players..."
-                className="pl-9"
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {players.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {search ? "No players found" : "No players tracked yet"}
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead />
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>First Seen</TableHead>
-                    <TableHead>Last Seen</TableHead>
-                    <TableHead className="text-right">Playtime</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {players.map((p) => (
-                    <TableRow
-                      key={p.uuid}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setSelectedPlayer(p.uuid);
-                        setSheetOpen(true);
-                      }}
-                    >
-                      <TableCell className="w-10">
-                        <img
-                          src={`https://mc-heads.net/avatar/${p.uuid}/32`}
-                          alt={p.name}
-                          className="size-8 min-w-8 rounded-sm"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={p.online === "true" ? statusColors.online : statusColors.inactive}
-                        >
-                          {p.online === "true" ? "Online" : "Offline"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(p.firstSeen)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(p.lastSeen)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {formatPlaytime(Number(p.totalPlaytimeSeconds))}
-                      </TableCell>
+      {loading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatCard
+              label="Online now"
+              icon={UserCheck}
+              tone="primary"
+              value={stats?.online ?? 0}
+              hint="across all services"
+            />
+            <StatCard
+              label="Total unique"
+              icon={Users}
+              value={stats?.totalUnique ?? 0}
+              hint="ever seen"
+            />
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Per service
+                </CardTitle>
+                <Server className="size-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-1">
+                  {stats?.perService &&
+                    Object.entries(stats.perService).map(([service, count]) => (
+                      <Badge
+                        key={service}
+                        variant="secondary"
+                        className="text-xs"
+                      >
+                        {service}: {count}
+                      </Badge>
+                    ))}
+                  {(!stats?.perService ||
+                    Object.keys(stats.perService).length === 0) && (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {players.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title={search ? "No players found" : "No players tracked yet"}
+              description={
+                search
+                  ? `No players match "${search}".`
+                  : "Players will appear here as they join any backend."
+              }
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-6 w-14" />
+                      <TableHead>Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>First seen</TableHead>
+                      <TableHead>Last seen</TableHead>
+                      <TableHead className="text-right pr-6">Playtime</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  </TableHeader>
+                  <TableBody>
+                    {players.map((p) => (
+                      <TableRow
+                        key={p.uuid}
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setSelectedPlayer(p.uuid);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        <TableCell className="pl-6">
+                          <img
+                            src={`https://mc-heads.net/avatar/${p.uuid}/32`}
+                            alt={p.name}
+                            className="size-8 min-w-8 rounded-sm"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              p.online === "true"
+                                ? statusColors.online
+                                : statusColors.inactive
+                            }
+                          >
+                            {p.online === "true" ? "Online" : "Offline"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(p.firstSeen)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(p.lastSeen)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm pr-6">
+                          {formatPlaytime(Number(p.totalPlaytimeSeconds))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
-      <PlayerSheet uuid={selectedPlayer} open={sheetOpen} onOpenChange={setSheetOpen} />
+      <PlayerSheet
+        uuid={selectedPlayer}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
     </>
   );
 }

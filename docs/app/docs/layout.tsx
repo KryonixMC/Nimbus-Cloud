@@ -99,6 +99,11 @@ export default function Layout({ children }: { children: ReactNode }) {
       }}
       links={[
         {
+          text: 'Dashboard',
+          url: 'https://dashboard.nimbuspowered.org',
+          external: true,
+        },
+        {
           type: 'icon',
           label: 'GitHub',
           icon: <SiGithub className="size-5" />,

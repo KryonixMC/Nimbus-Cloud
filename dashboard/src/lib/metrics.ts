@@ -3,48 +3,100 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
-interface ServiceMetricPoint {
+export interface ServiceMetricPoint {
   time: string;
-  tps: number;
   memory: number;
+  memoryMax: number;
+  players: number;
 }
 
 interface ServiceMetricsResponse {
-  tps: number;
   memoryUsedMb: number;
+  memoryMaxMb: number;
+  playerCount: number;
 }
 
-export function useServiceMetrics(serviceName: string, intervalMs = 5000) {
+interface ServiceMetricHistoryResponse {
+  service: string;
+  samples: Array<{
+    timestamp: string;
+    memoryUsedMb: number;
+    memoryMaxMb: number;
+    playerCount: number;
+  }>;
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+/**
+ * Returns a rolling window of memory + player samples for a service.
+ *
+ * On mount it fetches the last [historyMinutes] minutes from the controller's
+ * `/api/services/{name}/metrics/history` endpoint (which reads from the
+ * service_metric_samples DB table written by MetricsCollector). Then it keeps
+ * polling the live `/api/services/{name}` endpoint so that new samples are
+ * appended in real time without the user having to refresh.
+ */
+export function useServiceMetrics(
+  serviceName: string,
+  { intervalMs = 5000, historyMinutes = 60, maxPoints = 240 } = {}
+) {
   const [metrics, setMetrics] = useState<ServiceMetricPoint[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    function fetchMetric() {
+    let cancelled = false;
+
+    // 1. Load history once.
+    apiFetch<ServiceMetricHistoryResponse>(
+      `/api/services/${serviceName}/metrics/history?minutes=${historyMinutes}`
+    )
+      .then((data) => {
+        if (cancelled) return;
+        setMetrics(
+          data.samples.map((s) => ({
+            time: formatTime(new Date(s.timestamp)),
+            memory: s.memoryUsedMb,
+            memoryMax: s.memoryMaxMb,
+            players: s.playerCount,
+          }))
+        );
+      })
+      .catch(() => {
+        // History is best-effort — empty start is fine, live polling will fill in.
+      });
+
+    // 2. Start live polling for new samples.
+    function fetchLive() {
       apiFetch<ServiceMetricsResponse>(`/api/services/${serviceName}`)
         .then((data) => {
+          if (cancelled) return;
           const point: ServiceMetricPoint = {
-            time: new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            }),
-            tps: data.tps ?? 0,
+            time: formatTime(new Date()),
             memory: data.memoryUsedMb ?? 0,
+            memoryMax: data.memoryMaxMb ?? 0,
+            players: data.playerCount ?? 0,
           };
           setMetrics((prev) => {
             const next = [...prev, point];
-            return next.length > 60 ? next.slice(-60) : next;
+            return next.length > maxPoints ? next.slice(-maxPoints) : next;
           });
         })
         .catch(() => {});
     }
 
-    fetchMetric();
-    intervalRef.current = setInterval(fetchMetric, intervalMs);
+    pollRef.current = setInterval(fetchLive, intervalMs);
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      cancelled = true;
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [serviceName, intervalMs]);
+  }, [serviceName, intervalMs, historyMinutes, maxPoints]);
 
   return metrics;
 }

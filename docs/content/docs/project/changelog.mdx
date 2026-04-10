@@ -9,6 +9,33 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.6.1 (April 10, 2026)
+
+Dashboard design-system pass, historical memory charts and an audit-log fix.
+
+### Added
+- **Unified dashboard design system**: a canonical `<PageHeader>` (title + description + actions + hairline separator) on every page, plus shared `<StatCard>`, `<EmptyState>`, `<SectionLabel>` and `<MemoryBar>` components so Overview, Services, Groups, Dedicated, Nodes, Console, Plugins, Stress Test, Audit Log, Settings and every module page now share the exact same page shell, loading states and empty states
+- **Canonical sheet layout**: `<SheetContent>` gained a `size="sm|md|lg|xl"` prop and a new `<SheetBody>` that handles scroll + padding in one place. Edit sheets (Display, Permissions, Player) no longer need `p-0` + wrapper hacks; the Display edit sheet header is no longer double-padded
+- **Historical memory graph on service detail**: new `service_metric_samples` table (migration V4) populated every 30 s by `MetricsCollector.startMemorySampling()` with memory RSS + player count per running service. `GET /api/services/{name}/metrics/history?minutes=60` returns the last N minutes of samples. The dashboard chart now pre-loads history on mount and keeps appending live samples — no more blank charts on page enter
+- **`<MemoryBar>` component**: inline memory progress bar with tone-coded pressure (primary → yellow → destructive), used in the services list and service detail instead of raw `used/max MB` text
+- **Dashboard breadcrumbs** now mirror the sidebar labels exactly (`Dashboard`, `Services`, `Dedicated`, `Stress Test`, `Audit Log`, `Sync Proxy`, …). Added the missing `dedicated` → "Dedicated" mapping
+
+### Changed
+- **Accent color retuned to match the logo**: all color tokens (`--primary`, `--accent`, `--ring`, `--sidebar-primary`, `--sidebar-ring`, `--chart-1..5`) moved from hue 210 (teal-cyan) to hue 235 (sky-blue), lightness raised to match the `public/icon.png` cloud. Buttons, ring focus and charts now feel like part of the brand instead of sitting next to it
+- **TPS removed from the dashboard**: TPS was unreliable because only SDK-reporting services actually sent it, so the services list and service detail now focus on memory usage instead. TPS is still tracked internally for health checks; it just isn't shown in the dashboard anymore
+- **Permissions "Create group" moved into the page header** as a button-triggered dialog, consistent with how Services and Groups expose their create actions
+- **Info sheet, Perms group-edit sheet, Player sheet** all switched to the new `SheetBody` + `SectionLabel` pattern so every sheet feels identical
+- **Audit log route uses proper `@Serializable` DTOs** (`AuditEntryResponse`, `AuditListResponse`) instead of `mapOf<String, Any?>`
+
+### Fixed
+- **Audit log was empty in the dashboard**: `/api/audit` returned `mapOf<String, Any?>`, which kotlinx.serialization can't serialize (no polymorphic `Any` support), so every request silently 500'd and the dashboard showed an empty table. The console `audit` command worked because it queried the DB directly. Now fixed with real DTOs
+- **Service detail memory chart was ~500 px tall**: `ChartContainer` bakes in `aspect-video`, which at full card width forced a 16:9 chart. Overridden with `!aspect-auto` + fixed height so the graph stays compact
+- **Display module edit sheet title was weirdly indented**: the page wrapped `<SheetHeader>` (which already has `p-6`) in its own `p-6 pb-0` div, producing a double-padded header. Fixed by removing the wrapper and using the canonical sheet pattern
+- **Service detail stat cards collapsed under each other** on normal desktop widths. Forced to `grid-cols-3` so Group / Port / Players stay side-by-side
+- **v0.6.1 version bump** in `gradle.properties`
+
+---
+
 ## v0.6.0 (April 10, 2026)
 
 Dedicated Services: single-instance, fixed-port servers without templates — plus a unified memory-reading pipeline and a Controller Info sheet in the dashboard.

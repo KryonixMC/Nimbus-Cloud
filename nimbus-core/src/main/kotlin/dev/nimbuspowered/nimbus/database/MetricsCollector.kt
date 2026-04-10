@@ -2,6 +2,11 @@ package dev.nimbuspowered.nimbus.database
 
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
+import dev.nimbuspowered.nimbus.group.GroupManager
+import dev.nimbuspowered.nimbus.service.DedicatedServiceManager
+import dev.nimbuspowered.nimbus.service.ServiceMemoryResolver
+import dev.nimbuspowered.nimbus.service.ServiceRegistry
+import dev.nimbuspowered.nimbus.service.ServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -168,6 +173,64 @@ class MetricsCollector(
         logger.info("Metrics collector shut down (final flush complete)")
     }
 
+    // ── Periodic memory sampling ──────────────────────────────
+    //
+    // Writes a row per running service every [samplingIntervalMs] into
+    // [ServiceMetricSamples]. The dashboard queries this table to render
+    // "memory over the last hour" charts so users don't start from blank
+    // every time a service detail page is opened.
+
+    private val samplingIntervalMs = 30_000L
+
+    fun startMemorySampling(
+        registry: ServiceRegistry,
+        groupManager: GroupManager,
+        dedicatedServiceManager: DedicatedServiceManager?,
+    ): Job = scope.launch {
+        while (isActive) {
+            delay(samplingIntervalMs)
+            val running = registry.getAll().filter {
+                it.state == ServiceState.READY || it.state == ServiceState.STARTING
+            }
+            if (running.isEmpty()) continue
+            val ts = Instant.now().toString()
+            val rows = running.map { svc ->
+                val mem = ServiceMemoryResolver.resolve(svc, groupManager, dedicatedServiceManager)
+                SampleEntry(
+                    timestamp = ts,
+                    serviceName = svc.name,
+                    groupName = svc.groupName,
+                    memoryUsedMb = mem.usedMb.toInt(),
+                    memoryMaxMb = mem.maxMb.toInt(),
+                    playerCount = svc.playerCount,
+                )
+            }
+            try {
+                db.query {
+                    ServiceMetricSamples.batchInsert(rows) { entry ->
+                        this[ServiceMetricSamples.timestamp] = entry.timestamp
+                        this[ServiceMetricSamples.serviceName] = entry.serviceName
+                        this[ServiceMetricSamples.groupName] = entry.groupName
+                        this[ServiceMetricSamples.memoryUsedMb] = entry.memoryUsedMb
+                        this[ServiceMetricSamples.memoryMaxMb] = entry.memoryMaxMb
+                        this[ServiceMetricSamples.playerCount] = entry.playerCount
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to write {} service metric samples: {}", rows.size, e.message)
+            }
+        }
+    }
+
+    private data class SampleEntry(
+        val timestamp: String,
+        val serviceName: String,
+        val groupName: String?,
+        val memoryUsedMb: Int,
+        val memoryMaxMb: Int,
+        val playerCount: Int,
+    )
+
     private fun <T> drainQueue(queue: ConcurrentLinkedQueue<T>): List<T> {
         val list = mutableListOf<T>()
         while (true) {
@@ -194,8 +257,11 @@ class MetricsCollector(
             db.query {
                 val deletedServices = ServiceEvents.deleteWhere { timestamp less cutoff }
                 val deletedScaling = ScalingEvents.deleteWhere { timestamp less cutoff }
-                logger.info("Metrics retention cleanup: pruned {} service events, {} scaling events older than {} days",
-                    deletedServices, deletedScaling, retentionDays)
+                val deletedSamples = ServiceMetricSamples.deleteWhere { timestamp less cutoff }
+                logger.info(
+                    "Metrics retention cleanup: pruned {} service events, {} scaling events, {} metric samples older than {} days",
+                    deletedServices, deletedScaling, deletedSamples, retentionDays
+                )
             }
         } catch (e: Exception) {
             logger.warn("Failed to prune old metrics: {}", e.message)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,18 +16,40 @@ import {
 } from "@/components/ui/table";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
+  SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 import { PlayerSheet } from "@/components/player-sheet";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
-import { Save, Plus, Trash2, X, Search } from "lucide-react";
+import {
+  Save,
+  Plus,
+  Trash2,
+  X,
+  Search,
+  Shield,
+  Users as UsersIcon,
+} from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { SectionLabel } from "@/components/section-label";
 
 interface PermGroup {
   name: string;
@@ -70,6 +92,7 @@ export default function PermissionsPage() {
   const [saving, setSaving] = useState(false);
 
   // Create group
+  const [createOpen, setCreateOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -79,7 +102,9 @@ export default function PermissionsPage() {
 
   async function load() {
     try {
-      const g = await apiFetch<{ groups: PermGroup[]; total: number }>("/api/permissions/groups")
+      const g = await apiFetch<{ groups: PermGroup[]; total: number }>(
+        "/api/permissions/groups"
+      )
         .then((d) => d.groups)
         .catch(() => []);
       setGroups(g);
@@ -90,7 +115,9 @@ export default function PermissionsPage() {
 
   async function loadPlayers(query: string) {
     const params = query ? `?q=${encodeURIComponent(query)}` : "";
-    const p = await apiFetch<PermsPlayer[]>(`/api/permissions/players${params}`).catch(() => []);
+    const p = await apiFetch<PermsPlayer[]>(
+      `/api/permissions/players${params}`
+    ).catch(() => []);
     setPlayers(p);
   }
 
@@ -152,6 +179,7 @@ export default function PermissionsPage() {
       });
       toast.success(`Group '${newGroupName}' created`);
       setNewGroupName("");
+      setCreateOpen(false);
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create");
@@ -191,315 +219,394 @@ export default function PermissionsPage() {
     setEditParents((prev) => prev.filter((p) => p !== parent));
   }
 
-  if (loading) return <Skeleton className="h-96 rounded-xl" />;
-
   return (
     <>
-      <Tabs defaultValue="groups">
-        <TabsList>
-          <TabsTrigger value="groups">Groups ({groups.length})</TabsTrigger>
-          <TabsTrigger value="players">Players ({players.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="groups" className="mt-4 space-y-4">
-          {/* Create group */}
-          <div className="flex items-center gap-2">
-            <Input
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="New group name..."
-              className="max-w-xs"
-              onKeyDown={(e) => e.key === "Enter" && createGroup()}
+      <PageHeader
+        title="Permissions"
+        description="Manage LuckPerms-style groups, inheritance, prefixes and per-player overrides."
+        actions={
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="mr-1 size-4" /> New group
+                </Button>
+              }
             />
-            <Button
-              onClick={createGroup}
-              disabled={creating || !newGroupName.trim()}
-            >
-              <Plus className="mr-1 size-4" />
-              {creating ? "Creating..." : "Create"}
-            </Button>
-          </div>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create permission group</DialogTitle>
+                <DialogDescription>
+                  Give the group a unique name. You can edit prefix, weight
+                  and permissions right after creating it.
+                </DialogDescription>
+              </DialogHeader>
+              <Field>
+                <FieldLabel>Group name</FieldLabel>
+                <Input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g. admin"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && createGroup()}
+                />
+              </Field>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setCreateOpen(false)}
+                  disabled={creating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={createGroup}
+                  disabled={creating || !newGroupName.trim()}
+                >
+                  {creating ? "Creating…" : "Create group"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
+      />
 
-          <Card>
-            <CardContent className="pt-6">
-              {groups.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No permission groups
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Prefix</TableHead>
-                      <TableHead>Suffix</TableHead>
-                      <TableHead className="text-right">Weight</TableHead>
-                      <TableHead className="text-right">Permissions</TableHead>
-                      <TableHead>Parents</TableHead>
-                      <TableHead>Default</TableHead>
-                      <TableHead className="w-12" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {groups.map((g) => (
-                      <TableRow
-                        key={g.name}
-                        className="cursor-pointer"
-                        onClick={() => openEdit(g)}
-                      >
-                        <TableCell className="font-medium">{g.name}</TableCell>
-                        <TableCell className="text-xs">{g.prefix || "-"}</TableCell>
-                        <TableCell className="text-xs">{g.suffix || "-"}</TableCell>
-                        <TableCell className="text-right">{g.weight}</TableCell>
-                        <TableCell className="text-right">
-                          {g.permissions.length}
-                        </TableCell>
-                        <TableCell>
-                          {g.parents.length > 0 ? (
+      {loading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : (
+        <Tabs defaultValue="groups">
+          <TabsList>
+            <TabsTrigger value="groups">Groups ({groups.length})</TabsTrigger>
+            <TabsTrigger value="players">
+              Players ({players.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="groups" className="mt-4 space-y-4">
+            {groups.length === 0 ? (
+              <EmptyState
+                icon={Shield}
+                title="No permission groups"
+                description="Create your first group to start assigning permissions."
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6">Name</TableHead>
+                        <TableHead>Prefix</TableHead>
+                        <TableHead>Suffix</TableHead>
+                        <TableHead className="text-right">Weight</TableHead>
+                        <TableHead className="text-right">
+                          Permissions
+                        </TableHead>
+                        <TableHead>Parents</TableHead>
+                        <TableHead>Default</TableHead>
+                        <TableHead className="w-12" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {groups.map((g) => (
+                        <TableRow
+                          key={g.name}
+                          className="cursor-pointer"
+                          onClick={() => openEdit(g)}
+                        >
+                          <TableCell className="pl-6 font-medium">
+                            {g.name}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {g.prefix || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {g.suffix || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {g.weight}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {g.permissions.length}
+                          </TableCell>
+                          <TableCell>
+                            {g.parents.length > 0 ? (
+                              <div className="flex gap-1">
+                                {g.parents.map((p) => (
+                                  <Badge
+                                    key={p}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {p}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {g.default && (
+                              <Badge variant="outline" className="text-xs">
+                                Default
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteGroup(g.name);
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="players" className="mt-4 space-y-4">
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Search players…"
+                className="pl-9"
+              />
+            </div>
+
+            {players.length === 0 ? (
+              <EmptyState
+                icon={UsersIcon}
+                title={playerSearch ? "No players found" : "No players known"}
+                description={
+                  playerSearch
+                    ? `No players match "${playerSearch}".`
+                    : "Players will appear here once they join and get a permission group."
+                }
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6 w-14" />
+                        <TableHead>Name</TableHead>
+                        <TableHead>Group</TableHead>
+                        <TableHead>Prefix</TableHead>
+                        <TableHead>All groups</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {players.map((p) => (
+                        <TableRow
+                          key={p.uuid}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            setSelectedPlayer(p.uuid);
+                            setSheetOpen(true);
+                          }}
+                        >
+                          <TableCell className="pl-6">
+                            <img
+                              src={`https://mc-heads.net/avatar/${p.uuid}/32`}
+                              alt={p.name}
+                              className="size-8 min-w-8 rounded-sm"
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {p.name}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{p.displayGroup}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {p.prefix || "—"}
+                          </TableCell>
+                          <TableCell>
                             <div className="flex gap-1">
-                              {g.parents.map((p) => (
-                                <Badge key={p} variant="secondary" className="text-xs">
-                                  {p}
+                              {p.groups.map((g) => (
+                                <Badge
+                                  key={g}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {g}
                                 </Badge>
                               ))}
                             </div>
-                          ) : (
-                            "-"
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {g.default && (
-                            <Badge variant="outline" className="text-xs">
-                              Default
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteGroup(g.name);
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="players" className="mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Players</CardTitle>
-              <div className="relative w-64">
-                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  value={playerSearch}
-                  onChange={(e) => setPlayerSearch(e.target.value)}
-                  placeholder="Search players..."
-                  className="pl-9"
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {players.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {playerSearch ? "No players found" : "No players known"}
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead />
-                      <TableHead>Name</TableHead>
-                      <TableHead>Group</TableHead>
-                      <TableHead>Prefix</TableHead>
-                      <TableHead>All Groups</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {players.map((p) => (
-                      <TableRow
-                        key={p.uuid}
-                        className="cursor-pointer"
-                        onClick={() => {
-                          setSelectedPlayer(p.uuid);
-                          setSheetOpen(true);
-                        }}
-                      >
-                        <TableCell className="w-10">
-                          <img
-                            src={`https://mc-heads.net/avatar/${p.uuid}/32`}
-                            alt={p.name}
-                            className="size-8 min-w-8 rounded-sm"
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{p.displayGroup}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{p.prefix || "-"}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {p.groups.map((g) => (
-                              <Badge key={g} variant="secondary" className="text-xs">
-                                {g}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+      )}
 
       {/* Edit Group Sheet */}
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent className="w-[480px] sm:w-[600px] p-0">
-          <div className="p-6 pb-0">
-            <SheetHeader>
-              <SheetTitle>
-                Edit Group: {editGroup?.name}
-              </SheetTitle>
-            </SheetHeader>
-          </div>
-          <ScrollArea className="h-[calc(100vh-6rem)]">
-            <div className="space-y-6 p-6">
-              {/* Display */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Display</h3>
+        <SheetContent size="lg">
+          <SheetHeader>
+            <SheetTitle>Edit group · {editGroup?.name}</SheetTitle>
+            <SheetDescription>
+              Set display formatting, inheritance and the permission list.
+            </SheetDescription>
+          </SheetHeader>
+
+          <SheetBody>
+            <section className="space-y-3">
+              <SectionLabel>Display</SectionLabel>
+              <Field>
+                <FieldLabel>Prefix</FieldLabel>
+                <Input
+                  value={editPrefix}
+                  onChange={(e) => setEditPrefix(e.target.value)}
+                  placeholder="e.g. &c[Admin] "
+                />
+                <FieldDescription>
+                  Color codes supported (&amp;c, &amp;a, …)
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel>Suffix</FieldLabel>
+                <Input
+                  value={editSuffix}
+                  onChange={(e) => setEditSuffix(e.target.value)}
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
                 <Field>
-                  <FieldLabel>Prefix</FieldLabel>
+                  <FieldLabel>Weight</FieldLabel>
                   <Input
-                    value={editPrefix}
-                    onChange={(e) => setEditPrefix(e.target.value)}
-                    placeholder="e.g. &c[Admin] "
+                    type="number"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(Number(e.target.value))}
                   />
-                  <FieldDescription>Color codes supported (&amp;c, &amp;a, etc.)</FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel>Suffix</FieldLabel>
+                  <FieldLabel>Priority</FieldLabel>
                   <Input
-                    value={editSuffix}
-                    onChange={(e) => setEditSuffix(e.target.value)}
+                    type="number"
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(Number(e.target.value))}
                   />
                 </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field>
-                    <FieldLabel>Weight</FieldLabel>
-                    <Input
-                      type="number"
-                      value={editWeight}
-                      onChange={(e) => setEditWeight(Number(e.target.value))}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Priority</FieldLabel>
-                    <Input
-                      type="number"
-                      value={editPriority}
-                      onChange={(e) => setEditPriority(Number(e.target.value))}
-                    />
-                  </Field>
-                </div>
-                <div className="flex items-center justify-between">
-                  <FieldLabel>Default group (assigned to new players)</FieldLabel>
-                  <Switch checked={editDefault} onCheckedChange={setEditDefault} />
-                </div>
               </div>
-
-              {/* Parents */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Parents (Inheritance)</h3>
-                <div className="flex flex-wrap gap-1">
-                  {editParents.map((p) => (
-                    <Badge key={p} variant="secondary" className="gap-1">
-                      {p}
-                      <button onClick={() => removeParent(p)}>
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {editParents.length === 0 && (
-                    <span className="text-xs text-muted-foreground">None</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newParent}
-                    onChange={(e) => setNewParent(e.target.value)}
-                    placeholder="Parent group name"
-                    onKeyDown={(e) => e.key === "Enter" && addParent()}
-                  />
-                  <Button variant="outline" onClick={addParent}>
-                    Add
-                  </Button>
-                </div>
+              <div className="flex items-center justify-between gap-4">
+                <FieldLabel>Default group (assigned to new players)</FieldLabel>
+                <Switch
+                  checked={editDefault}
+                  onCheckedChange={setEditDefault}
+                />
               </div>
+            </section>
 
-              {/* Permissions */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold">
-                  Permissions ({editPermissions.length})
-                </h3>
-                <div className="max-h-48 overflow-y-auto rounded-md border">
-                  {editPermissions.map((perm) => (
-                    <div
-                      key={perm}
-                      className="flex items-center justify-between border-b px-3 py-1.5 text-xs last:border-b-0"
+            <section className="space-y-3">
+              <SectionLabel>Parents (inheritance)</SectionLabel>
+              <div className="flex flex-wrap gap-1">
+                {editParents.map((p) => (
+                  <Badge key={p} variant="secondary" className="gap-1 pr-1">
+                    {p}
+                    <button
+                      onClick={() => removeParent(p)}
+                      className="ml-0.5 hover:text-destructive"
                     >
-                      <code className={perm.startsWith("-") ? "text-destructive" : ""}>
-                        {perm}
-                      </code>
-                      <button
-                        onClick={() => removePerm(perm)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                  {editPermissions.length === 0 && (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No permissions
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newPerm}
-                    onChange={(e) => setNewPerm(e.target.value)}
-                    placeholder="e.g. nimbus.admin"
-                    className="font-mono"
-                    onKeyDown={(e) => e.key === "Enter" && addPerm()}
-                  />
-                  <Button variant="outline" onClick={addPerm}>
-                    Add
-                  </Button>
-                </div>
+                      <X className="size-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {editParents.length === 0 && (
+                  <span className="text-xs text-muted-foreground">None</span>
+                )}
               </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newParent}
+                  onChange={(e) => setNewParent(e.target.value)}
+                  placeholder="Parent group name"
+                  onKeyDown={(e) => e.key === "Enter" && addParent()}
+                />
+                <Button variant="outline" onClick={addParent}>
+                  Add
+                </Button>
+              </div>
+            </section>
 
-              {/* Save */}
-              <Button onClick={saveGroup} disabled={saving} className="w-full">
-                <Save className="mr-1 size-4" />
-                {saving ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </ScrollArea>
+            <section className="space-y-3">
+              <SectionLabel right={<span>{editPermissions.length}</span>}>
+                Permissions
+              </SectionLabel>
+              <div className="max-h-56 overflow-y-auto scrollbar-thin rounded-md border">
+                {editPermissions.map((perm) => (
+                  <div
+                    key={perm}
+                    className="flex items-center justify-between border-b px-3 py-1.5 text-xs last:border-b-0"
+                  >
+                    <code
+                      className={
+                        perm.startsWith("-") ? "text-destructive" : ""
+                      }
+                    >
+                      {perm}
+                    </code>
+                    <button
+                      onClick={() => removePerm(perm)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+                {editPermissions.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    No permissions
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newPerm}
+                  onChange={(e) => setNewPerm(e.target.value)}
+                  placeholder="e.g. nimbus.admin"
+                  className="font-mono"
+                  onKeyDown={(e) => e.key === "Enter" && addPerm()}
+                />
+                <Button variant="outline" onClick={addPerm}>
+                  Add
+                </Button>
+              </div>
+            </section>
+          </SheetBody>
+
+          <SheetFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditOpen(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveGroup} disabled={saving}>
+              <Save className="mr-1 size-4" />
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
 

@@ -22,7 +22,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | [v0.3.0 – v0.3.1](#v03x--competitive-features) | Released | Template stacking, warm pool, player module, remote CLI |
 | [v0.4.0 – v0.4.7](#v04x--web-dashboard) | Released (ALPHA) | Web Dashboard, modpack import, module loading fixes |
 | [v0.5.0 – v0.5.3](#v05x--modded-support) | Released | Modded client routing, mod list matching |
-| [v0.6.0](#v06x--dedicated-services) | Released | Dedicated services, unified memory, controller info |
+| [v0.6.0 – v0.6.1](#v06x--dedicated-services) | Released | Dedicated services, unified memory, dashboard design system |
 | [Vision](#vision--cloud-native) | Planned | Docker, S3 storage, multi-controller HA |
 
 ---
@@ -259,6 +259,15 @@ Smart routing based on mod list overlap — the key feature for networks running
 - **SDK simplified** — `reportHealth(tps)` only reports TPS now. Memory is the controller's job. Backwards-compatible: the API still accepts the old body shape
 - **Proxy forwarding sync on every start** — `syncProxyForwardingMods` runs on every service prepare (groups and dedicated) and cleans up stale mods from other modloaders if the group's software was changed. The NeoForge 1.20.1 ↔ 1.20.2 swap between proxy-compatible-forge and NeoForwarding now happens automatically
 - **Dashboard sidebar redesign** — Nav split into labeled sections (Overview, Infrastructure, Operations, Monitoring, Modules) with tighter spacing. Login page now uses `banner.svg` instead of the square icon
+
+### v0.6.1 — Dashboard Design System (April 10, 2026)
+
+- **Unified design system across every dashboard page** — A canonical `<PageHeader>` (title + description + actions + hairline separator), shared `<StatCard>`, `<EmptyState>`, `<SectionLabel>` and `<MemoryBar>` components, plus a new `<SheetBody>` + `SheetContent size="..."` prop so every sheet (Info, Display, Perms, Player) follows the exact same layout. Fixes the long-standing "Display edit sheet title is weirdly indented" bug caused by double-padding, and gets rid of pixel-hardcoded widths and `p-0` hacks
+- **Accent color tuned to the logo** — All color tokens moved from hue 210 (teal-cyan) to hue 235 (sky-blue) with lightness matched to the cloud icon. Buttons, focus rings and chart colors now belong to the brand
+- **Historical memory charts** — New `service_metric_samples` table (migration V4) writes memory RSS + player count every 30 s for every running service. `GET /api/services/{name}/metrics/history?minutes=60` returns the history. The service detail page pre-loads the last hour on mount and keeps appending live samples — no more charts that start blank when you open the page
+- **TPS dropped from the dashboard** — TPS was only reported by SDK-enabled services, so half the rows showed fake numbers. Services list and service detail now focus on memory (with an inline `MemoryBar` showing used / max and a tone-coded fill). TPS is still tracked internally for health checks
+- **Dashboard breadcrumbs** now mirror the sidebar labels exactly, including the missing `Dedicated` mapping
+- **Audit log dashboard empty-state bug fixed** — Root cause was `/api/audit` returning `mapOf<String, Any?>`, which kotlinx.serialization can't serialize, so every request silently 500'd. Proper `@Serializable` DTOs now
 
 ---
 

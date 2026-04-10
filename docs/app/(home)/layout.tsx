@@ -13,6 +13,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         { text: 'Documentation', url: '/docs/guide/introduction' },
         { text: 'Changelog', url: '/docs/project/changelog' },
         {
+          text: 'Dashboard',
+          url: 'https://dashboard.nimbuspowered.org',
+          external: true,
+        },
+        {
           type: 'icon',
           label: 'GitHub',
           icon: <SiGithub className="size-5" />,

@@ -14,10 +14,16 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 
+/**
+ * Breadcrumb labels, mirrored from `app-sidebar.tsx` so that the breadcrumb
+ * in the top bar always reads the same wording as the sidebar entry the user
+ * clicked. When adding a new page, add it to *both* the sidebar and this map.
+ */
 const routeLabels: Record<string, string> = {
-  "": "Overview",
+  "": "Dashboard",
   services: "Services",
   groups: "Groups",
+  dedicated: "Dedicated",
   nodes: "Nodes",
   console: "Console",
   plugins: "Plugins",

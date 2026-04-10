@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -12,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -25,6 +25,7 @@ import { apiFetch } from "@/lib/api";
 import { statusColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
+import { SectionLabel } from "@/components/section-label";
 
 interface PlayerMeta {
   uuid: string;
@@ -71,6 +72,22 @@ function formatDate(iso: string): string {
   }
 }
 
+/** Compact key/value row used in the player sheet. */
+function MetaRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right">{children}</span>
+    </div>
+  );
+}
+
 export function PlayerSheet({
   uuid,
   open,
@@ -89,11 +106,9 @@ export function PlayerSheet({
 
   function reload() {
     if (!uuid) return;
-    Promise.all([
-      apiFetch<PlayerPerms>(`/api/permissions/players/${uuid}`).catch(() => null),
-    ]).then(([p]) => {
-      if (p) setPerms(p);
-    });
+    apiFetch<PlayerPerms>(`/api/permissions/players/${uuid}`)
+      .then(setPerms)
+      .catch(() => {});
   }
 
   useEffect(() => {
@@ -106,9 +121,15 @@ export function PlayerSheet({
 
     Promise.all([
       apiFetch<PlayerMeta>(`/api/players/info/${uuid}`).catch(() => null),
-      apiFetch<SessionEntry[]>(`/api/players/history/${uuid}?limit=20`).catch(() => []),
-      apiFetch<PlayerPerms>(`/api/permissions/players/${uuid}`).catch(() => null),
-      apiFetch<{ groups: PermGroupInfo[]; total: number }>("/api/permissions/groups")
+      apiFetch<SessionEntry[]>(
+        `/api/players/history/${uuid}?limit=20`
+      ).catch(() => []),
+      apiFetch<PlayerPerms>(`/api/permissions/players/${uuid}`).catch(
+        () => null
+      ),
+      apiFetch<{ groups: PermGroupInfo[]; total: number }>(
+        "/api/permissions/groups"
+      )
         .then((d) => d.groups)
         .catch(() => []),
     ]).then(([m, h, p, g]) => {
@@ -156,162 +177,151 @@ export function PlayerSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[480px] sm:w-[600px] p-0">
-        <div className="p-6 pb-0">
-          <SheetHeader>
-            <div className="flex items-center gap-4">
-              <img
-                src={uuid ? `https://mc-heads.net/avatar/${uuid}/64` : undefined}
-                alt={playerName}
-                className="size-16 rounded-sm"
-              />
-              <div>
-                <SheetTitle className="text-xl">{playerName}</SheetTitle>
-                <SheetDescription className="font-mono text-xs mt-1">
-                  {uuid}
-                </SheetDescription>
-              </div>
+      <SheetContent size="lg">
+        <SheetHeader>
+          <div className="flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={uuid ? `https://mc-heads.net/avatar/${uuid}/64` : undefined}
+              alt={playerName}
+              className="size-14 rounded-md ring-1 ring-border"
+            />
+            <div className="min-w-0 flex-1">
+              <SheetTitle className="text-lg">{playerName}</SheetTitle>
+              <SheetDescription className="font-mono text-xs">
+                {uuid}
+              </SheetDescription>
             </div>
-          </SheetHeader>
-        </div>
+          </div>
+        </SheetHeader>
 
         {loading ? (
-          <div className="space-y-4 p-6">
-            <Skeleton className="h-20 rounded-md" />
+          <SheetBody>
+            <Skeleton className="h-24 rounded-md" />
             <Skeleton className="h-40 rounded-md" />
-          </div>
+          </SheetBody>
         ) : (
-          <ScrollArea className="h-[calc(100vh-10rem)]">
-            <div className="space-y-6 p-6">
-              {/* Status */}
-              {meta && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Status</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-muted-foreground">Online</div>
-                    <div>
-                      <Badge
-                        variant="outline"
-                        className={meta.online ? statusColors.online : statusColors.inactive}
-                      >
-                        {meta.online ? "Online" : "Offline"}
-                      </Badge>
-                    </div>
-                    {meta.currentService && (
-                      <>
-                        <div className="text-muted-foreground">Server</div>
-                        <div>{meta.currentService}</div>
-                      </>
-                    )}
-                    <div className="text-muted-foreground">First Seen</div>
-                    <div>{formatDate(meta.firstSeen)}</div>
-                    <div className="text-muted-foreground">Last Seen</div>
-                    <div>{formatDate(meta.lastSeen)}</div>
-                    <div className="text-muted-foreground">Playtime</div>
-                    <div>{formatPlaytime(meta.totalPlaytimeSeconds)}</div>
-                  </div>
-                </div>
-              )}
-
-              {/* Groups (editable) */}
-              {perms && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">Groups</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-muted-foreground">Display Group</div>
-                    <div>
-                      <Badge variant="outline">{perms.displayGroup}</Badge>
-                    </div>
-                    {perms.prefix && (
-                      <>
-                        <div className="text-muted-foreground">Prefix</div>
-                        <div>{perms.prefix}</div>
-                      </>
-                    )}
-                    {perms.suffix && (
-                      <>
-                        <div className="text-muted-foreground">Suffix</div>
-                        <div>{perms.suffix}</div>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {perms.groups.map((g) => (
-                      <Badge key={g} variant="secondary" className="gap-1 pr-1">
-                        {g}
-                        <button
-                          onClick={() => removeGroup(g)}
-                          className="ml-0.5 hover:text-destructive"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {availableGroups.length > 0 ? (
-                      <Select value={newGroup} onValueChange={(v) => v && setNewGroup(v)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select group..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {availableGroups.map((g) => (
-                              <SelectItem key={g.name} value={g.name}>
-                                {g.name}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        value={newGroup}
-                        onChange={(e) => setNewGroup(e.target.value)}
-                        placeholder="Group name"
-                        onKeyDown={(e) => e.key === "Enter" && addGroup()}
-                      />
-                    )}
-                    <Button
+          <SheetBody>
+            {meta && (
+              <section className="space-y-2">
+                <SectionLabel>Status</SectionLabel>
+                <div className="divide-y">
+                  <MetaRow label="Online">
+                    <Badge
                       variant="outline"
-                      onClick={addGroup}
-                      disabled={!newGroup.trim()}
+                      className={
+                        meta.online ? statusColors.online : statusColors.inactive
+                      }
                     >
-                      <Plus className="size-4" />
-                    </Button>
-                  </div>
+                      {meta.online ? "Online" : "Offline"}
+                    </Badge>
+                  </MetaRow>
+                  {meta.currentService && (
+                    <MetaRow label="Server">{meta.currentService}</MetaRow>
+                  )}
+                  <MetaRow label="First seen">
+                    {formatDate(meta.firstSeen)}
+                  </MetaRow>
+                  <MetaRow label="Last seen">{formatDate(meta.lastSeen)}</MetaRow>
+                  <MetaRow label="Playtime">
+                    {formatPlaytime(meta.totalPlaytimeSeconds)}
+                  </MetaRow>
                 </div>
-              )}
+              </section>
+            )}
 
-              {/* Session History */}
-              {history.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Session History</h3>
-                  <div className="space-y-1">
-                    {history.map((entry, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between rounded-md border px-3 py-2 text-xs"
-                      >
-                        <div>
-                          <span className="font-medium">{entry.service}</span>
-                          <span className="text-muted-foreground ml-2">
-                            {entry.group}
-                          </span>
-                        </div>
-                        <div className="text-muted-foreground">
-                          {formatDate(entry.connectedAt)}
-                          {entry.disconnectedAt && (
-                            <span> - {formatDate(entry.disconnectedAt)}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {perms && (
+              <section className="space-y-3">
+                <SectionLabel>Groups</SectionLabel>
+                <div className="divide-y">
+                  <MetaRow label="Display group">
+                    <Badge variant="outline">{perms.displayGroup}</Badge>
+                  </MetaRow>
+                  {perms.prefix && <MetaRow label="Prefix">{perms.prefix}</MetaRow>}
+                  {perms.suffix && <MetaRow label="Suffix">{perms.suffix}</MetaRow>}
                 </div>
-              )}
-            </div>
-          </ScrollArea>
+                <div className="flex flex-wrap gap-1.5">
+                  {perms.groups.map((g) => (
+                    <Badge
+                      key={g}
+                      variant="secondary"
+                      className="gap-1 pr-1"
+                    >
+                      {g}
+                      <button
+                        onClick={() => removeGroup(g)}
+                        className="ml-0.5 hover:text-destructive"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  {availableGroups.length > 0 ? (
+                    <Select
+                      value={newGroup}
+                      onValueChange={(v) => v && setNewGroup(v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select group…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {availableGroups.map((g) => (
+                            <SelectItem key={g.name} value={g.name}>
+                              {g.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={newGroup}
+                      onChange={(e) => setNewGroup(e.target.value)}
+                      placeholder="Group name"
+                      onKeyDown={(e) => e.key === "Enter" && addGroup()}
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={addGroup}
+                    disabled={!newGroup.trim()}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            {history.length > 0 && (
+              <section className="space-y-2">
+                <SectionLabel>Session history</SectionLabel>
+                <div className="space-y-1">
+                  {history.map((entry, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-md border px-3 py-2 text-xs"
+                    >
+                      <div>
+                        <span className="font-medium">{entry.service}</span>
+                        <span className="text-muted-foreground ml-2">
+                          {entry.group}
+                        </span>
+                      </div>
+                      <div className="text-muted-foreground">
+                        {formatDate(entry.connectedAt)}
+                        {entry.disconnectedAt && (
+                          <span> – {formatDate(entry.disconnectedAt)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </SheetBody>
         )}
       </SheetContent>
     </Sheet>

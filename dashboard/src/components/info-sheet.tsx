@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -196,7 +197,7 @@ export function InfoSheetTrigger() {
           </SidebarMenuButton>
         }
       />
-      <SheetContent className="w-full sm:max-w-md flex flex-col">
+      <SheetContent size="md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             Controller Info
@@ -207,7 +208,7 @@ export function InfoSheetTrigger() {
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-6">
+        <SheetBody>
           {loadingInfo && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Loading stats...
@@ -362,7 +363,7 @@ export function InfoSheetTrigger() {
               </div>
             )}
           </div>
-        </div>
+        </SheetBody>
       </SheetContent>
     </Sheet>
   );

@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { SectionLabel } from "@/components/section-label";
+
+const TEXTAREA_CLASS =
+  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +99,7 @@ function MotdTab() {
 
   return (
     <Card>
-      <CardContent className="pt-6 space-y-4">
+      <CardContent className="p-6 space-y-4">
         <Field>
           <FieldLabel>Line 1</FieldLabel>
           <Input value={line1} onChange={(e) => setLine1(e.target.value)} />
@@ -163,14 +168,14 @@ function TabListTab() {
 
   return (
     <Card>
-      <CardContent className="pt-6 space-y-4">
+      <CardContent className="p-6 space-y-4">
         <Field>
           <FieldLabel>Header</FieldLabel>
           <textarea
             value={header}
             onChange={(e) => setHeader(e.target.value)}
             rows={3}
-            className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+            className={TEXTAREA_CLASS}
           />
           <FieldDescription>Placeholders: {"{online}"}, {"{max}"}, {"{version}"}</FieldDescription>
         </Field>
@@ -180,7 +185,7 @@ function TabListTab() {
             value={footer}
             onChange={(e) => setFooter(e.target.value)}
             rows={3}
-            className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+            className={TEXTAREA_CLASS}
           />
           <FieldDescription>Placeholders: {"{online}"}, {"{max}"}, {"{server}"}</FieldDescription>
         </Field>
@@ -239,7 +244,7 @@ function ChatTab() {
 
   return (
     <Card>
-      <CardContent className="pt-6 space-y-4">
+      <CardContent className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <FieldLabel>Enable chat formatting</FieldLabel>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
@@ -342,21 +347,23 @@ function MaintenanceTab() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold">Global Maintenance</h3>
-              <p className="text-xs text-muted-foreground">
-                Block all players except whitelisted
-              </p>
-            </div>
-            <Button
-              variant={status.global.enabled ? "destructive" : "default"}
-              onClick={toggleGlobal}
-            >
-              {status.global.enabled ? "Disable" : "Enable"}
-            </Button>
-          </div>
+        <CardContent className="p-6 space-y-4">
+          <SectionLabel
+            right={
+              <Button
+                variant={status.global.enabled ? "destructive" : "default"}
+                size="sm"
+                onClick={toggleGlobal}
+              >
+                {status.global.enabled ? "Disable" : "Enable"}
+              </Button>
+            }
+          >
+            Global maintenance
+          </SectionLabel>
+          <p className="text-xs text-muted-foreground">
+            Block all players except whitelisted
+          </p>
           <Field>
             <FieldLabel>MOTD Line 1</FieldLabel>
             <Input value={motdLine1} onChange={(e) => setMotdLine1(e.target.value)} />
@@ -383,8 +390,8 @@ function MaintenanceTab() {
       </Card>
 
       <Card>
-        <CardContent className="pt-6 space-y-3">
-          <h3 className="text-sm font-semibold">Whitelist</h3>
+        <CardContent className="p-6 space-y-3">
+          <SectionLabel>Whitelist</SectionLabel>
           <div className="flex flex-wrap gap-1.5">
             {status.global.whitelist.map((entry) => (
               <Badge key={entry} variant="secondary" className="gap-1 pr-1">
@@ -414,8 +421,8 @@ function MaintenanceTab() {
 
       {Object.keys(status.groups).length > 0 && (
         <Card>
-          <CardContent className="pt-6 space-y-3">
-            <h3 className="text-sm font-semibold">Group Maintenance</h3>
+          <CardContent className="p-6 space-y-3">
+            <SectionLabel>Group maintenance</SectionLabel>
             {Object.entries(status.groups).map(([name, g]) => (
               <div key={name} className="flex items-center justify-between rounded-md border px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -440,25 +447,31 @@ function MaintenanceTab() {
 
 export default function SyncProxyPage() {
   return (
-    <Tabs defaultValue="motd">
-      <TabsList>
-        <TabsTrigger value="motd">MOTD</TabsTrigger>
-        <TabsTrigger value="tablist">Tab List</TabsTrigger>
-        <TabsTrigger value="chat">Chat</TabsTrigger>
-        <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
-      </TabsList>
-      <TabsContent value="motd" className="mt-4">
-        <MotdTab />
-      </TabsContent>
-      <TabsContent value="tablist" className="mt-4">
-        <TabListTab />
-      </TabsContent>
-      <TabsContent value="chat" className="mt-4">
-        <ChatTab />
-      </TabsContent>
-      <TabsContent value="maintenance" className="mt-4">
-        <MaintenanceTab />
-      </TabsContent>
-    </Tabs>
+    <>
+      <PageHeader
+        title="Sync Proxy"
+        description="Cluster-wide MOTD, tab list, chat format and maintenance mode — applied to every Velocity proxy."
+      />
+      <Tabs defaultValue="motd">
+        <TabsList>
+          <TabsTrigger value="motd">MOTD</TabsTrigger>
+          <TabsTrigger value="tablist">Tab list</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+        </TabsList>
+        <TabsContent value="motd" className="mt-4">
+          <MotdTab />
+        </TabsContent>
+        <TabsContent value="tablist" className="mt-4">
+          <TabListTab />
+        </TabsContent>
+        <TabsContent value="chat" className="mt-4">
+          <ChatTab />
+        </TabsContent>
+        <TabsContent value="maintenance" className="mt-4">
+          <MaintenanceTab />
+        </TabsContent>
+      </Tabs>
+    </>
   );
 }

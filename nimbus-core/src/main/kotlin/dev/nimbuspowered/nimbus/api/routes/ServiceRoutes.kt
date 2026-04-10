@@ -3,6 +3,8 @@ package dev.nimbuspowered.nimbus.api.routes
 import dev.nimbuspowered.nimbus.api.*
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.apiError
+import dev.nimbuspowered.nimbus.database.DatabaseManager
+import dev.nimbuspowered.nimbus.database.ServiceMetricSamples
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
@@ -15,15 +17,21 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.selectAll
 import java.io.RandomAccessFile
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 fun Route.serviceRoutes(
     registry: ServiceRegistry,
     serviceManager: ServiceManager,
     groupManager: GroupManager,
-    eventBus: EventBus
+    eventBus: EventBus,
+    databaseManager: DatabaseManager? = null,
 ) {
     val dedicatedServiceManager: DedicatedServiceManager? = serviceManager.dedicatedServiceManager
     route("/api/services") {
@@ -114,6 +122,42 @@ fun Route.serviceRoutes(
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
             call.respond(service.toResponse(groupManager, dedicatedServiceManager))
+        }
+
+        // GET /api/services/{name}/metrics/history — Historical memory + player samples.
+        // Reads from the `service_metric_samples` table written by MetricsCollector.
+        // Used by the dashboard chart so users see memory over the last hour instead
+        // of starting from blank when they open the page.
+        get("{name}/metrics/history") {
+            val name = call.parameters["name"]!!
+            if (registry.get(name) == null) {
+                return@get call.respond(
+                    HttpStatusCode.NotFound,
+                    apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND)
+                )
+            }
+            val db = databaseManager
+            if (db == null) {
+                return@get call.respond(ServiceMetricHistoryResponse(name, emptyList()))
+            }
+            val minutes = (call.queryParameters["minutes"]?.toIntOrNull() ?: 60).coerceIn(5, 24 * 60)
+            val since = Instant.now().minus(minutes.toLong(), ChronoUnit.MINUTES).toString()
+
+            val samples = db.query {
+                ServiceMetricSamples.selectAll()
+                    .where { (ServiceMetricSamples.serviceName eq name) and (ServiceMetricSamples.timestamp greaterEq since) }
+                    .orderBy(ServiceMetricSamples.timestamp, SortOrder.ASC)
+                    .limit(2000)
+                    .map { row ->
+                        ServiceMetricSampleResponse(
+                            timestamp = row[ServiceMetricSamples.timestamp],
+                            memoryUsedMb = row[ServiceMetricSamples.memoryUsedMb],
+                            memoryMaxMb = row[ServiceMetricSamples.memoryMaxMb],
+                            playerCount = row[ServiceMetricSamples.playerCount],
+                        )
+                    }
+            }
+            call.respond(ServiceMetricHistoryResponse(name, samples))
         }
 
         // POST /api/services/{name}/start — Start a new instance of a group

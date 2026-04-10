@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -454,21 +456,15 @@ export default function DedicatedPage() {
     (importMode === "upload" && importFile)
   );
 
-  if (loading) return <Skeleton className="h-96 rounded-xl" />;
-
-  return (
+  const headerActions = (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Dedicated Services ({services.length})</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Standalone servers with fixed ports and user-managed directories
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Import Modpack Dialog */}
-            <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) resetImportState(); }}>
+      <Dialog
+        open={importOpen}
+        onOpenChange={(open) => {
+          setImportOpen(open);
+          if (!open) resetImportState();
+        }}
+      >
               <DialogTrigger
                 render={
                   <Button variant="outline">
@@ -865,24 +861,32 @@ export default function DedicatedPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {services.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <BoxIcon className="size-10 text-muted-foreground/50 mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">
-                No dedicated services configured
-              </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                Create one to manage a standalone server
-              </p>
-            </div>
-          ) : (
+    </>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="Dedicated"
+        description="Standalone servers with fixed ports and user-managed directories."
+        actions={headerActions}
+      />
+
+      {loading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : services.length === 0 ? (
+        <EmptyState
+          icon={BoxIcon}
+          title="No dedicated services configured"
+          description="Create one to manage a standalone server with a fixed port."
+        />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead className="pl-6">Name</TableHead>
                   <TableHead>State</TableHead>
                   <TableHead>Software</TableHead>
                   <TableHead>Version</TableHead>
@@ -900,7 +904,7 @@ export default function DedicatedPage() {
                     s.state !== null && s.state !== "STOPPED" && s.state !== "CRASHED";
                   return (
                     <TableRow key={s.name}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell className="pl-6 font-medium">{s.name}</TableCell>
                       <TableCell>
                         <Badge variant={stateBadgeVariant(s.state)}>
                           {s.state ?? "OFFLINE"}
@@ -967,9 +971,9 @@ export default function DedicatedPage() {
                 })}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit Dialog */}
       <Dialog

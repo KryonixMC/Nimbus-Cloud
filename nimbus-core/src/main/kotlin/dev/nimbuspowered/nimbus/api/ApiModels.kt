@@ -749,3 +749,37 @@ data class EventMessage(
     val timestamp: String,
     val data: Map<String, String> = emptyMap()
 )
+
+// ── Audit log ──────────────────────────────────────────────────────
+
+@Serializable
+data class AuditEntryResponse(
+    val timestamp: String,
+    val actor: String,
+    val action: String,
+    val target: String,
+    val details: String,
+)
+
+@Serializable
+data class AuditListResponse(
+    val entries: List<AuditEntryResponse>,
+    val limit: Int,
+    val offset: Long,
+)
+
+// ── Service metric history ─────────────────────────────────────────
+
+@Serializable
+data class ServiceMetricSampleResponse(
+    val timestamp: String,
+    val memoryUsedMb: Int,
+    val memoryMaxMb: Int,
+    val playerCount: Int,
+)
+
+@Serializable
+data class ServiceMetricHistoryResponse(
+    val service: String,
+    val samples: List<ServiceMetricSampleResponse>,
+)

@@ -276,7 +276,7 @@ class NimbusApi(
 
             // Service-level routes — accessible with both master and service tokens
             val serviceRouteBlock: Route.() -> Unit = {
-                serviceRoutes(registry, serviceManager, groupManager, eventBus)
+                serviceRoutes(registry, serviceManager, groupManager, eventBus, databaseManager)
                 proxyEventRoutes(eventBus)
                 proxySyncRoutes(proxySyncManager, eventBus)
                 groupRoutes(registry, groupManager, groupsDir, eventBus)

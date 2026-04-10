@@ -65,6 +65,29 @@ object CliSessions : Table("cli_sessions") {
     }
 }
 
+// ── Service Metric Samples ─────────────────────────────────
+//
+// Periodic snapshots of runtime state for each running service. Used to
+// render historical charts in the dashboard so users see "memory over the
+// last hour" instead of "memory since I opened this tab".
+
+object ServiceMetricSamples : Table("service_metric_samples") {
+    val id = integer("id").autoIncrement()
+    val timestamp = varchar("timestamp", 30)
+    val serviceName = varchar("service_name", 128)
+    val groupName = varchar("group_name", 64).nullable()
+    val memoryUsedMb = integer("memory_used_mb")
+    val memoryMaxMb = integer("memory_max_mb")
+    val playerCount = integer("player_count")
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        index(false, serviceName, timestamp)
+        index(false, timestamp)
+    }
+}
+
 // ── Scaling Events ─────────────────────────────────────────
 
 object ScalingEvents : Table("scaling_events") {

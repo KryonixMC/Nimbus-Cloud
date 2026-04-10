@@ -1,5 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
+import dev.nimbuspowered.nimbus.api.AuditEntryResponse
+import dev.nimbuspowered.nimbus.api.AuditListResponse
 import dev.nimbuspowered.nimbus.database.AuditLog
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import io.ktor.http.*
@@ -9,6 +11,15 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.andWhere
 import org.jetbrains.exposed.sql.selectAll
 
+/**
+ * GET /api/audit — admin-only audit log listing.
+ *
+ * The previous implementation returned `mapOf<String, Any?>(...)` which
+ * kotlinx.serialization cannot serialize (no polymorphic `Any` support),
+ * causing the dashboard to silently receive a 500 and render an empty
+ * table. We now serialize through proper `@Serializable` DTOs so the
+ * dashboard and any other API consumer get real JSON back.
+ */
 fun Route.auditRoutes(db: DatabaseManager) {
     get("/api/audit") {
         val limit = (call.queryParameters["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 500)
@@ -23,20 +34,16 @@ fun Route.auditRoutes(db: DatabaseManager) {
             query.orderBy(AuditLog.timestamp, SortOrder.DESC)
                 .limit(limit).offset(offset)
                 .map { row ->
-                    mapOf(
-                        "timestamp" to row[AuditLog.timestamp],
-                        "actor" to row[AuditLog.actor],
-                        "action" to row[AuditLog.action],
-                        "target" to row[AuditLog.target],
-                        "details" to row[AuditLog.details]
+                    AuditEntryResponse(
+                        timestamp = row[AuditLog.timestamp],
+                        actor = row[AuditLog.actor],
+                        action = row[AuditLog.action],
+                        target = row[AuditLog.target],
+                        details = row[AuditLog.details],
                     )
                 }
         }
 
-        call.respond(HttpStatusCode.OK, mapOf(
-            "entries" to entries,
-            "limit" to limit,
-            "offset" to offset
-        ))
+        call.respond(HttpStatusCode.OK, AuditListResponse(entries, limit, offset))
     }
 }

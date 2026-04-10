@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -340,15 +342,15 @@ export default function GroupsPage() {
     }
   }
 
-  if (loading) return <Skeleton className="h-96 rounded-xl" />;
-
-  return (
+  const headerActions = (
     <>
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Groups ({groups.length})</CardTitle>
-        <div className="flex items-center gap-2">
-          <Dialog open={importOpen} onOpenChange={(open) => { setImportOpen(open); if (!open) resetImportState(); }}>
+      <Dialog
+        open={importOpen}
+        onOpenChange={(open) => {
+          setImportOpen(open);
+          if (!open) resetImportState();
+        }}
+      >
             <DialogTrigger
               render={
                 <Button variant="outline">
@@ -718,20 +720,34 @@ export default function GroupsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {groups.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <FolderTreeIcon className="size-10 text-muted-foreground/50 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">No groups configured</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Create a group to get started</p>
-          </div>
-        ) : (
-          <Table>
+    </>
+  );
+
+  return (
+    <>
+      <PageHeader
+        title="Groups"
+        description={`${groups.length} group${
+          groups.length === 1 ? "" : "s"
+        } configured · dynamic and static servers.`}
+        actions={headerActions}
+      />
+
+      {loading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={FolderTreeIcon}
+          title="No groups configured"
+          description="Create a group to start running lobbies or game servers."
+        />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="pl-6">Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Software</TableHead>
                 <TableHead>Version</TableHead>
@@ -744,7 +760,7 @@ export default function GroupsPage() {
             <TableBody>
               {groups.map((g) => (
                 <TableRow key={g.name}>
-                  <TableCell>
+                  <TableCell className="pl-6">
                     <Link
                       href={`/groups/${g.name}`}
                       className="font-medium hover:underline"
@@ -779,9 +795,9 @@ export default function GroupsPage() {
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      )}
 
     <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
       <DialogContent>

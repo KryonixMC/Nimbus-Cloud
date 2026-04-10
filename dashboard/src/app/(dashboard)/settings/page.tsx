@@ -11,6 +11,7 @@ import { dotColors } from "@/lib/status";
 import { toast } from "sonner";
 import { Save, RefreshCw } from "lucide-react";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
+import { PageHeader } from "@/components/page-header";
 
 interface ConfigResponse {
   networkName: string;
@@ -26,12 +27,11 @@ interface ModuleInfo {
 }
 
 export default function SettingsPage() {
-  const [config, setConfig] = useState<ConfigResponse | null>(null);
+  const [, setConfig] = useState<ConfigResponse | null>(null);
   const [modules, setModules] = useState<ModuleInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Edit state
   const [networkName, setNetworkName] = useState("");
   const [consoleColored, setConsoleColored] = useState(true);
   const [consoleLogEvents, setConsoleLogEvents] = useState(true);
@@ -82,88 +82,101 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) return <Skeleton className="h-96 rounded-xl" />;
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Settings</h2>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={reloadGroups}>
-            <RefreshCw className="mr-1 size-4" /> Reload Groups
-          </Button>
-          <Button onClick={saveConfig} disabled={saving}>
-            <Save className="mr-1 size-4" />
-            {saving ? "Saving..." : "Save"}
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Settings"
+        description="Network identity, console preferences and loaded modules."
+        actions={
+          <>
+            <Button variant="outline" onClick={reloadGroups}>
+              <RefreshCw className="mr-1 size-4" /> Reload groups
+            </Button>
+            <Button onClick={saveConfig} disabled={saving || loading}>
+              <Save className="mr-1 size-4" />
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Network</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field>
-              <FieldLabel>Network Name</FieldLabel>
-              <Input
-                value={networkName}
-                onChange={(e) => setNetworkName(e.target.value)}
-              />
-              <FieldDescription>Shown in MOTD and dashboard</FieldDescription>
-            </Field>
-          </CardContent>
-        </Card>
+      {loading ? (
+        <Skeleton className="h-96 rounded-xl" />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Network</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field>
+                <FieldLabel>Network name</FieldLabel>
+                <Input
+                  value={networkName}
+                  onChange={(e) => setNetworkName(e.target.value)}
+                />
+                <FieldDescription>Shown in MOTD and dashboard</FieldDescription>
+              </Field>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Console</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <FieldLabel>Colored output</FieldLabel>
-              <Switch checked={consoleColored} onCheckedChange={setConsoleColored} />
-            </div>
-            <div className="flex items-center justify-between">
-              <FieldLabel>Log events to console</FieldLabel>
-              <Switch checked={consoleLogEvents} onCheckedChange={setConsoleLogEvents} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Modules</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {modules.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No modules installed</p>
-            ) : (
-              <div className="grid gap-2 md:grid-cols-2">
-                {modules.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between rounded-md border px-4 py-3"
-                  >
-                    <div>
-                      <div className="font-medium">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {m.id} v{m.version}
-                      </div>
-                    </div>
-                    <div
-                      className={`size-2 rounded-full ${
-                        m.loaded ? dotColors.active : dotColors.inactive
-                      }`}
-                    />
-                  </div>
-                ))}
+          <Card>
+            <CardHeader>
+              <CardTitle>Console</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <FieldLabel>Colored output</FieldLabel>
+                <Switch
+                  checked={consoleColored}
+                  onCheckedChange={setConsoleColored}
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+              <div className="flex items-center justify-between gap-4">
+                <FieldLabel>Log events to console</FieldLabel>
+                <Switch
+                  checked={consoleLogEvents}
+                  onCheckedChange={setConsoleLogEvents}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Modules</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {modules.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No modules installed
+                </p>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-2">
+                  {modules.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between rounded-md border px-4 py-3"
+                    >
+                      <div>
+                        <div className="font-medium">{m.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {m.id} v{m.version}
+                        </div>
+                      </div>
+                      <div
+                        className={`size-2 rounded-full ${
+                          m.loaded ? dotColors.active : dotColors.inactive
+                        }`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
   );
 }
