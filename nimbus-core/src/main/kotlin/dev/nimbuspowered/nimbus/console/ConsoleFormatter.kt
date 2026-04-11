@@ -195,6 +195,8 @@ object ConsoleFormatter {
                 "${success("↑ SCALE UP")} group=${BOLD}${event.groupName}${RESET} ${event.currentInstances} → ${event.targetInstances} ${DIM}(${event.reason})${RESET}"
             is NimbusEvent.ScaleDown ->
                 "${warn("↓ SCALE DOWN")} ${BOLD}${event.serviceName}${RESET} ${DIM}from group=${event.groupName} (${event.reason})${RESET}"
+            is NimbusEvent.PlacementBlocked ->
+                "${warn("⊘ BLOCKED")} group=${BOLD}${event.groupName}${RESET} ${DIM}(${event.reason})${RESET}"
             is NimbusEvent.PlayerConnected ->
                 "${success("+")} ${BOLD}${event.playerName}${RESET} joined ${CYAN}${event.serviceName}${RESET}"
             is NimbusEvent.PlayerServerSwitch ->

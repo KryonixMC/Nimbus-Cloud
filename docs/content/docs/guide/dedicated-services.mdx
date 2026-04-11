@@ -169,6 +169,29 @@ args = []
 optimize = true
 ```
 
+### Running dedicated services on cluster nodes
+
+Dedicated services can be pinned to agent nodes via `[dedicated.placement]` with the same semantics as group placement:
+
+```toml title="config/dedicated/sandbox.toml"
+[dedicated]
+name = "sandbox"
+port = 25570
+software = "PAPER"
+version = "1.21.4"
+memory = "2G"
+
+[dedicated.placement]
+node = "worker-1"     # pin to this agent
+fallback = "wait"     # wait for node if offline (recommended)
+```
+
+**How it works:** Remote placement for dedicated services always uses the state sync mechanism — the controller's `dedicated/<name>/` directory is the canonical copy, and the agent pulls it on every start and pushes changes back on every graceful stop. This lets dedicated services float between nodes without losing their persistent data, as long as stops are graceful.
+
+**Data loss model:** Same as group sync — graceful stop = zero loss; unplanned crash = loss since the last push. For zero-loss guarantees on dedicated services, keep them on the controller (omit `[dedicated.placement]` or set `node = "local"`).
+
+**First start on a node:** The dedicated directory must already exist on the controller (`dedicated/<name>/`) before remote placement. If the controller canonical is empty, the agent will refuse to start — dedicated services have no template fallback. Create the service locally first (it'll download the JAR, generate configs, etc.), then enable remote placement.
+
 The `paths.dedicated` setting in `nimbus.toml` controls the base directory:
 
 ```toml title="nimbus.toml"

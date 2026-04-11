@@ -191,6 +191,11 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("group" to groupName, "service" to serviceName, "reason" to reason)
         )
+        is NimbusEvent.PlacementBlocked -> EventMessage(
+            type = "PLACEMENT_BLOCKED",
+            timestamp = timestamp.toString(),
+            data = mapOf("group" to groupName, "reason" to reason)
+        )
         is NimbusEvent.PlayerConnected -> EventMessage(
             type = "PLAYER_CONNECTED",
             timestamp = timestamp.toString(),

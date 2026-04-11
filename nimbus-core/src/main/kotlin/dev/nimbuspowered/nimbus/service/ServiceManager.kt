@@ -61,6 +61,9 @@ class ServiceManager(
     val restartingGroups: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val processHandles = ConcurrentHashMap<String, ServiceHandle>()
+
+    /** Dedupes PlacementBlocked events per (group, reason) so scaling retries don't spam. */
+    private val lastPlacementBlockedReason = ConcurrentHashMap<String, String>()
     private val velocityConfigGen = VelocityConfigGen(registry, groupManager)
     private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
     private val compatibilityChecker = CompatibilityChecker(groupManager, config, javaResolver)
@@ -99,7 +102,16 @@ class ServiceManager(
         // explicit pin > any-node (dynamic only) > local (static fallback).
         // Pinned placement applies to BOTH static and dynamic groups.
         val remoteNode: dev.nimbuspowered.nimbus.cluster.NodeConnection? = when {
-            syncEnabled -> nodeManager?.selectNode(memory)
+            syncEnabled -> {
+                val node = nodeManager?.selectNode(memory)
+                if (node == null && nodeManager != null) {
+                    // Sync service wants a node but none available — block instead of
+                    // silently falling back to controller-local (would diverge data).
+                    emitPlacementBlocked(groupName, "sync service needs an agent node, none available")
+                    return null
+                }
+                node
+            }
             placement?.node == "local" -> null
             !placement?.node.isNullOrBlank() -> {
                 val pinned = nodeManager?.getNode(placement.node)
@@ -108,16 +120,16 @@ class ServiceManager(
                 } else {
                     when (placement.fallback.lowercase()) {
                         "local" -> {
-                            logger.warn("Group '{}' pinned to node '{}' which is offline — falling back to local", groupName, placement.node)
+                            emitPlacementBlocked(groupName, "pinned node '${placement.node}' offline — falling back to local")
                             null
                         }
                         "fail" -> {
-                            logger.error("Group '{}' pinned to node '{}' which is offline (fallback=fail) — refusing to start", groupName, placement.node)
+                            emitPlacementBlocked(groupName, "pinned node '${placement.node}' offline, fallback=fail — refusing to start")
                             return null
                         }
                         else -> {
                             // "wait" or unknown → refuse to start, scaling engine will retry later
-                            logger.warn("Group '{}' pinned to node '{}' which is offline — waiting for node", groupName, placement.node)
+                            emitPlacementBlocked(groupName, "pinned node '${placement.node}' offline — waiting for node to reconnect")
                             return null
                         }
                     }
@@ -133,6 +145,10 @@ class ServiceManager(
             ?: return null
         val (service, workDir, command, readyPattern, isModded, readyTimeout) = prepared
         val serviceName = service.name
+
+        // Successful placement — clear any stale PlacementBlocked dedupe so the next
+        // block for this group will be emitted fresh.
+        clearPlacementBlocked(groupName)
 
         if (remoteNode != null) {
             return startRemoteService(service, prepared, remoteNode, group)
@@ -153,19 +169,42 @@ class ServiceManager(
             }
         }
 
-        // Remote placement for dedicated services is not yet supported — the controller
-        // would need to ship the full dedicated directory (not just a template) to the
-        // agent, which requires the binary file-transfer subsystem. For now, warn and
-        // fall back to local. Config field is preserved for forward compatibility.
-        if (config.placement.node.isNotBlank() && config.placement.node != "local") {
-            logger.warn(
-                "Dedicated service '{}' has placement.node='{}' but remote dedicated placement " +
-                "is not yet implemented — running locally on the controller.",
-                config.name, config.placement.node
-            )
+        // Resolve placement: dedicated services can be pinned to a node via
+        // placement.node. Remote placement uses the state sync infrastructure —
+        // the controller's canonical data in `dedicated/<name>/` gets pulled to
+        // the agent on start, and pushed back on graceful stop.
+        val placement = config.placement
+        val remoteNode: dev.nimbuspowered.nimbus.cluster.NodeConnection? = when {
+            placement.node.isBlank() || placement.node == "local" -> null
+            else -> {
+                val pinned = nodeManager?.getNode(placement.node)
+                if (pinned != null && pinned.isConnected) {
+                    pinned
+                } else {
+                    when (placement.fallback.lowercase()) {
+                        "local" -> {
+                            emitPlacementBlocked(config.name, "pinned node '${placement.node}' offline — running dedicated locally")
+                            null
+                        }
+                        "fail" -> {
+                            emitPlacementBlocked(config.name, "pinned node '${placement.node}' offline, fallback=fail — refusing to start")
+                            return null
+                        }
+                        else -> {
+                            emitPlacementBlocked(config.name, "pinned node '${placement.node}' offline — waiting for dedicated node")
+                            return null
+                        }
+                    }
+                }
+            }
         }
 
         val prepared = serviceFactory.prepareDedicated(config) ?: return null
+        clearPlacementBlocked(config.name)
+
+        if (remoteNode != null) {
+            return startRemoteService(prepared.service, prepared, remoteNode, null, dedicatedConfig = config)
+        }
         return startLocalService(prepared.service, prepared)
     }
 
@@ -218,17 +257,22 @@ class ServiceManager(
         service: Service,
         prepared: ServiceFactory.PreparedService,
         node: dev.nimbuspowered.nimbus.cluster.NodeConnection,
-        group: dev.nimbuspowered.nimbus.group.ServerGroup?
+        group: dev.nimbuspowered.nimbus.group.ServerGroup?,
+        dedicatedConfig: DedicatedDefinition? = null
     ): Service? {
         val serviceName = service.name
-        val groupConfig = group?.config?.group ?: return null
 
         return try {
             // Update service with remote node info
             service.host = node.host
             service.nodeId = node.nodeId
 
-            val startMsg = buildStartServiceMessage(service, groupConfig)
+            val startMsg = if (dedicatedConfig != null) {
+                buildDedicatedStartServiceMessage(service, dedicatedConfig)
+            } else {
+                val groupConfig = group?.config?.group ?: return null
+                buildStartServiceMessage(service, groupConfig)
+            }
 
             // Create remote handle
             val remoteHandle = RemoteServiceHandle(serviceName, node)
@@ -308,6 +352,62 @@ class ServiceManager(
         )
     }
 
+    /**
+     * Builds a StartService message for a dedicated service being placed on a remote
+     * node. Dedicated services have no template — the canonical data lives in
+     * `dedicated/<name>/` on the controller and is transferred to the agent via the
+     * state sync infrastructure. The agent must always pull (never template-copy).
+     */
+    private fun buildDedicatedStartServiceMessage(
+        service: Service,
+        dedicated: DedicatedDefinition
+    ): ClusterMessage.StartService {
+        val isModded = dedicated.software in listOf(
+            ServerSoftware.FORGE, ServerSoftware.NEOFORGE, ServerSoftware.FABRIC
+        )
+        val forwardingMode = compatibilityChecker.determineForwardingMode()
+        val forwardingSecret = computeForwardingSecret()
+
+        return ClusterMessage.StartService(
+            serviceName = service.name,
+            groupName = service.name,                // dedicated uses name as group
+            port = service.port,
+            templateName = "",                       // no template for dedicated
+            templateNames = emptyList(),
+            templateHash = "",
+            software = dedicated.software.name,
+            version = dedicated.version,
+            memory = dedicated.memory,
+            jvmArgs = resolveDedicatedJvmArgs(dedicated),
+            jvmOptimize = dedicated.jvm.optimize,
+            jarName = dedicated.jarName.ifBlank { softwareResolver.jarFileName(dedicated.software) },
+            modloaderVersion = "",
+            readyPattern = dedicated.readyPattern,
+            readyTimeoutSeconds = if (isModded) 180 else 60,
+            forwardingMode = forwardingMode,
+            forwardingSecret = forwardingSecret,
+            isStatic = true,
+            isModded = isModded,
+            customJarName = dedicated.jarName,
+            apiUrl = if (config.api.enabled) "http://${config.api.bind}:${config.api.port}" else "",
+            apiToken = dev.nimbuspowered.nimbus.api.NimbusApi.deriveServiceToken(config.api.token),
+            javaVersion = javaResolver.requiredJavaVersion(dedicated.version, dedicated.software),
+            bedrockPort = 0,
+            bedrockEnabled = false,
+            syncEnabled = true,                      // dedicated ALWAYS uses sync for remote placement
+            syncExcludes = dedicated.sync.excludes,
+            isDedicated = true
+        )
+    }
+
+    private fun resolveDedicatedJvmArgs(dedicated: DedicatedDefinition): List<String> {
+        val jvm = dedicated.jvm
+        if (jvm.optimize && jvm.args.isEmpty()) {
+            return performanceOptimizer.aikarsFlags(dedicated.memory)
+        }
+        return jvm.args
+    }
+
     private fun resolveJvmArgs(groupConfig: GroupDefinition): List<String> {
         val jvm = groupConfig.jvm
         if (jvm.optimize && jvm.args.isEmpty()) {
@@ -336,12 +436,15 @@ class ServiceManager(
                     reloadVelocity()
                 } else {
                     logger.warn("Service '{}' did not become ready within timeout — marking as CRASHED", serviceName)
-                    service.transitionTo(ServiceState.CRASHED)
-                    eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
+                    if (service.transitionTo(ServiceState.CRASHED)) {
+                        eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
+                    }
                 }
             } catch (e: Exception) {
                 logger.error("Error waiting for service '{}' to become ready — marking as CRASHED", serviceName, e)
-                service.transitionTo(ServiceState.CRASHED)
+                if (service.transitionTo(ServiceState.CRASHED)) {
+                    eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
+                }
             }
         }
     }
@@ -446,10 +549,14 @@ class ServiceManager(
             return
         }
 
-        // Non-zero exit = actual crash
-        service.transitionTo(ServiceState.CRASHED)
-        logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
-        eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount))
+        // Non-zero exit = actual crash. Guard on transitionTo so we only emit once
+        // per distinct crash (it returns false if the service was already CRASHED via
+        // another path — e.g. node-failure handler ran first).
+        val justCrashed = service.transitionTo(ServiceState.CRASHED)
+        if (justCrashed) {
+            logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
+            eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount))
+        }
 
         if (restartOnCrash && service.restartCount < maxRestarts) {
             logger.info("Restarting service '{}' (attempt {}/{})", serviceName, service.restartCount + 1, maxRestarts)
@@ -947,5 +1054,25 @@ class ServiceManager(
         } catch (e: Exception) {
             logger.warn("Failed to clean up working directory: {}", workDir, e)
         }
+    }
+
+    /**
+     * Emits a [NimbusEvent.PlacementBlocked] and logs it, deduping against the last
+     * reason seen for this group so scaling retry loops don't spam the log.
+     * The dedupe entry is cleared as soon as a service for the group starts successfully.
+     */
+    private fun emitPlacementBlocked(groupName: String, reason: String) {
+        val last = lastPlacementBlockedReason[groupName]
+        if (last == reason) return
+        lastPlacementBlockedReason[groupName] = reason
+        logger.warn("Placement blocked for group '{}': {}", groupName, reason)
+        scope.launch {
+            eventBus.emit(NimbusEvent.PlacementBlocked(groupName, reason))
+        }
+    }
+
+    /** Clears the dedupe tracker when a group starts successfully — next block is fresh. */
+    private fun clearPlacementBlocked(groupName: String) {
+        lastPlacementBlockedReason.remove(groupName)
     }
 }

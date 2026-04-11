@@ -20,6 +20,8 @@ sealed class NimbusEvent {
     // Scaling
     data class ScaleUp(val groupName: String, val currentInstances: Int, val targetInstances: Int, val reason: String) : NimbusEvent()
     data class ScaleDown(val groupName: String, val serviceName: String, val reason: String) : NimbusEvent()
+    /** A scheduled start was skipped because placement constraints could not be satisfied (e.g. pinned node offline). */
+    data class PlacementBlocked(val groupName: String, val reason: String) : NimbusEvent()
 
     // Warm Pool
     data class ServicePrepared(val serviceName: String, val groupName: String) : NimbusEvent()

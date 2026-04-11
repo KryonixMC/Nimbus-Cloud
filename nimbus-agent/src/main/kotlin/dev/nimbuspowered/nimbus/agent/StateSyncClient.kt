@@ -131,17 +131,20 @@ class StateSyncClient(
             serviceName, localManifest.files.size, toUpload.size, localManifest.files.size - toUpload.size)
 
         runBlocking {
-            // NOTE: Files.readAllBytes loads each file into memory during form build.
-            // For typical MC region files (≤16 MB) this is fine. If sync ever needs to
-            // handle GB-scale single files, switch to a ChannelProvider / streaming body.
+            // Stream each file from disk via ChannelProvider instead of loading into
+            // memory — world syncs can be multiple GB and a readAllBytes approach would
+            // OOM the agent heap on large single files.
             val parts = formData {
                 append("manifest", json.encodeToString(StateManifest.serializer(), localManifest))
                 for (relPath in toUpload) {
                     val file = workDir.resolve(relPath)
                     if (!file.exists() || !Files.isRegularFile(file)) continue
+                    val size = Files.size(file)
                     append(
                         key = "file:$relPath",
-                        value = Files.readAllBytes(file),
+                        value = ChannelProvider(size = size) {
+                            Files.newInputStream(file).toByteReadChannel()
+                        },
                         headers = Headers.build {
                             append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
                             append(HttpHeaders.ContentDisposition, "filename=\"${relPath.substringAfterLast('/')}\"")

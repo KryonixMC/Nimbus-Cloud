@@ -90,6 +90,17 @@ fun Route.stateRoutes(
         }
         val name = call.parameters["name"]!!
 
+        // Acquire per-service sync lock so concurrent pushes don't stomp on each
+        // other's staging dir. Fail fast with 409 if another sync is in progress —
+        // the caller can retry later.
+        if (!stateSyncManager.tryAcquireLock(name)) {
+            call.respond(
+                HttpStatusCode.Conflict,
+                apiError("Another sync for '$name' is already in progress", ApiErrors.INVALID_INPUT)
+            )
+            return@post
+        }
+
         var manifest: StateManifest? = null
         var filesReceived = 0
         var bytesReceived = 0L
@@ -154,6 +165,8 @@ fun Route.stateRoutes(
                     apiError("Sync failed: ${e.message}", ApiErrors.INTERNAL_ERROR)
                 )
             }
+        } finally {
+            stateSyncManager.releaseLock(name)
         }
     }
 }

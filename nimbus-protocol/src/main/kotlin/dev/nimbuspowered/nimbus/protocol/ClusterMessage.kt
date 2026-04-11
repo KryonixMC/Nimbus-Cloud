@@ -57,7 +57,9 @@ sealed class ClusterMessage {
         /** When true, agent pulls canonical state from controller before start and pushes back on stop. */
         val syncEnabled: Boolean = false,
         /** rsync-style exclude globs applied to both pull and push. Files matching these are never synced. */
-        val syncExcludes: List<String> = emptyList()
+        val syncExcludes: List<String> = emptyList(),
+        /** Dedicated service (single-instance, persistent data, no template). Always implies sync. */
+        val isDedicated: Boolean = false
     ) : ClusterMessage()
 
     @Serializable @SerialName("STOP_SERVICE")

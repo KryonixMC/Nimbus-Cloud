@@ -32,10 +32,13 @@ class LocalProcessManager(
             val servicesDir = baseDir.resolve("services")
             val resolvedTemplates = msg.templateNames.ifEmpty { listOf(msg.templateName) }
 
-            // Sync-enabled services live in services/sync/<name>/ — preserved across
-            // restarts like static services, but additionally pulled from controller
-            // on each start and pushed back on each graceful stop.
+            // Work dir layout by service type:
+            //   dedicated        → services/dedicated/<name>/ (stable, pulled from canonical)
+            //   sync-enabled     → services/sync/<name>/      (stable, pulled/pushed)
+            //   static           → services/static/<name>/    (stable, template-copied)
+            //   else (dynamic)   → services/temp/<name>_<uuid>/ (ephemeral, template-copied)
             val workDir = when {
+                msg.isDedicated -> servicesDir.resolve("dedicated").resolve(msg.serviceName)
                 msg.syncEnabled -> servicesDir.resolve("sync").resolve(msg.serviceName)
                 msg.isStatic -> servicesDir.resolve("static").resolve(msg.serviceName)
                 else -> {
@@ -46,19 +49,30 @@ class LocalProcessManager(
             workDir.createDirectories()
 
             // State sync pull: if enabled, try to pull canonical state first.
-            // If controller has no canonical yet (first start), fall back to template copy.
+            // Dedicated services MUST pull — there's no template to fall back to,
+            // so if the pull returns false (empty canonical), error out.
             val pulledFromCanonical = if (msg.syncEnabled && stateSyncClient != null) {
                 try {
                     stateSyncClient.pull(msg.serviceName, workDir, msg.syncExcludes)
                 } catch (e: Exception) {
-                    logger.error("State sync pull failed for '{}': {} — falling back to template", msg.serviceName, e.message)
+                    logger.error("State sync pull failed for '{}': {}", msg.serviceName, e.message)
                     false
                 }
             } else false
 
+            if (msg.isDedicated && !pulledFromCanonical) {
+                logger.error(
+                    "Dedicated service '{}' cannot start: controller has no canonical state. " +
+                    "The initial dedicated/{}/ must exist on the controller before remote placement.",
+                    msg.serviceName, msg.serviceName
+                )
+                return false
+            }
+
             // Copy template stack if we didn't pull from canonical.
-            // For sync services, this only runs on first start ever.
-            if (!pulledFromCanonical) {
+            // Dedicated never uses templates. For group-sync services, template copy
+            // runs only on the first start ever.
+            if (!pulledFromCanonical && !msg.isDedicated) {
                 val primaryDir = templatesDir.resolve(resolvedTemplates.first())
                 copyTemplate(primaryDir, workDir, preserveExisting = msg.isStatic || msg.syncEnabled)
                 for (tmpl in resolvedTemplates.drop(1)) {

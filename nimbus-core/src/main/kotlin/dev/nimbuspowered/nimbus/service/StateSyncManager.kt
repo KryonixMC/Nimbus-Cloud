@@ -13,6 +13,8 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.io.path.exists
 
 /**
@@ -30,19 +32,56 @@ import kotlin.io.path.exists
  * the staging dir is left behind and cleaned up on the next sync begin.
  */
 class StateSyncManager(
-    private val stateRoot: Path
+    private val stateRoot: Path,
+    /**
+     * Optional lookup for services whose canonical dir lives outside [stateRoot]
+     * (e.g. dedicated services in `dedicated/<name>/`). Return null to fall back to
+     * the default `stateRoot/<name>` layout.
+     */
+    private val customRootResolver: ((String) -> Path?)? = null
 ) {
     private val logger = LoggerFactory.getLogger(StateSyncManager::class.java)
+
+    /**
+     * Per-service locks so two syncs for the same service serialize. Concurrent
+     * pushes from (e.g.) two crash-respawn paths would otherwise corrupt staging.
+     */
+    private val locks = ConcurrentHashMap<String, ReentrantLock>()
 
     init {
         if (!stateRoot.exists()) Files.createDirectories(stateRoot)
     }
 
-    /** Absolute path to the canonical state dir for [serviceName]. */
-    fun canonicalDir(serviceName: String): Path = stateRoot.resolve(serviceName)
+    /**
+     * Attempts to acquire the sync lock for [serviceName]. Returns true on success,
+     * false if another sync is already in progress. The caller MUST call [releaseLock]
+     * in a finally block.
+     */
+    fun tryAcquireLock(serviceName: String): Boolean {
+        val lock = locks.computeIfAbsent(serviceName) { ReentrantLock() }
+        return lock.tryLock()
+    }
 
-    /** Absolute path to the staging dir for [serviceName]. */
-    fun stagingDir(serviceName: String): Path = stateRoot.resolve("$serviceName.incoming")
+    fun releaseLock(serviceName: String) {
+        locks[serviceName]?.let { lock ->
+            if (lock.isHeldByCurrentThread) lock.unlock()
+        }
+    }
+
+    /** Absolute path to the canonical state dir for [serviceName]. */
+    fun canonicalDir(serviceName: String): Path {
+        val custom = customRootResolver?.invoke(serviceName)
+        return custom ?: stateRoot.resolve(serviceName)
+    }
+
+    /**
+     * Absolute path to the staging dir for [serviceName]. Always a sibling of the
+     * canonical dir so the atomic rename on commit stays on the same filesystem.
+     */
+    fun stagingDir(serviceName: String): Path {
+        val canonical = canonicalDir(serviceName)
+        return canonical.resolveSibling("${canonical.fileName}.incoming")
+    }
 
     /**
      * Builds a manifest of the canonical copy of [serviceName]. Returns an empty
@@ -164,8 +203,9 @@ class StateSyncManager(
         })
 
         // Atomic rename: canonical → .old, staging → canonical, delete .old.
+        // .old lives as sibling of canonical so it's on the same filesystem.
         val canonical = canonicalDir(serviceName)
-        val old = stateRoot.resolve("$serviceName.old")
+        val old = canonical.resolveSibling("${canonical.fileName}.old")
         if (old.exists()) deleteRecursively(old)
 
         if (canonical.exists()) {

@@ -138,20 +138,26 @@ class ClusterWebSocketHandler(
                 val service = registry.get(message.serviceName)
                 if (service != null) {
                     val newState = ServiceState.valueOf(message.state)
-                    service.transitionTo(newState)
+                    val actuallyTransitioned = service.transitionTo(newState)
                     service.pid = message.pid
 
-                    // Forward to remote handle for waitForReady etc
+                    // Forward to remote handle for waitForReady etc (always, even if
+                    // the state machine rejected the transition — the handle still
+                    // needs to unblock any waiters)
                     val handle = node.remoteHandles[message.serviceName]
                     handle?.onStateChanged(message.state, message.pid)
 
-                    // Emit events (READY is emitted by ServiceManager after waitForReady)
-                    when (newState) {
-                        ServiceState.STOPPED -> eventBus.emit(
-                            dev.nimbuspowered.nimbus.event.NimbusEvent.ServiceStopped(message.serviceName))
-                        ServiceState.CRASHED -> eventBus.emit(
-                            dev.nimbuspowered.nimbus.event.NimbusEvent.ServiceCrashed(message.serviceName, -1, 0))
-                        else -> {}
+                    // Only emit events if the state actually changed. Prevents duplicate
+                    // CRASHED events when multiple paths (heartbeat timeout, WS close,
+                    // exit monitor) all notice the same failure.
+                    if (actuallyTransitioned) {
+                        when (newState) {
+                            ServiceState.STOPPED -> eventBus.emit(
+                                dev.nimbuspowered.nimbus.event.NimbusEvent.ServiceStopped(message.serviceName))
+                            ServiceState.CRASHED -> eventBus.emit(
+                                dev.nimbuspowered.nimbus.event.NimbusEvent.ServiceCrashed(message.serviceName, -1, 0))
+                            else -> {}
+                        }
                     }
                 } else if (message.state == "READY" || message.state == "STARTING") {
                     val group = groupManager?.getGroup(message.groupName)

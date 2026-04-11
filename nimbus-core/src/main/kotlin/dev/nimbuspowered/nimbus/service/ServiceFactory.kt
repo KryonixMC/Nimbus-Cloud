@@ -88,11 +88,26 @@ class ServiceFactory(
 
         val software = group.config.group.software
 
-        // Always use the lowest available instance number
-        val existing = registry.getByGroup(groupName).map { it.name }.toSet()
-        var instanceNumber = 1
-        while ("$groupName-$instanceNumber" in existing) instanceNumber++
-        val serviceName = "$groupName-$instanceNumber"
+        // Reuse the slot of the lowest-numbered terminal-state service (CRASHED/STOPPED)
+        // instead of advancing to a fresh number. Keeps service names stable across
+        // crash-restart cycles, which matters for sync services (canonical state is
+        // keyed by service name).
+        val reusable = registry.getByGroup(groupName)
+            .filter { it.state == ServiceState.CRASHED || it.state == ServiceState.STOPPED }
+            .minByOrNull { it.name.substringAfterLast('-').toIntOrNull() ?: Int.MAX_VALUE }
+
+        val serviceName: String
+        if (reusable != null) {
+            logger.info("Reusing service slot '{}' (was {})", reusable.name, reusable.state)
+            registry.unregister(reusable.name)
+            serviceName = reusable.name
+        } else {
+            // No reusable slot — allocate the lowest fresh instance number
+            val existing = registry.getByGroup(groupName).map { it.name }.toSet()
+            var instanceNumber = 1
+            while ("$groupName-$instanceNumber" in existing) instanceNumber++
+            serviceName = "$groupName-$instanceNumber"
+        }
 
         val port = if (software == ServerSoftware.VELOCITY) {
             portAllocator.allocateProxyPort()

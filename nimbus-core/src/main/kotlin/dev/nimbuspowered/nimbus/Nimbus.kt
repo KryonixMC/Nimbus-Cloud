@@ -309,8 +309,18 @@ fun nimbusMain() = runBlocking {
         JwtTokenManager(config.api.token)
     } else null
 
-    // State sync: controller holds the canonical copy of services with sync enabled
-    val stateSyncManager = dev.nimbuspowered.nimbus.service.StateSyncManager(stateDir)
+    // State sync: controller holds the canonical copy of services with sync enabled.
+    // Group-based services live in services/state/<name>/, dedicated services reuse
+    // their existing canonical location at dedicated/<name>/ — the resolver routes
+    // based on whether a matching dedicated config exists.
+    val stateSyncManager = dev.nimbuspowered.nimbus.service.StateSyncManager(
+        stateRoot = stateDir,
+        customRootResolver = { serviceName ->
+            if (dedicatedServiceManager.getConfig(serviceName) != null) {
+                dedicatedServicesDir.resolve(serviceName)
+            } else null
+        }
+    )
 
     // Create service manager
     val serviceManager = ServiceManager(
