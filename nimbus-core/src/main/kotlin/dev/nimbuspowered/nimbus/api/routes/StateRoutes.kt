@@ -40,7 +40,8 @@ private val json = Json { ignoreUnknownKeys = true }
  */
 fun Route.stateRoutes(
     stateSyncManager: StateSyncManager,
-    clusterToken: String
+    clusterToken: String,
+    eventBus: dev.nimbuspowered.nimbus.event.EventBus? = null
 ) {
     // Manifest: always authenticated, even if empty
     get("/api/services/{name}/state/manifest") {
@@ -105,6 +106,7 @@ fun Route.stateRoutes(
         var filesReceived = 0
         var bytesReceived = 0L
         var success = false
+        val startTime = System.currentTimeMillis()
 
         try {
             // Seed staging by hardlinking from canonical, so the agent only has to
@@ -149,6 +151,14 @@ fun Route.stateRoutes(
             val m = manifest ?: throw IllegalStateException("missing manifest part")
             stateSyncManager.commitSync(name, m)
             success = true
+            val duration = System.currentTimeMillis() - startTime
+            eventBus?.emit(dev.nimbuspowered.nimbus.event.NimbusEvent.SyncCompleted(
+                serviceName = name,
+                filesInManifest = m.files.size,
+                filesReceived = filesReceived,
+                bytesReceived = bytesReceived,
+                durationMs = duration
+            ))
 
             call.respond(StateSyncResponse(
                 success = true,
@@ -156,9 +166,24 @@ fun Route.stateRoutes(
                 bytesReceived = bytesReceived,
                 filesInManifest = m.files.size
             ))
+        } catch (e: StateSyncManager.QuotaExceededException) {
+            logger.warn("State sync for '{}' rejected: {}", name, e.message)
+            try { stateSyncManager.abortSync(name) } catch (_: Exception) {}
+            eventBus?.emit(dev.nimbuspowered.nimbus.event.NimbusEvent.SyncFailed(
+                serviceName = name,
+                reason = "quota exceeded: ${e.message}"
+            ))
+            call.respond(
+                HttpStatusCode.InsufficientStorage,
+                apiError("Quota exceeded: ${e.message}", ApiErrors.INTERNAL_ERROR)
+            )
         } catch (e: Exception) {
             logger.error("State sync for '{}' failed: {}", name, e.message, e)
             try { stateSyncManager.abortSync(name) } catch (_: Exception) {}
+            eventBus?.emit(dev.nimbuspowered.nimbus.event.NimbusEvent.SyncFailed(
+                serviceName = name,
+                reason = e.message ?: e::class.simpleName ?: "unknown"
+            ))
             if (!success) {
                 call.respond(
                     HttpStatusCode.InternalServerError,

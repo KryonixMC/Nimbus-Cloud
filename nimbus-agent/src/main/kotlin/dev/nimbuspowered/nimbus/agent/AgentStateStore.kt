@@ -27,7 +27,11 @@ data class PersistedService(
     val memory: String,
     val startedAtEpochMs: Long,
     val syncEnabled: Boolean = false,
-    val syncExcludes: List<String> = emptyList()
+    val syncExcludes: List<String> = emptyList(),
+    val snapshotInterval: Long = 0,
+    val snapshotFlushCommand: String = "",
+    val snapshotFlushWaitMs: Long = 3000,
+    val isDedicated: Boolean = false
 )
 
 @Serializable

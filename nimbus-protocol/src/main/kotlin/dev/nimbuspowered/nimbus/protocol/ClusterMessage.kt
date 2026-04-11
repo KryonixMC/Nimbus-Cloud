@@ -59,7 +59,13 @@ sealed class ClusterMessage {
         /** rsync-style exclude globs applied to both pull and push. Files matching these are never synced. */
         val syncExcludes: List<String> = emptyList(),
         /** Dedicated service (single-instance, persistent data, no template). Always implies sync. */
-        val isDedicated: Boolean = false
+        val isDedicated: Boolean = false,
+        /** Seconds between periodic snapshots; 0 = only push on graceful stop. */
+        val snapshotInterval: Long = 0,
+        /** Console command sent to service's stdin before a periodic snapshot (e.g. "save-all flush"). Empty = skip. */
+        val snapshotFlushCommand: String = "",
+        /** Milliseconds to wait after sending flush command before scanning the filesystem. */
+        val snapshotFlushWaitMs: Long = 3000
     ) : ClusterMessage()
 
     @Serializable @SerialName("STOP_SERVICE")

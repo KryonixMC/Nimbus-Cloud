@@ -303,6 +303,56 @@ Emitted when a service cannot be scheduled because its placement constraints can
 
 ---
 
+### SYNC_COMPLETED
+
+Emitted when a state sync push successfully commits to the controller's canonical store. Fires for both graceful-stop pushes and periodic snapshots. Pipe these to Prometheus/Grafana via the events WebSocket for sync health dashboards.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `service` | string | Service name |
+| `filesInManifest` | string | Total files in the pushed manifest |
+| `filesReceived` | string | Files actually uploaded (the diff; lower = more cache hits) |
+| `bytesReceived` | string | Bytes actually uploaded in this sync |
+| `durationMs` | string | Wall-clock duration of the sync commit |
+
+```json title="SYNC_COMPLETED"
+{
+  "type": "SYNC_COMPLETED",
+  "timestamp": "2025-01-15T15:00:00.000Z",
+  "data": {
+    "service": "Lobby-1",
+    "filesInManifest": "122",
+    "filesReceived": "8",
+    "bytesReceived": "4521678",
+    "durationMs": "612"
+  }
+}
+```
+
+---
+
+### SYNC_FAILED
+
+Emitted when a state sync push fails — either a validation error (hash mismatch), the disk quota was exceeded, or an IO error during staging. The canonical copy is rolled back to its pre-sync state on failure.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `service` | string | Service name |
+| `reason` | string | Failure reason (quota, hash mismatch, IO error, etc.) |
+
+```json title="SYNC_FAILED"
+{
+  "type": "SYNC_FAILED",
+  "timestamp": "2025-01-15T15:00:00.000Z",
+  "data": {
+    "service": "Survival-1",
+    "reason": "quota exceeded: projected 12884901888 bytes, limit 10737418240 bytes"
+  }
+}
+```
+
+---
+
 ## Player Events
 
 ### PLAYER_CONNECTED

@@ -212,7 +212,7 @@ curl -H "Authorization: Bearer $TOKEN" \
       "groupName": "Lobby",
       "port": 30001,
       "host": "127.0.0.1",
-      "nodeId": "local",
+      "nodeId": "worker-1",
       "state": "READY",
       "customState": null,
       "pid": 48201,
@@ -221,12 +221,29 @@ curl -H "Authorization: Bearer $TOKEN" \
       "restartCount": 0,
       "uptime": "2h 15m 30s",
       "isStatic": false,
-      "bedrockPort": null
+      "bedrockPort": null,
+      "sync": {
+        "inFlight": false,
+        "lastPushAt": "2025-01-15T12:30:00Z",
+        "lastPushBytes": 67108864,
+        "lastPushFiles": 122,
+        "canonicalSizeBytes": 134217728
+      }
     }
   ],
   "total": 1
 }
 ```
+
+**`sync` field:** Only populated for services with `[group.sync] enabled = true` (or equivalent for dedicated). Null for non-sync services. Fields:
+
+| Field | Description |
+|-------|-------------|
+| `inFlight` | `true` while a push is currently in progress (sync lock held) |
+| `lastPushAt` | ISO-8601 timestamp of the last successful push, or `null` if never |
+| `lastPushBytes` | Sum of the last-pushed manifest's file sizes |
+| `lastPushFiles` | File count in the last-pushed manifest |
+| `canonicalSizeBytes` | Current on-disk size of the canonical copy on the controller |
 
 | Status Code | Description |
 |-------------|-------------|
@@ -374,6 +391,34 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 | 200 | Service restarted |
 | 404 | Service not found |
 | 500 | Restart failed |
+
+---
+
+### POST /api/services/{'{'}name{'}'}/migrate
+
+Move a sync-enabled service to a different cluster node. Stops on the current node (which triggers a state push to the controller's canonical store), then starts on the target (which pulls the canonical back). For non-sync services, data on the source node is lost.
+
+```json title="Request"
+{
+  "target": "worker-2"
+}
+```
+
+Use `"target": "local"` or omit the target entirely to move a service back to the controller.
+
+```json title="Response"
+{
+  "success": true,
+  "message": "Service 'Lobby-1' migrated to node 'worker-2'"
+}
+```
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Migration complete |
+| 400 | Invalid request body |
+| 404 | Service not found |
+| 500 | Migration failed (target offline, push failed, etc.) |
 
 ---
 

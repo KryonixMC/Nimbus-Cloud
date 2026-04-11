@@ -211,9 +211,22 @@ class AgentRuntime(
         when (msg) {
             is ClusterMessage.StartService -> {
                 scope.launch {
-                    // Ensure all templates in the stack are available
-                    val templatesToDownload = msg.templateNames.ifEmpty { listOf(msg.templateName) }
-                    val templatesReady = templateDownloader.ensureTemplates(templatesToDownload, msg.templateHash, msg.software)
+                    // Dedicated services have no template — the state-sync pull in
+                    // LocalProcessManager.startService is the only data source. Skip
+                    // the template download step entirely. Group-based services still
+                    // need their template available even if sync is enabled (for the
+                    // first start before canonical exists).
+                    val templatesReady = if (msg.isDedicated) {
+                        true
+                    } else {
+                        val templatesToDownload = msg.templateNames.ifEmpty { listOf(msg.templateName) }
+                            .filter { it.isNotBlank() }
+                        if (templatesToDownload.isEmpty()) {
+                            true
+                        } else {
+                            templateDownloader.ensureTemplates(templatesToDownload, msg.templateHash, msg.software)
+                        }
+                    }
                     if (!templatesReady) {
                         logger.error("Cannot start '{}': template download failed", msg.serviceName)
                         session.send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),

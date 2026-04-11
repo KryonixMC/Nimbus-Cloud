@@ -17,6 +17,7 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.and
@@ -26,12 +27,16 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+@Serializable
+data class MigrateRequest(val target: String? = null)
+
 fun Route.serviceRoutes(
     registry: ServiceRegistry,
     serviceManager: ServiceManager,
     groupManager: GroupManager,
     eventBus: EventBus,
     databaseManager: DatabaseManager? = null,
+    stateSyncManager: dev.nimbuspowered.nimbus.service.StateSyncManager? = null
 ) {
     val dedicatedServiceManager: DedicatedServiceManager? = serviceManager.dedicatedServiceManager
     route("/api/services") {
@@ -64,7 +69,7 @@ fun Route.serviceRoutes(
                 services = services.filter { it.customState.equals(customStateParam, ignoreCase = true) }
             }
 
-            val responses = services.map { it.toResponse(groupManager, dedicatedServiceManager) }
+            val responses = services.map { it.toResponse(groupManager, dedicatedServiceManager, stateSyncManager) }
             call.respond(ServiceListResponse(responses, responses.size))
         }
 
@@ -121,7 +126,7 @@ fun Route.serviceRoutes(
             val name = call.parameters["name"]!!
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
-            call.respond(service.toResponse(groupManager, dedicatedServiceManager))
+            call.respond(service.toResponse(groupManager, dedicatedServiceManager, stateSyncManager))
         }
 
         // GET /api/services/{name}/metrics/history — Historical memory + player samples.
@@ -201,6 +206,27 @@ fun Route.serviceRoutes(
                 call.respond(ApiMessage(true, "Service restarted as '${newService.name}' on port ${newService.port}"))
             } else {
                 call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
+            }
+        }
+
+        // POST /api/services/{name}/migrate — Move a service to a different node
+        post("{name}/migrate") {
+            val name = call.parameters["name"]!!
+            registry.get(name)
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+
+            val body = try {
+                call.receive<MigrateRequest>()
+            } catch (_: Exception) {
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid request body — expected { \"target\": \"<node>\" }", ApiErrors.INVALID_INPUT))
+            }
+            val target = body.target?.takeIf { it.isNotBlank() }
+
+            val migrated = serviceManager.migrateService(name, target)
+            if (migrated != null) {
+                call.respond(ApiMessage(true, "Service '$name' migrated to node '${migrated.nodeId}'"))
+            } else {
+                call.respond(HttpStatusCode.InternalServerError, apiError("Migration failed for service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
             }
         }
 
@@ -359,7 +385,8 @@ private fun tailFile(file: java.io.File, lines: Int): List<String> {
 
 private fun dev.nimbuspowered.nimbus.service.Service.toResponse(
     groupManager: GroupManager,
-    dedicatedServiceManager: DedicatedServiceManager?
+    dedicatedServiceManager: DedicatedServiceManager?,
+    stateSyncManager: dev.nimbuspowered.nimbus.service.StateSyncManager? = null
 ): ServiceResponse {
     val uptime = if (startedAt != null) {
         val duration = Duration.between(startedAt, Instant.now())
@@ -370,6 +397,24 @@ private fun dev.nimbuspowered.nimbus.service.Service.toResponse(
     } else null
 
     val mem = ServiceMemoryResolver.resolve(this, groupManager, dedicatedServiceManager)
+
+    // Sync health: only populated if state sync is enabled for this service
+    // (group has [group.sync] enabled or dedicated has [dedicated.sync] enabled).
+    // We determine this by checking if the controller has any canonical for the service.
+    val syncHealth = stateSyncManager?.let { ssm ->
+        val canonicalSize = ssm.canonicalSizeBytes(name)
+        val stats = ssm.getStats(name)
+        val inFlight = ssm.isSyncInFlight(name)
+        if (canonicalSize > 0 || stats != null || inFlight) {
+            SyncHealth(
+                inFlight = inFlight,
+                lastPushAt = stats?.lastPushAtEpochMs?.let { Instant.ofEpochMilli(it).toString() },
+                lastPushBytes = stats?.lastPushBytes ?: 0,
+                lastPushFiles = stats?.lastPushFiles ?: 0,
+                canonicalSizeBytes = canonicalSize
+            )
+        } else null
+    }
 
     return ServiceResponse(
         name = name,
@@ -391,6 +436,7 @@ private fun dev.nimbuspowered.nimbus.service.Service.toResponse(
         tps = tps,
         memoryUsedMb = mem.usedMb,
         memoryMaxMb = mem.maxMb,
-        healthy = healthy
+        healthy = healthy,
+        sync = syncHealth
     )
 }

@@ -38,7 +38,11 @@ class StateSyncManager(
      * (e.g. dedicated services in `dedicated/<name>/`). Return null to fall back to
      * the default `stateRoot/<name>` layout.
      */
-    private val customRootResolver: ((String) -> Path?)? = null
+    private val customRootResolver: ((String) -> Path?)? = null,
+    /** Maximum total canonical bytes across all services. 0 = unlimited. */
+    private val diskQuotaBytes: Long = 0,
+    /** Extra roots (typically the dedicated services dir) to include in quota accounting. */
+    private val extraQuotaRoots: List<Path> = emptyList()
 ) {
     private val logger = LoggerFactory.getLogger(StateSyncManager::class.java)
 
@@ -47,6 +51,118 @@ class StateSyncManager(
      * pushes from (e.g.) two crash-respawn paths would otherwise corrupt staging.
      */
     private val locks = ConcurrentHashMap<String, ReentrantLock>()
+
+    /** Per-service sync health tracked for the /api/services endpoint. */
+    private val syncStats = ConcurrentHashMap<String, SyncStats>()
+
+    data class SyncStats(
+        val lastPushAtEpochMs: Long,
+        val lastPushBytes: Long,
+        val lastPushFiles: Int
+    )
+
+    /** Returns current sync health for a service, or null if it has never successfully synced. */
+    fun getStats(serviceName: String): SyncStats? = syncStats[serviceName]
+
+    /** True while a sync is currently in progress for [serviceName]. */
+    fun isSyncInFlight(serviceName: String): Boolean =
+        locks[serviceName]?.isLocked == true
+
+    /**
+     * Sweeps the state root (and any custom-resolver roots, if we can enumerate them)
+     * for orphaned `*.incoming/` or `*.old/` dirs left behind by crashes or unclean
+     * shutdowns. Called from Nimbus bootstrap so the next sync starts from a clean
+     * slate. Also wipes dedicated staging under the optional extra roots passed in.
+     *
+     * Logs every directory it deletes. Non-fatal on individual failures.
+     */
+    fun cleanupStaleStaging(extraRoots: List<Path> = emptyList()): Int {
+        val roots = (listOf(stateRoot) + extraRoots).filter { it.exists() && Files.isDirectory(it) }
+        var cleaned = 0
+        for (root in roots) {
+            Files.list(root).use { stream ->
+                for (entry in stream) {
+                    val name = entry.fileName.toString()
+                    if (!Files.isDirectory(entry)) continue
+                    if (name.endsWith(".incoming") || name.endsWith(".old")) {
+                        try {
+                            deleteRecursively(entry)
+                            logger.info("Cleaned stale staging dir: {}", entry)
+                            cleaned += 1
+                        } catch (e: Exception) {
+                            logger.warn("Failed to clean staging dir {}: {}", entry, e.message)
+                        }
+                    }
+                }
+            }
+        }
+        if (cleaned > 0) logger.info("Cleaned {} stale staging dir(s) across {} root(s)", cleaned, roots.size)
+        return cleaned
+    }
+
+    /**
+     * Enforces the canonical disk quota. Called before commit. If the new total
+     * (current cluster-wide canonical size minus the service's old size plus the
+     * new manifest's projected size) would exceed [diskQuotaBytes], throws
+     * [QuotaExceededException].
+     *
+     * When [diskQuotaBytes] is 0 (unlimited), this is a no-op.
+     */
+    fun enforceQuota(serviceName: String, newManifestBytes: Long) {
+        if (diskQuotaBytes <= 0) return
+        val currentThisService = canonicalSizeBytes(serviceName)
+        val clusterTotal = clusterCanonicalTotalBytes()
+        val projected = clusterTotal - currentThisService + newManifestBytes
+        if (projected > diskQuotaBytes) {
+            throw QuotaExceededException(
+                "sync disk quota exceeded: projected $projected bytes, limit $diskQuotaBytes bytes"
+            )
+        }
+    }
+
+    /** Sum of canonical bytes across every root we manage. Used for quota accounting. */
+    private fun clusterCanonicalTotalBytes(): Long {
+        val roots = (listOf(stateRoot) + extraQuotaRoots).filter { it.exists() && Files.isDirectory(it) }
+        var total = 0L
+        for (root in roots) {
+            Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    // Don't count staging dirs in the quota — they're transient
+                    val parent = file.parent?.fileName?.toString()
+                    if (parent != null && (parent.endsWith(".incoming") || parent.endsWith(".old"))) {
+                        return FileVisitResult.CONTINUE
+                    }
+                    total += attrs.size()
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    val name = dir.fileName?.toString() ?: return FileVisitResult.CONTINUE
+                    if (name.endsWith(".incoming") || name.endsWith(".old")) {
+                        return FileVisitResult.SKIP_SUBTREE
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+            })
+        }
+        return total
+    }
+
+    class QuotaExceededException(msg: String) : RuntimeException(msg)
+
+    /** Total size of the canonical copy in bytes, or 0 if none exists. */
+    fun canonicalSizeBytes(serviceName: String): Long {
+        val dir = canonicalDir(serviceName)
+        if (!dir.exists() || !Files.isDirectory(dir)) return 0
+        var total = 0L
+        Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                total += attrs.size()
+                return FileVisitResult.CONTINUE
+            }
+        })
+        return total
+    }
 
     init {
         if (!stateRoot.exists()) Files.createDirectories(stateRoot)
@@ -177,6 +293,10 @@ class StateSyncManager(
         val staging = stagingDir(serviceName)
         if (!staging.exists()) throw IllegalStateException("no staging for '$serviceName' — beginSync not called")
 
+        // Enforce disk quota: would this commit push us over the configured limit?
+        val newBytes = targetManifest.files.values.sumOf { it.size }
+        enforceQuota(serviceName, newBytes)
+
         // Reconcile: remove files from staging that aren't in the target manifest.
         // This handles the case where the agent removed files locally (deletions).
         val kept = targetManifest.files.keys
@@ -208,19 +328,30 @@ class StateSyncManager(
         val old = canonical.resolveSibling("${canonical.fileName}.old")
         if (old.exists()) deleteRecursively(old)
 
+        // Two-phase commit: canonical → .old, staging → canonical, delete .old.
+        // ATOMIC_MOVE fails on NTFS-over-WSL for directories with contents, so we
+        // use plain move. The small window between the two moves is covered by
+        // the rollback on failure; nothing concurrent can access canonical because
+        // the per-service lock is held.
         if (canonical.exists()) {
-            Files.move(canonical, old, StandardCopyOption.ATOMIC_MOVE)
+            Files.move(canonical, old)
         }
         try {
-            Files.move(staging, canonical, StandardCopyOption.ATOMIC_MOVE)
+            Files.move(staging, canonical)
         } catch (e: Exception) {
             // Rollback: restore canonical if the staging move failed
-            if (old.exists()) Files.move(old, canonical, StandardCopyOption.ATOMIC_MOVE)
+            if (old.exists()) Files.move(old, canonical)
             throw e
         }
         if (old.exists()) deleteRecursively(old)
 
         logger.info("Sync committed for '{}' ({} files)", serviceName, targetManifest.files.size)
+        val totalBytes = targetManifest.files.values.sumOf { it.size }
+        syncStats[serviceName] = SyncStats(
+            lastPushAtEpochMs = System.currentTimeMillis(),
+            lastPushBytes = totalBytes,
+            lastPushFiles = targetManifest.files.size
+        )
         return scanManifest(canonical, emptyList())
     }
 

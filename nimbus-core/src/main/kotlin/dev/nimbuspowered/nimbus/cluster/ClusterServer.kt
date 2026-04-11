@@ -128,7 +128,7 @@ class ClusterServer(
             with(handler) { clusterRoutes() }
             templateRoutes(templatesDir, config.token)
             if (stateSyncManager != null) {
-                stateRoutes(stateSyncManager, config.token)
+                stateRoutes(stateSyncManager, config.token, eventBus)
             }
         }
     }
