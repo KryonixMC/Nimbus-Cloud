@@ -136,9 +136,17 @@ fun Route.stateRoutes(
                                 // InputStream in non-suspending code — the channel read happens in
                                 // the wrong coroutine context and returns 0 bytes.
                                 val bytes: ByteArray = part.provider().toByteArray()
-                                stateSyncManager.writeStagedFile(name, relPath, expected.sha256, bytes.inputStream())
+                                val staged = stateSyncManager.writeStagedFile(name, relPath, expected.sha256, bytes.inputStream())
+                                // If the file was rewritten between scan and upload, patch the manifest
+                                // entry with the actual SHA so the committed canonical accurately reflects
+                                // the bytes on disk and future delta calculations are correct.
+                                if (!staged.actualSha256.equals(expected.sha256, ignoreCase = true)) {
+                                    manifest = manifest?.let { m ->
+                                        m.copy(files = m.files + (relPath to expected.copy(sha256 = staged.actualSha256, size = staged.bytes)))
+                                    }
+                                }
                                 filesReceived += 1
-                                bytesReceived += bytes.size.toLong()
+                                bytesReceived += staged.bytes
                             }
                         }
                         else -> {}

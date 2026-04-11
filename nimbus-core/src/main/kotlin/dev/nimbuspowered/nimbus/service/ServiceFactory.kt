@@ -370,7 +370,7 @@ class ServiceFactory(
                 else -> null
             }
 
-            val readyTimeout = if (isModded) 180.seconds else 120.seconds
+            val readyTimeout = if (isModded) 240.seconds else 180.seconds
 
             PreparedService(
                 service = service,
@@ -556,7 +556,7 @@ class ServiceFactory(
                 else -> null
             }
 
-            val readyTimeout = if (isModded) 180.seconds else 120.seconds
+            val readyTimeout = if (isModded) 240.seconds else 180.seconds
 
             PreparedService(
                 service = service,

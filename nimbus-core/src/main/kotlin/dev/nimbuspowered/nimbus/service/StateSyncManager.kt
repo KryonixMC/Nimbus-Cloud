@@ -64,6 +64,29 @@ class StateSyncManager(
     /** Returns current sync health for a service, or null if it has never successfully synced. */
     fun getStats(serviceName: String): SyncStats? = syncStats[serviceName]
 
+    /**
+     * Every service name that currently has sync state on disk or in memory:
+     * a canonical directory, live stats, or an in-flight lock. Metrics and the
+     * API use this to enumerate sync-enabled services independent of the service
+     * registry, so freshly-crashed services still show their canonical size.
+     */
+    fun listSyncServices(): Set<String> {
+        val names = HashSet<String>(syncStats.keys)
+        names.addAll(locks.keys)
+        val roots = (listOf(stateRoot) + extraQuotaRoots).filter { it.exists() && Files.isDirectory(it) }
+        for (root in roots) {
+            Files.list(root).use { stream ->
+                for (entry in stream) {
+                    if (!Files.isDirectory(entry)) continue
+                    val name = entry.fileName.toString()
+                    if (name.endsWith(".incoming") || name.endsWith(".old")) continue
+                    names.add(name)
+                }
+            }
+        }
+        return names
+    }
+
     /** True while a sync is currently in progress for [serviceName]. */
     fun isSyncInFlight(serviceName: String): Boolean =
         locks[serviceName]?.isLocked == true
@@ -255,7 +278,19 @@ class StateSyncManager(
      * Also replaces any existing hardlink from seeding (we unlink first to avoid
      * mutating the canonical copy via the shared inode).
      */
-    fun writeStagedFile(serviceName: String, relPath: String, expectedSha256: String, input: InputStream): Long {
+    /**
+     * Write a single staged file. Returns (bytes written, actual SHA-256 of the bytes).
+     *
+     * We no longer fail the entire push on SHA mismatch between manifest-time and
+     * upload-time: a live Minecraft server constantly rewrites files like
+     * `spigot.yml` or `world/data/raids.dat`, and blowing up a 200 MB sync because
+     * one config churned between scan and upload is not useful. The caller should
+     * patch the manifest entry with the returned hash so the canonical manifest on
+     * disk reflects the bytes actually committed.
+     */
+    data class StagedFile(val bytes: Long, val actualSha256: String)
+
+    fun writeStagedFile(serviceName: String, relPath: String, expectedSha256: String, input: InputStream): StagedFile {
         val staging = stagingDir(serviceName).toAbsolutePath().normalize()
         val target = staging.resolve(relPath).normalize()
         if (!target.startsWith(staging)) throw IllegalArgumentException("path escapes staging: $relPath")
@@ -278,10 +313,12 @@ class StateSyncManager(
         }
         val actual = md.digest().joinToString("") { "%02x".format(it) }
         if (!actual.equals(expectedSha256, ignoreCase = true)) {
-            Files.deleteIfExists(target)
-            throw java.io.IOException("SHA-256 mismatch for $relPath: expected $expectedSha256, got $actual")
+            logger.warn(
+                "SHA-256 drift for '{}' during sync of '{}' (manifest={}, actual={}); file was rewritten mid-push, accepting actual bytes",
+                relPath, serviceName, expectedSha256.take(12), actual.take(12)
+            )
         }
-        return bytes
+        return StagedFile(bytes, actual)
     }
 
     /**
@@ -330,17 +367,20 @@ class StateSyncManager(
 
         // Two-phase commit: canonical → .old, staging → canonical, delete .old.
         // ATOMIC_MOVE fails on NTFS-over-WSL for directories with contents, so we
-        // use plain move. The small window between the two moves is covered by
-        // the rollback on failure; nothing concurrent can access canonical because
-        // the per-service lock is held.
+        // use plain move. Windows AV / file locks can also transiently block the
+        // move of a freshly-written directory tree, so retry with backoff before
+        // giving up. Nothing concurrent can access canonical because the per-service
+        // lock is held.
         if (canonical.exists()) {
-            Files.move(canonical, old)
+            moveWithRetry(canonical, old)
         }
         try {
-            Files.move(staging, canonical)
+            moveWithRetry(staging, canonical)
         } catch (e: Exception) {
             // Rollback: restore canonical if the staging move failed
-            if (old.exists()) Files.move(old, canonical)
+            if (old.exists()) {
+                try { moveWithRetry(old, canonical) } catch (_: Exception) {}
+            }
             throw e
         }
         if (old.exists()) deleteRecursively(old)
@@ -429,6 +469,35 @@ class StateSyncManager(
             }
         }
         return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Directory rename with retry. NTFS/Windows can transiently fail a move if AV
+     * is scanning a freshly-written file under the source tree, or if a file handle
+     * is in the process of releasing. Linux filesystems almost never hit this. We
+     * retry a handful of times with increasing backoff before propagating.
+     */
+    private fun moveWithRetry(source: Path, target: Path) {
+        val delays = longArrayOf(0, 100, 250, 500, 1000, 2000)
+        var lastError: Exception? = null
+        for ((i, delay) in delays.withIndex()) {
+            if (delay > 0) {
+                try { Thread.sleep(delay) } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+            }
+            try {
+                Files.move(source, target)
+                if (i > 0) {
+                    logger.info("move {} -> {} succeeded on attempt {}", source.fileName, target.fileName, i + 1)
+                }
+                return
+            } catch (e: Exception) {
+                lastError = e
+                logger.debug("move {} -> {} failed (attempt {}): {}", source.fileName, target.fileName, i + 1, e.message)
+            }
+        }
+        throw lastError ?: java.io.IOException("move $source -> $target failed after retries")
     }
 
     private fun deleteRecursively(path: Path) {

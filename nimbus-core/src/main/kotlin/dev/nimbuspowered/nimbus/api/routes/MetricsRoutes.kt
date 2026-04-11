@@ -143,13 +143,17 @@ fun Route.metricsRoutes(
                 "Unix timestamp of the last successful push per service")
             sb.help("nimbus_sync_in_flight", "gauge",
                 "1 if a sync is currently running for this service, else 0")
-            for (service in services) {
-                val size = stateSyncManager.canonicalSizeBytes(service.name)
-                val stats = stateSyncManager.getStats(service.name)
-                val inFlight = if (stateSyncManager.isSyncInFlight(service.name)) 1 else 0
-                // Only emit rows for services that actually have sync state
+            // Drive enumeration from StateSyncManager, not the service registry,
+            // so a service that crashed or was removed still shows its canonical
+            // on disk (important for ops dashboards during failover).
+            val serviceByName = services.associateBy { it.name }
+            for (name in stateSyncManager.listSyncServices()) {
+                val size = stateSyncManager.canonicalSizeBytes(name)
+                val stats = stateSyncManager.getStats(name)
+                val inFlight = if (stateSyncManager.isSyncInFlight(name)) 1 else 0
                 if (size == 0L && stats == null && inFlight == 0) continue
-                val labels = arrayOf("service" to service.name, "group" to service.groupName)
+                val groupLabel = serviceByName[name]?.groupName ?: ""
+                val labels = arrayOf("service" to name, "group" to groupLabel)
                 sb.value("nimbus_sync_canonical_size_bytes", size, *labels)
                 sb.value("nimbus_sync_in_flight", inFlight, *labels)
                 if (stats != null) {
