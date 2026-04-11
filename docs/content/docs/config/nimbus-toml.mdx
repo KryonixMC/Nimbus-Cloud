@@ -443,6 +443,7 @@ Cluster mode is **disabled by default**. Single-node setups do not need it. All 
 | `keystore_password` | String | `""` | Keystore password. If empty during auto-generation, uses a default internal password. Can be overridden via `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` env var. |
 | `extra_sans` | List&lt;String&gt; | `[]` | Additional SANs (hostnames or IPs) baked into the auto-generated TLS cert. Strings matching `N.N.N.N` are added as IP SANs, everything else as DNS SANs. **Only applied when the keystore is generated** — to change SANs after the fact, run `cluster cert regenerate` and restart. |
 | `public_host` | String | `""` | Hostname or IP returned in the `wsUrl` of the `/api/cluster/bootstrap` response. Defaults to the `bind` address (when not `0.0.0.0`) or the local hostname. Set this if the controller is behind NAT or has multiple interfaces. |
+| `sync_disk_quota_bytes` | Long | `0` | Maximum total size in bytes that state-sync canonical copies may occupy (under `services/state/` + any dedicated service roots). `0` = unlimited. Pushes that would exceed this limit are rejected with HTTP 507 Insufficient Storage. Example: `sync_disk_quota_bytes = 10737418240` for a 10 GB cap. |
 | `reconciliation_delay` | Int | `10000` | Milliseconds to wait for agent reconnections before starting services. During this window, agents report recovered services. Only after the delay does `startMinimumInstances()` run, preventing duplicate service starts. |
 
 ```toml title="config/nimbus.toml"

@@ -279,7 +279,7 @@ class NimbusApi(
 
             // Service-level routes — accessible with both master and service tokens
             val serviceRouteBlock: Route.() -> Unit = {
-                serviceRoutes(registry, serviceManager, groupManager, eventBus, databaseManager)
+                serviceRoutes(registry, serviceManager, groupManager, eventBus, databaseManager, stateSyncManager)
                 proxyEventRoutes(eventBus)
                 proxySyncRoutes(proxySyncManager, eventBus)
                 groupRoutes(registry, groupManager, groupsDir, eventBus)
@@ -344,7 +344,7 @@ class NimbusApi(
             // State sync endpoints: agents pull/push canonical service state here.
             // Gated by cluster token, same as template downloads.
             if (stateSyncManager != null) {
-                stateRoutes(stateSyncManager, config.cluster.token)
+                stateRoutes(stateSyncManager, config.cluster.token, eventBus)
             }
 
             // Remote CLI console routes (WebSocket + REST, master token only)

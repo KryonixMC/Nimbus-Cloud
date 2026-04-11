@@ -208,6 +208,89 @@ class ServiceManager(
         return startLocalService(prepared.service, prepared)
     }
 
+    /**
+     * Explicit migration: stop a service on its current node, wait for the graceful
+     * stop (which triggers a state-sync push for sync-enabled services) to complete,
+     * then start it again. When [targetNode] is non-null, the service is pinned to
+     * that node for this start; otherwise the normal placement rules run.
+     *
+     * The operator is responsible for this being a sync-enabled service — for
+     * non-sync services, the data on the source node is lost.
+     *
+     * Returns the new [Service] on success, null on failure (service not found,
+     * target node offline, etc.).
+     */
+    suspend fun migrateService(serviceName: String, targetNode: String?): Service? {
+        val current = registry.get(serviceName)
+        if (current == null) {
+            logger.warn("Cannot migrate '{}': service not found", serviceName)
+            return null
+        }
+        val groupName = current.groupName
+
+        // Validate target node if specified
+        if (targetNode != null && targetNode != "local") {
+            val node = nodeManager?.getNode(targetNode)
+            if (node == null || !node.isConnected) {
+                logger.error("Cannot migrate '{}': target node '{}' is not online", serviceName, targetNode)
+                return null
+            }
+        }
+
+        val sourceNodeId = current.nodeId
+        logger.info("Migrating '{}' from {} → {} (group={})",
+            serviceName, sourceNodeId, targetNode ?: "auto-placement", groupName)
+
+        // Stop the service. For sync-enabled services this triggers a push of the
+        // current state to the controller's canonical store — so the new start
+        // (on any node) pulls fresh data.
+        val stopped = stopService(serviceName, forceful = false)
+        if (!stopped) {
+            logger.warn("Migration stop for '{}' returned false — service may not have been running", serviceName)
+        }
+
+        // Wait for the stop + push to actually complete. Poll until the service is
+        // out of the registry or in a terminal state.
+        val deadline = System.currentTimeMillis() + 60_000
+        while (System.currentTimeMillis() < deadline) {
+            val s = registry.get(serviceName)
+            if (s == null || s.state == ServiceState.STOPPED || s.state == ServiceState.CRASHED) break
+            delay(500)
+        }
+
+        // Temporarily pin placement via a one-shot override. Simplest path: if the
+        // target is a specific node, we inject the preference by patching the
+        // group's placement.node just for this start. Since groups are shared
+        // state, we instead use a new one-shot placement override that
+        // startServiceOnNode supports.
+        val started = if (targetNode != null && targetNode != "local") {
+            startServiceOnNode(groupName, targetNode)
+        } else {
+            startService(groupName)
+        }
+
+        if (started == null) {
+            logger.error("Migration start for '{}' failed", serviceName)
+            return null
+        }
+        logger.info("Migration of '{}' complete: now on node {}", started.name, started.nodeId)
+        return started
+    }
+
+    /**
+     * One-shot placement: start a service on a specific node regardless of the
+     * group's configured placement.node. Used by [migrateService].
+     */
+    private suspend fun startServiceOnNode(groupName: String, nodeId: String): Service? {
+        val group = groupManager.getGroup(groupName) ?: return null
+        val node = nodeManager?.getNode(nodeId) ?: return null
+        if (!node.isConnected) return null
+
+        val prepared = serviceFactory.prepare(groupName) ?: return null
+        clearPlacementBlocked(groupName)
+        return startRemoteService(prepared.service, prepared, node, group)
+    }
+
     private suspend fun startLocalService(service: Service, prepared: ServiceFactory.PreparedService): Service? {
         val (_, workDir, command, readyPattern, isModded, readyTimeout, env) = prepared
         val serviceName = service.name
@@ -348,8 +431,26 @@ class ServiceManager(
             bedrockPort = service.bedrockPort ?: 0,
             bedrockEnabled = config.bedrock.enabled && groupConfig.software == dev.nimbuspowered.nimbus.config.ServerSoftware.VELOCITY,
             syncEnabled = groupConfig.sync.enabled,
-            syncExcludes = groupConfig.sync.excludes
+            syncExcludes = groupConfig.sync.excludes,
+            snapshotInterval = groupConfig.sync.snapshotInterval,
+            snapshotFlushCommand = resolveSnapshotFlushCommand(groupConfig.sync.snapshotFlushCommand, groupConfig.software),
+            snapshotFlushWaitMs = groupConfig.sync.snapshotFlushWaitMs
         )
+    }
+
+    /**
+     * Resolves the effective flush command for a snapshot. If the user didn't specify one,
+     * pick a sensible default based on the server software.
+     */
+    private fun resolveSnapshotFlushCommand(configured: String, software: ServerSoftware): String {
+        if (configured.isNotBlank()) return configured
+        return when (software) {
+            ServerSoftware.VELOCITY -> ""
+            // Paper-family (Paper, Purpur, Folia, Pufferfish, Leaf), Forge, NeoForge, Fabric
+            // all accept "save-all flush". CUSTOM defaults to the safer plain "save-all".
+            ServerSoftware.CUSTOM -> "save-all"
+            else -> "save-all flush"
+        }
     }
 
     /**
@@ -396,7 +497,10 @@ class ServiceManager(
             bedrockEnabled = false,
             syncEnabled = true,                      // dedicated ALWAYS uses sync for remote placement
             syncExcludes = dedicated.sync.excludes,
-            isDedicated = true
+            isDedicated = true,
+            snapshotInterval = dedicated.sync.snapshotInterval,
+            snapshotFlushCommand = resolveSnapshotFlushCommand(dedicated.sync.snapshotFlushCommand, dedicated.software),
+            snapshotFlushWaitMs = dedicated.sync.snapshotFlushWaitMs
         )
     }
 

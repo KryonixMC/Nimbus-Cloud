@@ -94,6 +94,27 @@ nimbus » restart Lobby-1
 
 ---
 
+### `migrate`
+
+Move a service between cluster nodes. For sync-enabled services the graceful stop triggers a state push to the controller canonical, then the start on the target node pulls that canonical before launching.
+
+**Syntax:** `migrate <service> <target-node|local>`
+
+```text title="Nimbus"
+nimbus » migrate Lobby-1 worker-2
+ℹ Migrating 'Lobby-1' from worker-1 → worker-2...
+✓ Service 'Lobby-1' now running on node 'worker-2' (port 30000).
+```
+
+- `target-node` must be an agent node name that is currently connected.
+- Pass `local` to move a service back to the controller.
+- For **non-sync** services, the data on the source node is lost. Migration is only safe for `[group.sync] enabled = true` or `[dedicated.sync] enabled = true`.
+- Same-name slot reuse: the service keeps its name across the migration so canonical state stays keyed to the same name.
+
+**Tab completion:** Running service names, then connected node names.
+
+---
+
 ### `purge`
 
 Force-kill a service process, clean up crashed services, or kill a process by PID. Use this when a service is stuck and `stop` doesn't work.

@@ -135,9 +135,26 @@ class ClusterWebSocketHandler(
                 }
             }
             is ClusterMessage.ServiceStateChanged -> {
-                val service = registry.get(message.serviceName)
+                val existing = registry.get(message.serviceName)
+                val newState = ServiceState.valueOf(message.state)
+
+                // Reconcile stale terminal state: after a controller restart or transient
+                // disconnect the controller may still see a service as CRASHED/STOPPED
+                // while the agent actually has it running. When the agent re-syncs and
+                // reports READY/STARTING, unregister the stale entry and let the
+                // "unknown service" branch below re-register it fresh.
+                val service = if (
+                    existing != null &&
+                    (existing.state == ServiceState.CRASHED || existing.state == ServiceState.STOPPED) &&
+                    (newState == ServiceState.READY || newState == ServiceState.STARTING)
+                ) {
+                    logger.info("Reconciling ghost entry '{}': controller had {} but agent reports {}",
+                        message.serviceName, existing.state, newState)
+                    registry.unregister(message.serviceName)
+                    null
+                } else existing
+
                 if (service != null) {
-                    val newState = ServiceState.valueOf(message.state)
                     val actuallyTransitioned = service.transitionTo(newState)
                     service.pid = message.pid
 

@@ -168,6 +168,13 @@ data class ClusterConfig(
     val extraSans: List<String> = emptyList(),
     @SerialName("public_host")
     val publicHost: String = "",
+    /**
+     * Maximum total size in bytes that canonical state may occupy under
+     * `services/state/` + any dedicated service roots. 0 = unlimited.
+     * Pushes that would exceed this limit are rejected with HTTP 507.
+     */
+    @SerialName("sync_disk_quota_bytes")
+    val syncDiskQuotaBytes: Long = 0,
     @SerialName("reconciliation_delay")
     val reconciliationDelay: Long = 10000
 )

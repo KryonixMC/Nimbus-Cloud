@@ -25,7 +25,23 @@ data class ServiceResponse(
     val tps: Double = 20.0,
     val memoryUsedMb: Long = 0,
     val memoryMaxMb: Long = 0,
-    val healthy: Boolean = true
+    val healthy: Boolean = true,
+    /** Sync health: null if this service has sync disabled or never synced. */
+    val sync: SyncHealth? = null
+)
+
+@Serializable
+data class SyncHealth(
+    /** True while a push is currently in flight for this service. */
+    val inFlight: Boolean,
+    /** ISO-8601 timestamp of the last successful push, or null if never. */
+    val lastPushAt: String?,
+    /** Bytes covered by the last push (sum of manifest sizes). */
+    val lastPushBytes: Long,
+    /** File count in the last push's manifest. */
+    val lastPushFiles: Int,
+    /** Current size of the canonical copy on disk. */
+    val canonicalSizeBytes: Long
 )
 
 @Serializable

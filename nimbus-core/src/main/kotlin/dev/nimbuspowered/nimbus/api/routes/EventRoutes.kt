@@ -196,6 +196,22 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("group" to groupName, "reason" to reason)
         )
+        is NimbusEvent.SyncCompleted -> EventMessage(
+            type = "SYNC_COMPLETED",
+            timestamp = timestamp.toString(),
+            data = mapOf(
+                "service" to serviceName,
+                "filesInManifest" to filesInManifest.toString(),
+                "filesReceived" to filesReceived.toString(),
+                "bytesReceived" to bytesReceived.toString(),
+                "durationMs" to durationMs.toString()
+            )
+        )
+        is NimbusEvent.SyncFailed -> EventMessage(
+            type = "SYNC_FAILED",
+            timestamp = timestamp.toString(),
+            data = mapOf("service" to serviceName, "reason" to reason)
+        )
         is NimbusEvent.PlayerConnected -> EventMessage(
             type = "PLAYER_CONNECTED",
             timestamp = timestamp.toString(),

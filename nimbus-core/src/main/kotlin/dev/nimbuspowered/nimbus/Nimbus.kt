@@ -319,8 +319,13 @@ fun nimbusMain() = runBlocking {
             if (dedicatedServiceManager.getConfig(serviceName) != null) {
                 dedicatedServicesDir.resolve(serviceName)
             } else null
-        }
+        },
+        diskQuotaBytes = config.cluster.syncDiskQuotaBytes,
+        extraQuotaRoots = listOf(dedicatedServicesDir)
     )
+    // Wipe orphaned staging dirs from previous unclean shutdowns (both the state
+    // root for group-sync services and the dedicated dir for dedicated-sync services)
+    stateSyncManager.cleanupStaleStaging(extraRoots = listOf(dedicatedServicesDir))
 
     // Create service manager
     val serviceManager = ServiceManager(

@@ -169,11 +169,30 @@ State sync policy for stateful services that should **float between nodes** whil
 |--------|------|---------|-------------|
 | `enabled` | Boolean | `false` | When true, the controller stores the service's canonical working directory under `services/state/<name>/`. On every start, the agent pulls (only changed files). On every graceful stop, the agent pushes changes back. |
 | `excludes` | `List<String>` | see below | rsync-style glob patterns. Matched files are neither uploaded nor deleted during reconcile. |
+| `snapshot_interval` | Long | `0` | Periodic snapshot interval in seconds. `0` = only push on graceful stop (no periodic snapshots). When set, the agent sends `snapshot_flush_command` to the service's stdin every N seconds, waits `snapshot_flush_wait_ms`, and pushes the current delta. Shrinks the crash data-loss window from "last stop" to "last snapshot". |
+| `snapshot_flush_command` | String | software-specific | Console command sent to stdin before a periodic snapshot. Defaults: Paper/Purpur/Folia/Pufferfish/Leaf/Forge/NeoForge/Fabric → `"save-all flush"`; Vanilla/Custom → `"save-all"`; Velocity → `""`. Set explicitly for modded servers with custom save commands. |
+| `snapshot_flush_wait_ms` | Long | `3000` | Milliseconds to wait after sending the flush command before scanning the filesystem. Gives the server time to finish writing chunks to disk. Bump for modded servers with many dimensions. |
 
 **Default excludes:**
 ```toml
 excludes = ["logs/", "cache/", "crash-reports/", "*.tmp", "*.lock", "*.pid", "session.lock"]
 ```
+
+### Periodic snapshotting
+
+Without snapshots, sync runs only at graceful stop — so an unplanned crash loses everything since the last stop. Periodic snapshotting trades a small runtime TPS hiccup (while the server flushes chunks) for a much smaller data-loss window.
+
+```toml title="config/groups/survival.toml"
+[group.sync]
+enabled = true
+snapshot_interval = 300       # every 5 minutes
+snapshot_flush_command = "save-all flush"
+snapshot_flush_wait_ms = 3000
+```
+
+The agent sends `save-all flush` over the service's stdin, waits for the flush to complete, then does a normal delta push. The lock prevents two snapshots from running concurrently — the next interval simply skips if a previous push is still in flight.
+
+**No SDK required** — the flush happens via standard Minecraft stdin commands. Works on any Bukkit/Paper/Forge/NeoForge/Fabric/Folia/Vanilla server.
 
 ### How it works
 

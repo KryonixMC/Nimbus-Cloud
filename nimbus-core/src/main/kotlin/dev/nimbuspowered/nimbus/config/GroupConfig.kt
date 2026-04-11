@@ -153,5 +153,33 @@ data class SyncConfig(
         "*.lock",
         "*.pid",
         "session.lock"
-    )
+    ),
+    /**
+     * Periodic snapshot interval in seconds. 0 = only push on graceful stop
+     * (no periodic snapshots). When set, the agent sends [snapshotFlushCommand]
+     * to the service's stdin every N seconds, waits [snapshotFlushWaitMs], and
+     * pushes the current state to the controller as a new canonical checkpoint.
+     *
+     * Shrinks the crash data-loss window from "last stop" to "last interval".
+     * Tradeoff: runtime bandwidth + brief TPS hiccup while the server flushes.
+     */
+    @SerialName("snapshot_interval")
+    val snapshotInterval: Long = 0,
+    /**
+     * Console command sent to the service's stdin before a periodic snapshot.
+     * Empty string = no flush command (file-scan only, less consistent).
+     * Defaults are software-specific: Paper/Purpur/Pufferfish/Leaf/Folia/Forge/NeoForge/Fabric
+     * use `save-all flush`; Vanilla uses `save-all`; Velocity has no persistent
+     * world data so the default is empty.
+     */
+    @SerialName("snapshot_flush_command")
+    val snapshotFlushCommand: String = "",
+    /**
+     * Milliseconds to wait after sending [snapshotFlushCommand] before scanning
+     * the filesystem. Gives the server time to finish flushing chunks to disk.
+     * Default 3000ms is comfortable for a single world; bump it for modded
+     * servers with many dimensions.
+     */
+    @SerialName("snapshot_flush_wait_ms")
+    val snapshotFlushWaitMs: Long = 3000
 )

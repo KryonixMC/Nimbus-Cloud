@@ -81,17 +81,37 @@ class StateSyncClient(
         val matchers = excludes.map { compileGlob(it) }
         val local = scanLocalManifest(workDir, matchers)
 
-        var downloaded = 0
-        var skipped = 0
-        for ((relPath, entry) in ctrlManifest.files) {
-            if (matchers.any { it(relPath) }) continue
+        // Precompute the set of files we'll actually download so we can show progress.
+        val toDownload = ctrlManifest.files.filter { (relPath, entry) ->
+            if (matchers.any { it(relPath) }) return@filter false
             val localEntry = local.files[relPath]
-            if (localEntry != null && localEntry.sha256.equals(entry.sha256, ignoreCase = true)) {
-                skipped += 1
-                continue
-            }
+            localEntry == null || !localEntry.sha256.equals(entry.sha256, ignoreCase = true)
+        }
+        val totalToDownload = toDownload.size
+        val totalBytesToDownload = toDownload.values.sumOf { it.size }
+        val startTime = System.currentTimeMillis()
+
+        if (totalToDownload > 0) {
+            logger.info("State sync pull '{}': {} files ({} MB) to download",
+                serviceName, totalToDownload, "%.1f".format(totalBytesToDownload / 1024.0 / 1024.0))
+        }
+
+        var downloaded = 0
+        var skipped = ctrlManifest.files.size - toDownload.size
+        var bytesDownloaded = 0L
+        var nextLogThreshold = 0.10 // log at 10%, 20%, 30%, …
+        for ((relPath, entry) in toDownload) {
             downloadFile(serviceName, relPath, workDir.resolve(relPath))
             downloaded += 1
+            bytesDownloaded += entry.size
+            val progress = downloaded.toDouble() / totalToDownload
+            if (progress >= nextLogThreshold && totalToDownload >= 50) {
+                val pct = (progress * 100).toInt()
+                val mb = "%.1f".format(bytesDownloaded / 1024.0 / 1024.0)
+                logger.info("State sync pull '{}': {}% ({}/{} files, {} MB)",
+                    serviceName, pct, downloaded, totalToDownload, mb)
+                nextLogThreshold += 0.10
+            }
         }
 
         // Reconcile: delete local files not in the controller's manifest (unless excluded)
@@ -104,8 +124,9 @@ class StateSyncClient(
             deleted += 1
         }
 
-        logger.info("State sync pull '{}': {} downloaded, {} skipped (up-to-date), {} deleted locally",
-            serviceName, downloaded, skipped, deleted)
+        val duration = System.currentTimeMillis() - startTime
+        logger.info("State sync pull '{}' done in {}ms: {} downloaded, {} skipped (up-to-date), {} deleted locally",
+            serviceName, duration, downloaded, skipped, deleted)
         return true
     }
 
@@ -127,8 +148,11 @@ class StateSyncClient(
             remote == null || !remote.sha256.equals(entry.sha256, ignoreCase = true)
         }.keys
 
-        logger.info("State sync push '{}': {} files total, {} to upload, {} unchanged",
-            serviceName, localManifest.files.size, toUpload.size, localManifest.files.size - toUpload.size)
+        val uploadBytes = toUpload.sumOf { localManifest.files[it]?.size ?: 0L }
+        logger.info("State sync push '{}': {} files total, {} to upload ({} MB), {} unchanged",
+            serviceName, localManifest.files.size, toUpload.size,
+            "%.1f".format(uploadBytes / 1024.0 / 1024.0),
+            localManifest.files.size - toUpload.size)
 
         runBlocking {
             // Stream each file from disk via ChannelProvider instead of loading into

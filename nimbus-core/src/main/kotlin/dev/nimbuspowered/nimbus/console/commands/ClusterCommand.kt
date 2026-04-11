@@ -90,10 +90,13 @@ class ClusterCommand(
             }
             "cert" -> {
                 val certArgs = args.drop(1)
-                if (certArgs.isNotEmpty() && certArgs[0].lowercase() == "regenerate") {
-                    handleCertRegenerate(output)
-                } else {
-                    handleCertShow(output)
+                when {
+                    certArgs.isEmpty() -> handleCertShow(output)
+                    certArgs[0].lowercase() == "regenerate" -> {
+                        val confirmed = certArgs.size >= 2 && certArgs[1].lowercase() == "confirm"
+                        handleCertRegenerate(output, confirmed)
+                    }
+                    else -> handleCertShow(output)
                 }
             }
             "bootstrap-url", "bootstrap" -> handleBootstrapUrl(output)
@@ -156,7 +159,7 @@ class ClusterCommand(
         output.info("(the setup wizard does this automatically via /api/cluster/bootstrap).")
     }
 
-    private fun handleCertRegenerate(output: CommandOutput) {
+    private fun handleCertRegenerate(output: CommandOutput, confirmed: Boolean) {
         if (!config.cluster.enabled) {
             output.info("Cluster mode is not enabled.")
             return
@@ -170,12 +173,25 @@ class ClusterCommand(
             output.info("No keystore found at $keystorePath — a fresh one will be generated on next start.")
             return
         }
-        output.info("Regenerating the cluster certificate.")
-        output.info("All agents will need to re-run their setup wizard to re-trust the new cert.")
+
+        if (!confirmed) {
+            // Dry-run mode — show what would happen and require explicit confirm
+            output.header("Cluster Cert Regeneration")
+            output.text("  ${ConsoleFormatter.BOLD}This will delete:${ConsoleFormatter.RESET} $keystorePath")
+            output.text("")
+            output.info("⚠  All agents currently pinned to the old cert will fail to connect.")
+            output.info("⚠  Every agent must re-run 'java -jar nimbus-agent.jar --setup' to re-pin.")
+            output.text("")
+            output.info("To confirm, run:")
+            output.text("  ${ConsoleFormatter.CYAN}cluster cert regenerate confirm${ConsoleFormatter.RESET}")
+            return
+        }
+
+        output.info("Regenerating the cluster certificate (confirmed).")
         try {
             java.nio.file.Files.delete(keystorePath)
             output.success("Deleted $keystorePath")
-            output.info("Restart Nimbus to generate a new certificate.")
+            output.info("Restart Nimbus to generate a new certificate. All agents must then re-pin.")
         } catch (e: Exception) {
             output.error("Failed to delete keystore: ${e.message}")
         }
