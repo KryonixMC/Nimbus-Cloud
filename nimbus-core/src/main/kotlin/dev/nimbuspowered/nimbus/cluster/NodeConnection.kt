@@ -10,11 +10,15 @@ import org.slf4j.LoggerFactory
 
 class NodeConnection(
     val nodeId: String,
-    val host: String,
+    host: String,
     val maxMemory: String,
     val maxServices: Int,
     private var session: DefaultWebSocketServerSession?
 ) {
+    // Mutable so the agent can update its advertised public_host on reconnect
+    // (e.g. after an IP change or a config reload).
+    @Volatile var host: String = host
+        private set
     private val logger = LoggerFactory.getLogger(NodeConnection::class.java)
     private val sendMutex = Mutex()
 
@@ -60,6 +64,7 @@ class NodeConnection(
         systemMemoryTotalMb = auth.systemMemoryTotalMb
         javaVersion = auth.javaVersion
         javaVendor = auth.javaVendor
+        if (auth.publicHost.isNotBlank()) host = auth.publicHost
     }
 
     fun updateHeartbeat(response: ClusterMessage.HeartbeatResponse) {

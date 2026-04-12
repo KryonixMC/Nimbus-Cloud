@@ -32,7 +32,15 @@ data class AgentDefinition(
     @SerialName("truststore_path")
     val truststorePath: String = "",
     @SerialName("truststore_password")
-    val truststorePassword: String = ""
+    val truststorePassword: String = "",
+    /**
+     * Publicly reachable IP/hostname the controller's proxy should use to connect
+     * to backends on this node. Leave blank to auto-pick the first non-APIPA,
+     * non-loopback, non-link-local IPv4 interface. Set explicitly if the agent
+     * runs behind NAT or has multiple interfaces (e.g. Tailscale + LAN).
+     */
+    @SerialName("public_host")
+    val publicHost: String = ""
 )
 
 @Serializable
@@ -98,6 +106,12 @@ object AgentConfigLoader {
             appendLine("# truststore_path / truststore_password: advanced, for CA-issued certs.")
             appendLine("truststore_path = \"${config.agent.truststorePath}\"")
             appendLine("truststore_password = \"${config.agent.truststorePassword}\"")
+            appendLine()
+            appendLine("# public_host: IP/hostname the controller's proxy should route players to")
+            appendLine("# when they connect to backends on this node. Leave blank to auto-pick a")
+            appendLine("# routable IPv4 from a real LAN interface. Set explicitly if the agent runs")
+            appendLine("# behind NAT or has multiple interfaces (e.g. Tailscale + LAN).")
+            appendLine("public_host = \"${config.agent.publicHost}\"")
             appendLine()
             appendLine("# Optional: specify paths to Java installations.")
             appendLine("# Leave empty for auto-detection / auto-download from Adoptium.")

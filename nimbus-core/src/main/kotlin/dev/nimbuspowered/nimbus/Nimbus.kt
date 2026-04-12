@@ -343,6 +343,11 @@ fun nimbusMain() = runBlocking {
         jwtTokenManager = jwtTokenManager
     )
 
+    // Wire node-failover callback — runs re-placement for services on dead nodes.
+    nodeManager?.onNodeFailover = { nodeId, names ->
+        serviceManager.handleNodeFailover(nodeId, names)
+    }
+
     // Wire dedicated service manager into service manager and factory
     serviceManager.dedicatedServiceManager = dedicatedServiceManager
     serviceManager.serviceFactory.dedicatedServiceManager = dedicatedServiceManager
@@ -547,17 +552,9 @@ fun nimbusMain() = runBlocking {
     }
 
     // Start minimum instances for all groups (auto-downloads JARs if missing)
-    // This runs phased: proxy first (waits for READY), then backends.
+    // This runs phased: proxy first (waits for READY), then backends, then
+    // dedicated services. All three startup phases live in startMinimumInstances.
     serviceManager.startMinimumInstances()
-
-    // Start dedicated services after group services
-    for (cfg in dedicatedServiceManager.getAllConfigs()) {
-        try {
-            serviceManager.startDedicatedService(cfg.dedicated)
-        } catch (e: Exception) {
-            logger.error("Failed to start dedicated service '{}': {}", cfg.dedicated.name, e.message)
-        }
-    }
 
     // Start scaling engine AFTER initial boot completes — prevents the engine from
     // racing the phased startup (e.g. starting backends before the proxy is ready).

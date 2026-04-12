@@ -103,6 +103,25 @@ class ScalingEngine(
             return
         }
 
+        // Static groups with sync.enabled can float across nodes — if they were
+        // blocked at boot (no agents yet) or their node crashed, retry placement
+        // here so they recover without requiring a controller restart.
+        for (group in groupManager.getAllGroups()) {
+            if (!group.isStatic) continue
+            if (group.name in serviceManager.restartingGroups) continue
+            val syncEnabled = group.config.group.sync.enabled
+            if (!syncEnabled) continue
+            val minInstances = group.config.group.scaling.minInstances
+            val services = registry.getByGroup(group.name)
+            val live = services.count { it.state !in setOf(ServiceState.CRASHED, ServiceState.STOPPED) }
+            if (live >= minInstances) continue
+            try {
+                serviceManager.startService(group.name)
+            } catch (e: Exception) {
+                logger.debug("Retry placement of static sync group '{}' failed: {}", group.name, e.message)
+            }
+        }
+
         for (group in groupManager.getAllGroups()) {
             if (group.isStatic) continue
 

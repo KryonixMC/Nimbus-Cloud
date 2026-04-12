@@ -68,6 +68,16 @@ sealed class ClusterMessage {
         val timeoutSeconds: Int = 30
     ) : ClusterMessage()
 
+    /**
+     * Tell an agent to delete a cached sync workdir for a service it no longer hosts.
+     * Sent by the controller after a successful migration / failover re-placement so
+     * the source node doesn't hoard stale state.
+     */
+    @Serializable @SerialName("DISCARD_SYNC_WORKDIR")
+    data class DiscardSyncWorkdir(
+        val serviceName: String
+    ) : ClusterMessage()
+
     @Serializable @SerialName("SEND_COMMAND")
     data class SendCommand(
         val serviceName: String,
@@ -143,7 +153,14 @@ sealed class ClusterMessage {
         val availableProcessors: Int = 0,
         val systemMemoryTotalMb: Long = 0,
         val javaVersion: String = "",
-        val javaVendor: String = ""
+        val javaVendor: String = "",
+        /**
+         * Publicly reachable address the controller's proxy should use when routing
+         * players to backends on this node. Set from [cluster] public_host in agent.toml,
+         * or picked automatically from a non-APIPA / non-loopback interface. The controller
+         * overrides the socket-derived peer address with this if non-empty.
+         */
+        val publicHost: String = ""
     ) : ClusterMessage()
 
     @Serializable @SerialName("HEARTBEAT_RESPONSE")

@@ -161,7 +161,8 @@ class AgentRuntime(
                 availableProcessors = Runtime.getRuntime().availableProcessors(),
                 systemMemoryTotalMb = getTotalMemoryMb(),
                 javaVersion = System.getProperty("java.version", ""),
-                javaVendor = System.getProperty("java.vendor", "")
+                javaVendor = System.getProperty("java.vendor", ""),
+                publicHost = resolvePublicHost()
             )
             send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), authRequest)))
 
@@ -307,6 +308,16 @@ class AgentRuntime(
             is ClusterMessage.StopService -> {
                 scope.launch {
                     processManager.stopService(msg.serviceName, msg.timeoutSeconds)
+                }
+            }
+
+            is ClusterMessage.DiscardSyncWorkdir -> {
+                scope.launch {
+                    try {
+                        processManager.discardSyncWorkdir(msg.serviceName)
+                    } catch (e: Exception) {
+                        logger.warn("Failed to discard sync workdir for '{}': {}", msg.serviceName, e.message)
+                    }
                 }
             }
 
@@ -524,6 +535,45 @@ class AgentRuntime(
             val osBean = java.lang.management.ManagementFactory.getOperatingSystemMXBean()
             ((osBean as? com.sun.management.OperatingSystemMXBean)?.totalMemorySize ?: 0) / 1024 / 1024
         } catch (_: Exception) { 0 }
+    }
+
+    /**
+     * Picks the best reachable IPv4 address for the controller's proxy to use when
+     * routing players to backends on this node. Prefers the operator's explicit
+     * `[agent] public_host` config; falls back to the first non-loopback, non-APIPA,
+     * non-link-local, site-local or global IPv4 address from any up interface.
+     *
+     * Without this, the controller used `call.request.local.remoteAddress` which on
+     * Windows often picks a Hyper-V vEthernet / Tailscale / APIPA (169.254.x.x)
+     * address and breaks backend routing for real multi-node deployments.
+     */
+    private fun resolvePublicHost(): String {
+        val configured = config.agent.publicHost.trim()
+        if (configured.isNotEmpty()) return configured
+
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return ""
+            val candidates = mutableListOf<java.net.Inet4Address>()
+            for (iface in interfaces.toList()) {
+                if (!iface.isUp || iface.isLoopback || iface.isVirtual) continue
+                val name = iface.displayName.lowercase()
+                // Skip virtual/tunnel interfaces that are unlikely to be reachable.
+                if ("hyper-v" in name || "vethernet" in name || "vmware" in name ||
+                    "virtualbox" in name || "tailscale" in name || "wsl" in name) continue
+                for (addr in iface.inetAddresses.toList()) {
+                    if (addr !is java.net.Inet4Address) continue
+                    if (addr.isLoopbackAddress || addr.isAnyLocalAddress || addr.isLinkLocalAddress) continue
+                    candidates += addr
+                }
+            }
+            // Prefer site-local (192.168/10/172.16-31) or global addresses over anything else.
+            candidates.firstOrNull { it.isSiteLocalAddress }?.hostAddress
+                ?: candidates.firstOrNull()?.hostAddress
+                ?: ""
+        } catch (e: Exception) {
+            logger.debug("Failed to auto-resolve public host: {}", e.message)
+            ""
+        }
     }
 
     private fun readHostname(): String {

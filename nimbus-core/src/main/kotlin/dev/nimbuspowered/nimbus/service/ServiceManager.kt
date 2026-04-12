@@ -274,6 +274,31 @@ class ServiceManager(
             logger.error("Migration start for '{}' failed", serviceName)
             return null
         }
+        // Wait until the service is actually READY on the new node before reporting
+        // success — previously this logged "complete" ~40s before the service could
+        // accept connections, which was confusing for operators.
+        val readyDeadline = System.currentTimeMillis() + 240_000
+        while (System.currentTimeMillis() < readyDeadline) {
+            val live = registry.get(started.name) ?: break
+            if (live.state == ServiceState.READY) break
+            if (live.state == ServiceState.CRASHED || live.state == ServiceState.STOPPED) {
+                logger.error("Migration start for '{}' ended in state {}", started.name, live.state)
+                return null
+            }
+            delay(1000)
+        }
+        // Tell the source node to drop its cached sync workdir if the service
+        // actually moved — otherwise stale copies accumulate after every migration.
+        if (sourceNodeId != "local" && sourceNodeId != started.nodeId) {
+            try {
+                val src = nodeManager?.getNode(sourceNodeId)
+                if (src != null && src.isConnected) {
+                    src.send(ClusterMessage.DiscardSyncWorkdir(serviceName))
+                }
+            } catch (e: Exception) {
+                logger.debug("Failed to send DiscardSyncWorkdir to '{}': {}", sourceNodeId, e.message)
+            }
+        }
         logger.info("Migration of '{}' complete: now on node {}", started.name, started.nodeId)
         return started
     }
@@ -378,6 +403,21 @@ class ServiceManager(
 
             launchReadyMonitor(service, remoteHandle, prepared.readyTimeout)
             launchExitMonitor(service, remoteHandle)
+
+            // prepare() created a controller-side workDir (services/static/<name> or
+            // services/temp/<name>_xxxx) even though the service runs on the agent.
+            // The canonical state lives in services/state/<name>/ for sync groups and
+            // dedicated/<name>/ for dedicated, so the local prepared dir is dead weight.
+            // Clean it up so the controller doesn't hoard stale copies of every remote
+            // service's files (full world, plugins, etc.).
+            try {
+                val leftover = prepared.workDir
+                if (leftover.exists()) {
+                    Files.walk(leftover).sorted(Comparator.reverseOrder()).forEach(Files::delete)
+                }
+            } catch (e: Exception) {
+                logger.debug("Failed to remove controller-side placeholder dir for remote service '{}': {}", serviceName, e.message)
+            }
 
             service
         } catch (e: Exception) {
@@ -514,6 +554,10 @@ class ServiceManager(
         scope.launch {
             try {
                 val ready = handle.waitForReady(readyTimeout)
+                // If the exit monitor already handled this (process died, service
+                // unregistered) skip the relabel — avoids double CRASHED logs 3 min
+                // after a bind-failure startup crash.
+                if (registry.get(serviceName) !== service) return@launch
                 if (ready) {
                     service.transitionTo(ServiceState.READY)
                     eventBus.emit(NimbusEvent.ServiceReady(serviceName, service.groupName))
@@ -526,7 +570,10 @@ class ServiceManager(
                         eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
                     }
                 }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Normal during shutdown — don't log as error.
             } catch (e: Exception) {
+                if (registry.get(serviceName) !== service) return@launch
                 logger.error("Error waiting for service '{}' to become ready — marking as CRASHED", serviceName, e)
                 if (service.transitionTo(ServiceState.CRASHED)) {
                     eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
@@ -616,6 +663,11 @@ class ServiceManager(
         }
 
         val exitCode = handle.exitCode() ?: -1
+        // A service that dies before reaching READY is a crash regardless of exit code —
+        // Paper/Velocity catch startup exceptions (e.g. BindException) and then System.exit(0),
+        // so exit 0 alone doesn't mean "ran cleanly". Only READY → exit 0 is truly clean.
+        val wasReady = service.state == ServiceState.READY
+        val treatAsCrash = exitCode != 0 || !wasReady
 
         handle.destroy()
         processHandles.remove(serviceName)
@@ -627,20 +679,23 @@ class ServiceManager(
             cleanupWorkingDirectory(service.workingDirectory)
         }
 
-        // Exit code 0 = clean shutdown, not a crash
-        if (exitCode == 0) {
+        if (!treatAsCrash) {
             service.transitionTo(ServiceState.STOPPED)
             logger.info("Service '{}' exited cleanly (code 0)", serviceName)
             eventBus.emit(NimbusEvent.ServiceStopped(serviceName))
             return
         }
 
-        // Non-zero exit = actual crash. Guard on transitionTo so we only emit once
+        // Startup crash OR non-zero exit. Guard on transitionTo so we only emit once
         // per distinct crash (it returns false if the service was already CRASHED via
         // another path — e.g. node-failure handler ran first).
         val justCrashed = service.transitionTo(ServiceState.CRASHED)
         if (justCrashed) {
-            logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
+            if (exitCode == 0 && !wasReady) {
+                logger.warn("Service '{}' exited during startup (code 0) — treating as crash", serviceName)
+            } else {
+                logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
+            }
             eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount))
         }
 
@@ -674,6 +729,14 @@ class ServiceManager(
 
         // Already draining or stopping — idempotent
         if (service.state == ServiceState.DRAINING || service.state == ServiceState.STOPPING) {
+            return true
+        }
+
+        // CRASHED services have no live process — just purge the registry entry and
+        // release resources so a subsequent start can succeed. Without this, operators
+        // are stuck with a dead slot until the controller is restarted.
+        if (service.state == ServiceState.CRASHED) {
+            purgeService(name)
             return true
         }
 
@@ -769,6 +832,62 @@ class ServiceManager(
         } catch (e: Exception) {
             logger.error("Error stopping service '{}'", name, e)
             false
+        }
+    }
+
+    /**
+     * Called by NodeManager after a node is declared failed. For each service that
+     * was running on the dead node, purge the CRASHED registry entry and start a
+     * fresh instance — on another node if one is available, otherwise the group is
+     * left blocked (scaling engine / operator will retry).
+     *
+     * This is the missing piece that made agent crashes non-recoverable for sync
+     * static groups (which the scaling engine skips) and made the CRASHED slot
+     * permanently block subsequent starts.
+     */
+    suspend fun handleNodeFailover(nodeId: String, affectedServiceNames: List<String>) {
+        if (affectedServiceNames.isEmpty()) return
+        logger.warn("Failover: re-placing {} service(s) from failed node '{}'", affectedServiceNames.size, nodeId)
+        for (name in affectedServiceNames) {
+            val service = registry.get(name) ?: continue
+            val groupName = service.groupName
+            val isDedicated = service.isDedicated
+
+            val shouldRestart = if (isDedicated) {
+                dedicatedServiceManager?.getConfig(name)?.dedicated?.restartOnCrash ?: true
+            } else {
+                groupManager.getGroup(groupName)?.config?.group?.lifecycle?.restartOnCrash ?: true
+            }
+            if (!shouldRestart) {
+                logger.info("Failover: '{}' has restart_on_crash=false — leaving CRASHED", name)
+                continue
+            }
+
+            // Purge the dead entry so the slot frees up.
+            try {
+                purgeService(name)
+            } catch (e: Exception) {
+                logger.warn("Failover: purge of '{}' failed: {}", name, e.message)
+                continue
+            }
+
+            // Start a fresh instance. Dedicated services stay pinned to their config;
+            // group services pick a new node via the standard placement logic.
+            try {
+                val started = if (isDedicated) {
+                    val def = dedicatedServiceManager?.getConfig(name)?.dedicated
+                    if (def != null) startDedicatedService(def) else null
+                } else {
+                    startService(groupName)
+                }
+                if (started != null) {
+                    logger.info("Failover: '{}' re-placed on node '{}'", started.name, started.nodeId)
+                } else {
+                    logger.warn("Failover: re-placement of '{}' (group {}) failed — no capacity or blocked", name, groupName)
+                }
+            } catch (e: Exception) {
+                logger.error("Failover: re-placement of '{}' threw", name, e)
+            }
         }
     }
 

@@ -89,8 +89,11 @@ class ServiceFactory(
             return null
         }
 
-        // Early check (non-atomic) for fast rejection — atomic check happens at register time
-        val currentCount = registry.countByGroup(groupName)
+        // Early check (non-atomic) for fast rejection — atomic check happens at register time.
+        // Count only non-terminal states so a CRASHED slot doesn't block a fresh start;
+        // the slot-allocation lock below will reuse the CRASHED name cleanly.
+        val currentCount = registry.getByGroup(groupName)
+            .count { it.state != ServiceState.CRASHED && it.state != ServiceState.STOPPED }
         if (currentCount >= group.maxInstances) {
             logger.warn("Cannot start service: group '{}' already at max instances ({}/{})", groupName, currentCount, group.maxInstances)
             return null
@@ -482,6 +485,19 @@ class ServiceFactory(
 
         // Ensure proxy forwarding mods + config match proxyEnabled for modded servers
         syncDedicatedProxyForwarding(workDir, software, config.version, config.proxyEnabled)
+
+        // Patch server.properties / velocity.toml so the server binds the dedicated port.
+        // Without this, Paper reads whatever server-port is in the pre-existing file
+        // (often 25565) and collides with the proxy.
+        when (software) {
+            ServerSoftware.VELOCITY -> {
+                val forwardingMode = compatibilityChecker.determineForwardingMode()
+                configPatcher.patchVelocityConfig(workDir, port, forwardingMode, bedrockEnabled = this.config.bedrock.enabled)
+            }
+            else -> {
+                configPatcher.patchServerProperties(workDir, port, bedrockEnabled = this.config.bedrock.enabled)
+            }
+        }
 
         val service = Service(
             name = serviceName,

@@ -8,9 +8,8 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
-fun Route.stressRoutes(stressTestManager: StressTestManager) {
-
-    // GET /api/stress — Current stress test status
+/** Status read — not rate-limited, callable from polling dashboards. */
+fun Route.stressStatusRoute(stressTestManager: StressTestManager) {
     get("/api/stress") {
         val status = stressTestManager.getStatus()
         if (status == null) {
@@ -29,6 +28,10 @@ fun Route.stressRoutes(stressTestManager: StressTestManager) {
             ))
         }
     }
+}
+
+/** Mutation routes — rate-limited (5/min) to prevent runaway start/stop/ramp spam. */
+fun Route.stressRoutes(stressTestManager: StressTestManager) {
 
     // POST /api/stress/start — Start a stress test
     post("/api/stress/start") {

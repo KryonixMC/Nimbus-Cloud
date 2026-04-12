@@ -18,6 +18,13 @@ class NodeManager(
     private val logger = LoggerFactory.getLogger(NodeManager::class.java)
     private val nodes = ConcurrentHashMap<String, NodeConnection>()
 
+    /**
+     * Late-bound failover hook. Invoked after a node is marked failed with the list
+     * of service names that were running on it. ServiceManager wires this to
+     * handle re-placement of restart-on-crash services on surviving nodes.
+     */
+    var onNodeFailover: (suspend (nodeId: String, affectedServiceNames: List<String>) -> Unit) = { _, _ -> }
+
     val placementStrategy: PlacementStrategy = when (config.placementStrategy.lowercase()) {
         "least-memory" -> LeastMemoryPlacement()
         "round-robin" -> RoundRobinPlacement()
@@ -98,6 +105,7 @@ class NodeManager(
         // Idempotency guard: if the node was already removed, nothing to do.
         if (nodes[nodeId] == null) return
         val affectedServices = registry.getAll().filter { it.nodeId == nodeId }
+        val affectedNames = affectedServices.map { it.name }
         for (service in affectedServices) {
             if (service.state != dev.nimbuspowered.nimbus.service.ServiceState.CRASHED) {
                 service.transitionTo(dev.nimbuspowered.nimbus.service.ServiceState.CRASHED)
@@ -106,6 +114,12 @@ class NodeManager(
         }
         unregisterNode(nodeId)
         logger.error("Node '{}' failed — {} service(s) affected", nodeId, affectedServices.size)
+        // Hand off to ServiceManager for re-placement on surviving nodes.
+        try {
+            onNodeFailover(nodeId, affectedNames)
+        } catch (e: Exception) {
+            logger.error("Failover handler for node '{}' threw", nodeId, e)
+        }
     }
 
     /**

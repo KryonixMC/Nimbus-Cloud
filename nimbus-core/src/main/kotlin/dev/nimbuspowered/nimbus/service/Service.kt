@@ -56,9 +56,12 @@ class Service(
         if (newState == _state) return true
 
         val allowed = when (_state) {
-            ServiceState.PREPARING -> setOf(ServiceState.PREPARED, ServiceState.STARTING, ServiceState.STOPPED, ServiceState.CRASHED)
-            ServiceState.PREPARED -> setOf(ServiceState.STARTING, ServiceState.STOPPED)
-            ServiceState.STARTING -> setOf(ServiceState.READY, ServiceState.CRASHED, ServiceState.STOPPED)
+            ServiceState.PREPARING -> setOf(ServiceState.PREPARED, ServiceState.STARTING, ServiceState.STOPPING, ServiceState.STOPPED, ServiceState.CRASHED)
+            // Shutdown during startup must be able to stop a service that's still in
+            // PREPARED/STARTING — previously this threw "Invalid state transition" and
+            // the backend process leaked.
+            ServiceState.PREPARED -> setOf(ServiceState.STARTING, ServiceState.STOPPING, ServiceState.STOPPED)
+            ServiceState.STARTING -> setOf(ServiceState.READY, ServiceState.STOPPING, ServiceState.CRASHED, ServiceState.STOPPED)
             // READY can jump straight to STOPPED on a clean remote exit (no DRAINING phase).
             ServiceState.READY -> setOf(ServiceState.DRAINING, ServiceState.STOPPING, ServiceState.STOPPED, ServiceState.CRASHED)
             ServiceState.DRAINING -> setOf(ServiceState.STOPPING, ServiceState.STOPPED, ServiceState.CRASHED)
@@ -67,7 +70,10 @@ class Service(
             // also fire on a service that has already been marked STOPPED — treat
             // CRASHED as an allowed relabel rather than a state error.
             ServiceState.STOPPED -> setOf(ServiceState.CRASHED)
-            ServiceState.CRASHED -> setOf(ServiceState.PREPARING, ServiceState.STOPPED)
+            // CRASHED must allow STOPPING so the operator can clean up a dead remote
+            // service via the stop/restart API. Without this the service is stuck
+            // until controller restart.
+            ServiceState.CRASHED -> setOf(ServiceState.PREPARING, ServiceState.STOPPING, ServiceState.STOPPED)
         }
         if (newState !in allowed) {
             logger.warn("Invalid state transition for '{}': {} -> {}", name, _state, newState)

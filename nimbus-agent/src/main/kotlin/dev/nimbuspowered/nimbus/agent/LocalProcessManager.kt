@@ -280,6 +280,32 @@ class LocalProcessManager(
         }
     }
 
+    /**
+     * Deletes a cached sync workdir for a service no longer hosted on this agent.
+     * Called by the controller via [ClusterMessage.DiscardSyncWorkdir] after a
+     * migration or failover re-placement, so the source node doesn't hoard stale
+     * state. Safe if the workdir is already gone or the service is still running
+     * (in which case we bail out).
+     */
+    fun discardSyncWorkdir(serviceName: String) {
+        if (handles.containsKey(serviceName)) {
+            logger.warn("Refusing to discard workdir for '{}': service is still running", serviceName)
+            return
+        }
+        val workDir = workDirs.remove(serviceName) ?: run {
+            // Fall back to the canonical sync location convention.
+            val candidate = baseDir.resolve("services").resolve("sync").resolve(serviceName)
+            if (candidate.exists()) candidate else return
+        }
+        if (!workDir.exists()) return
+        try {
+            Files.walk(workDir).sorted(Comparator.reverseOrder()).forEach(Files::delete)
+            logger.info("Discarded stale sync workdir for '{}' ({})", serviceName, workDir)
+        } catch (e: Exception) {
+            logger.warn("Failed to discard sync workdir for '{}': {}", serviceName, e.message)
+        }
+    }
+
     fun cleanup(serviceName: String, isStatic: Boolean) {
         // State sync push: fires on clean exit (player typed /stop, process died normally).
         // We push BEFORE removing state because we need the workDir + syncExcludes.
