@@ -331,6 +331,19 @@ class ServiceManager(
             // Store handle immediately after start so cleanupFailedStart can find it
             processHandles[serviceName] = processHandle
 
+            // Write a pid marker in the workdir so the orphan sweep can find this
+            // process after an unclean controller restart on Windows, where
+            // java.lang.ProcessHandle.info().commandLine() often returns empty.
+            try {
+                val pid = processHandle.pid() ?: 0L
+                if (pid > 0) {
+                    java.nio.file.Files.writeString(
+                        workDir.resolve(".nimbus-owner"),
+                        "pid=$pid\nservice=$serviceName\nowner=controller\nstartedAt=${System.currentTimeMillis()}\n"
+                    )
+                }
+            } catch (_: Exception) {}
+
             // Persist state for crash recovery
             stateStore?.addService(PersistedLocalService(
                 serviceName = serviceName,
@@ -999,7 +1012,73 @@ class ServiceManager(
         }
 
         logger.info("Recovered {}/{} local service(s)", recovered.size, state.services.size)
+
+        // Any java.exe still alive with a -Dnimbus.service.name=<X> marker that we
+        // didn't successfully adopt is an orphan from a previous controller run
+        // (killed without cleanly stopping its children). These hold Paper's
+        // world/session.lock and will make every new spawn fail with a
+        // DirectoryLock IOException until they're killed.
+        killOrphanLocalBackends()
+
         return recovered to protectedDirs
+    }
+
+    /**
+     * Kills any alive java.exe whose command line contains `-Dnimbus.service.name=`
+     * and isn't currently tracked in [processHandles]. Matches only processes whose
+     * command line also references this controller's services/ directory, so a
+     * parallel Nimbus instance on the same host isn't affected. Called from
+     * [recoverLocalServices] after adoption.
+     */
+    private fun killOrphanLocalBackends() {
+        val adoptedPids = processHandles.values.mapNotNull { it.pid() }.toSet()
+        // Walk known service workdirs for `.nimbus-owner` marker files written at
+        // spawn time. Each marker records the PID + ownerNode. This is more reliable
+        // than ProcessHandle.info().commandLine() which returns empty on Windows for
+        // reparented processes.
+        val servicesDir = Path(config.paths.services)
+        val candidateRoots = listOf(
+            servicesDir.resolve("static"),
+            servicesDir.resolve("temp")
+        ) + (dedicatedServiceManager?.let { listOf(Path(config.paths.dedicated)) } ?: emptyList())
+        var scanned = 0
+        var killed = 0
+        for (root in candidateRoots) {
+            if (!root.exists()) continue
+            try {
+                java.nio.file.Files.list(root).use { stream ->
+                    stream.forEach { wd ->
+                        val marker = wd.resolve(".nimbus-owner")
+                        if (!java.nio.file.Files.exists(marker)) return@forEach
+                        scanned++
+                        try {
+                            val lines = java.nio.file.Files.readAllLines(marker)
+                                .associate { line -> line.substringBefore("=") to line.substringAfter("=", "") }
+                            val pid = lines["pid"]?.toLongOrNull() ?: return@forEach
+                            val markerService = lines["service"] ?: ""
+                            val markerOwner = lines["owner"] ?: ""
+                            if (markerOwner != "controller") return@forEach
+                            if (pid in adoptedPids) return@forEach
+                            val h = java.lang.ProcessHandle.of(pid).orElse(null) ?: return@forEach
+                            if (!h.isAlive) {
+                                try { java.nio.file.Files.delete(marker) } catch (_: Exception) {}
+                                return@forEach
+                            }
+                            logger.warn("Killing orphan backend PID {} (service={}) from marker",
+                                pid, markerService)
+                            h.destroyForcibly()
+                            killed++
+                            try { java.nio.file.Files.delete(marker) } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            logger.debug("Marker parse failed for {}: {}", marker, e.message)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        if (scanned > 0 || killed > 0) {
+            logger.info("Controller orphan sweep done (scanned {}, killed {})", scanned, killed)
+        }
     }
 
     /**

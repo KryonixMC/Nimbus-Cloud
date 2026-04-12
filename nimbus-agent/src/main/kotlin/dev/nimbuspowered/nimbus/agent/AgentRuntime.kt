@@ -44,7 +44,7 @@ class AgentRuntime(
         config.agent.token,
         trustManager
     )
-    private val processManager = LocalProcessManager(baseDir, scope, javaResolver, stateStore, stateSyncClient)
+    private val processManager = LocalProcessManager(baseDir, scope, javaResolver, stateStore, stateSyncClient, ownerNodeName = config.agent.nodeName)
     private val client = run {
         val tm = trustManager
         HttpClient(CIO) {
@@ -162,7 +162,10 @@ class AgentRuntime(
                 systemMemoryTotalMb = getTotalMemoryMb(),
                 javaVersion = System.getProperty("java.version", ""),
                 javaVendor = System.getProperty("java.vendor", ""),
-                publicHost = resolvePublicHost()
+                publicHost = resolvePublicHost(),
+                // Authoritative list of currently-running services for post-reconnect
+                // registry reconciliation on the controller.
+                runningServices = processManager.getRunningServices().map { it.serviceName }
             )
             send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), authRequest)))
 

@@ -53,9 +53,31 @@ class ScalingEngine(
     /** Cooldown tracking: last scale-down time per group. */
     private val lastScaleDown = ConcurrentHashMap<String, Instant>()
 
+    /** Static-sync retry backoff: tracks repeated failures per group to avoid
+     * spamming startService on a group whose start keeps crashing (e.g. due to
+     * an orphaned session.lock that no cleanup has removed yet). */
+    private val staticSyncRetryFailures = ConcurrentHashMap<String, Int>()
+    private val staticSyncRetryBackoffUntil = ConcurrentHashMap<String, Instant>()
+
     companion object {
         private const val SCALE_UP_COOLDOWN_SECONDS = 30L
         private const val SCALE_DOWN_COOLDOWN_SECONDS = 120L
+    }
+
+    /** Applies exponential backoff to the static-sync retry path when a placement
+     * keeps failing. Schedule: 10s → 30s → 90s → 5min → 15min, capped. */
+    private fun bumpStaticSyncBackoff(groupName: String, reason: String) {
+        val fails = staticSyncRetryFailures.merge(groupName, 1) { old, _ -> old + 1 } ?: 1
+        val delay = when {
+            fails <= 1 -> 10L
+            fails == 2 -> 30L
+            fails == 3 -> 90L
+            fails == 4 -> 300L
+            else -> 900L
+        }
+        staticSyncRetryBackoffUntil[groupName] = Instant.now().plusSeconds(delay)
+        logger.warn("Static-sync retry for '{}' failed (attempt {}): {} — backing off {}s",
+            groupName, fails, reason, delay)
     }
 
     /**
@@ -106,6 +128,10 @@ class ScalingEngine(
         // Static groups with sync.enabled can float across nodes — if they were
         // blocked at boot (no agents yet) or their node crashed, retry placement
         // here so they recover without requiring a controller restart.
+        //
+        // Guarded with an exponential backoff because a broken workdir (e.g. an
+        // orphaned session.lock) would otherwise cause us to respawn Paper every
+        // 5 seconds indefinitely.
         for (group in groupManager.getAllGroups()) {
             if (!group.isStatic) continue
             if (group.name in serviceManager.restartingGroups) continue
@@ -113,12 +139,39 @@ class ScalingEngine(
             if (!syncEnabled) continue
             val minInstances = group.config.group.scaling.minInstances
             val services = registry.getByGroup(group.name)
-            val live = services.count { it.state !in setOf(ServiceState.CRASHED, ServiceState.STOPPED) }
-            if (live >= minInstances) continue
+            val readyCount = services.count { it.state == ServiceState.READY }
+            val inFlightCount = services.count {
+                it.state == ServiceState.PREPARING ||
+                    it.state == ServiceState.PREPARED ||
+                    it.state == ServiceState.STARTING
+            }
+            if (readyCount >= minInstances) {
+                // A READY instance exists — reset failure tracking, we're recovered.
+                staticSyncRetryFailures.remove(group.name)
+                staticSyncRetryBackoffUntil.remove(group.name)
+                continue
+            }
+            if (inFlightCount > 0) {
+                // A start is already in progress — don't stack more attempts.
+                continue
+            }
+            // Respect backoff window if we've been failing.
+            val backoffUntil = staticSyncRetryBackoffUntil[group.name]
+            if (backoffUntil != null && Instant.now().isBefore(backoffUntil)) continue
+
+            // If there's a CRASHED entry sitting in the registry, the previous
+            // attempt failed — count it so we back off on repeated failures.
+            val hasCrashed = services.any { it.state == ServiceState.CRASHED }
+            if (hasCrashed) bumpStaticSyncBackoff(group.name, "previous attempt crashed")
+            // Still within the (just-extended) backoff → skip the actual start.
+            val backoffAfterBump = staticSyncRetryBackoffUntil[group.name]
+            if (backoffAfterBump != null && Instant.now().isBefore(backoffAfterBump)) continue
+
             try {
                 serviceManager.startService(group.name)
             } catch (e: Exception) {
                 logger.debug("Retry placement of static sync group '{}' failed: {}", group.name, e.message)
+                bumpStaticSyncBackoff(group.name, e.message ?: "exception")
             }
         }
 

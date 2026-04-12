@@ -308,6 +308,10 @@ class ServiceFactory(
             command.add("-Dnimbus.service.name=$serviceName")
             command.add("-Dnimbus.service.group=$groupName")
             command.add("-Dnimbus.service.port=$port")
+            // Owner tag used by the orphan-backend sweep after an unclean controller
+            // restart — tells us which leftover java.exe were spawned by THIS
+            // controller vs some other Nimbus instance on the same host.
+            command.add("-Dnimbus.owner=controller")
             // Pass API URL as system property (non-sensitive), token via env var (hidden from ps)
             val processEnv = mutableMapOf<String, String>()
             if (config.api.enabled) {
@@ -532,6 +536,7 @@ class ServiceFactory(
             command.add("-Dnimbus.service.group=$serviceName")
             command.add("-Dnimbus.service.port=$port")
             command.add("-Dnimbus.service.dedicated=true")
+            command.add("-Dnimbus.owner=controller")
 
             val processEnv = mutableMapOf<String, String>()
             if (this.config.api.enabled) {

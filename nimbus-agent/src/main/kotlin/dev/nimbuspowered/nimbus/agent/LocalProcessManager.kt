@@ -20,7 +20,10 @@ class LocalProcessManager(
     private val scope: CoroutineScope,
     private val javaResolver: JavaResolver,
     private val stateStore: AgentStateStore,
-    private val stateSyncClient: StateSyncClient? = null
+    private val stateSyncClient: StateSyncClient? = null,
+    /** Agent node name, stamped into spawned backend cmdlines so orphan sweeps
+     *  can identify which agent instance owns a given process. */
+    private val ownerNodeName: String = "agent"
 ) {
     private val logger = LoggerFactory.getLogger(LocalProcessManager::class.java)
     private val handles = ConcurrentHashMap<String, LocalProcessHandle>()
@@ -30,6 +33,23 @@ class LocalProcessManager(
     fun runningCount(): Int = handles.count { it.value.isAlive() }
 
     suspend fun startService(msg: ClusterMessage.StartService): Boolean {
+        // Duplicate StartService for the same service: either the controller retried
+        // a still-in-flight start (race with scaling tick) or the old process is stuck.
+        // Kill whatever's there so we don't leak a process holding Paper's session.lock,
+        // which would make every subsequent spawn fail with DirectoryLock IOException.
+        val existing = handles[msg.serviceName]
+        if (existing != null) {
+            logger.warn("StartService '{}' received while a previous handle exists — destroying old one",
+                msg.serviceName)
+            try {
+                existing.destroy()
+            } catch (_: Exception) {}
+            handles.remove(msg.serviceName)
+        }
+        // Also sweep any leftover java.exe with a matching -Dnimbus.service.name=<name>
+        // from a prior agent process (we were killed and the Paper outlived us).
+        killOrphanProcesses(msg.serviceName)
+
         return try {
             val templatesDir = baseDir.resolve("templates")
             val servicesDir = baseDir.resolve("services")
@@ -125,6 +145,19 @@ class LocalProcessManager(
             handles[msg.serviceName] = handle
             workDirs[msg.serviceName] = workDir
             if (msg.isStatic) staticServices.add(msg.serviceName)
+
+            // Write a pid marker to the workdir so the orphan sweep can find this
+            // process even after an unclean agent restart on Windows, where
+            // java.lang.ProcessHandle.info().commandLine() often returns empty.
+            try {
+                val pid = handle.pid() ?: 0L
+                if (pid > 0) {
+                    java.nio.file.Files.writeString(
+                        workDir.resolve(".nimbus-owner"),
+                        "pid=$pid\nservice=${msg.serviceName}\nowner=$ownerNodeName\nstartedAt=${System.currentTimeMillis()}\n"
+                    )
+                }
+            } catch (_: Exception) {}
 
             // Persist state for crash recovery (includes sync metadata so reconnected
             // agents know to push on stop even across restarts)
@@ -281,6 +314,74 @@ class LocalProcessManager(
     }
 
     /**
+     * Kills any live java.exe process whose command line contains
+     * `-Dnimbus.service.name=<name>` and which isn't currently adopted by this
+     * agent. These are orphans left behind when a previous agent instance was
+     * killed without cleanly stopping its children — they still hold Paper's
+     * `world/session.lock` and will prevent any new spawn from starting up.
+     *
+     * Uses `java.lang.ProcessHandle.allProcesses()` so it works on both Linux
+     * and Windows without shelling out.
+     */
+    fun killOrphanProcesses(serviceName: String? = null) {
+        val adoptedPids = handles.values.mapNotNull { it.pid() }.toSet()
+        logger.info("Orphan sweep starting (serviceFilter={}, ownerTag={})",
+            serviceName ?: "<any>", ownerNodeName)
+        // Walk all service workdirs and look for .nimbus-owner marker files. Each
+        // marker records the PID that was spawned for that workdir. If the PID is
+        // still alive and we didn't adopt it, it's an orphan from a previous run.
+        //
+        // This beats relying on java.lang.ProcessHandle.info().commandLine(), which
+        // returns an empty Optional on Windows for processes the current user can't
+        // read the PEB of (reparented children of a dead agent).
+        val servicesDir = baseDir.resolve("services")
+        val candidateRoots = listOf(
+            servicesDir.resolve("sync"),
+            servicesDir.resolve("static"),
+            servicesDir.resolve("dedicated"),
+            servicesDir.resolve("temp")
+        )
+        var scanned = 0
+        var killed = 0
+        for (root in candidateRoots) {
+            if (!root.exists()) continue
+            try {
+                java.nio.file.Files.list(root).use { stream ->
+                    stream.forEach { wd ->
+                        val marker = wd.resolve(".nimbus-owner")
+                        if (!marker.exists()) return@forEach
+                        scanned++
+                        try {
+                            val lines = java.nio.file.Files.readAllLines(marker)
+                                .associate { line -> line.substringBefore("=") to line.substringAfter("=", "") }
+                            val pid = lines["pid"]?.toLongOrNull() ?: return@forEach
+                            val markerService = lines["service"] ?: ""
+                            val markerOwner = lines["owner"] ?: ""
+                            if (markerOwner != ownerNodeName) return@forEach
+                            if (serviceName != null && markerService != serviceName) return@forEach
+                            if (pid in adoptedPids) return@forEach
+                            val h = java.lang.ProcessHandle.of(pid).orElse(null) ?: return@forEach
+                            if (!h.isAlive) {
+                                // Stale marker pointing to a dead PID — clean it up.
+                                try { java.nio.file.Files.delete(marker) } catch (_: Exception) {}
+                                return@forEach
+                            }
+                            logger.warn("Killing orphan backend PID {} (service={}, owner={}) from marker",
+                                pid, markerService, markerOwner)
+                            h.destroyForcibly()
+                            killed++
+                            try { java.nio.file.Files.delete(marker) } catch (_: Exception) {}
+                        } catch (e: Exception) {
+                            logger.debug("Marker parse failed for {}: {}", marker, e.message)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        logger.info("Orphan sweep done (workdirs scanned {}, killed {})", scanned, killed)
+    }
+
+    /**
      * Deletes a cached sync workdir for a service no longer hosted on this agent.
      * Called by the controller via [ClusterMessage.DiscardSyncWorkdir] after a
      * migration or failover re-placement, so the source node doesn't hoard stale
@@ -367,7 +468,12 @@ class LocalProcessManager(
      */
     fun recoverServices(): Pair<List<RecoveredService>, Set<Path>> {
         val state = stateStore.load()
-        if (state.services.isEmpty()) return emptyList<RecoveredService>() to emptySet()
+        if (state.services.isEmpty()) {
+            // No adopted services, but there may still be orphan backends from a
+            // previous agent run whose state file we lost (fresh install, wipe).
+            killOrphanProcesses()
+            return emptyList<RecoveredService>() to emptySet()
+        }
 
         logger.info("Found {} persisted service(s), attempting recovery...", state.services.size)
         val recovered = mutableListOf<RecoveredService>()
@@ -396,6 +502,13 @@ class LocalProcessManager(
         }
 
         logger.info("Recovered {}/{} service(s)", recovered.size, state.services.size)
+
+        // After adoption, any java.exe that advertises itself as a Nimbus service
+        // but wasn't adopted is an orphan from a previous agent run (the agent was
+        // killed without cleanly stopping children). Kill them now so new spawns
+        // don't fight for the same workdir's session.lock.
+        killOrphanProcesses()
+
         return recovered to protectedDirs
     }
 
@@ -572,6 +685,10 @@ class LocalProcessManager(
         cmd.add("-Dnimbus.service.name=${msg.serviceName}")
         cmd.add("-Dnimbus.service.group=${msg.groupName}")
         cmd.add("-Dnimbus.service.port=${msg.port}")
+        // Owner tag used by the orphan sweep to identify "our" children after
+        // an unclean agent restart. Without this, we can't tell our orphans
+        // apart from a sibling nimbus instance's processes on the same host.
+        cmd.add("-Dnimbus.owner=$ownerNodeName")
         if (msg.apiUrl.isNotEmpty()) {
             cmd.add("-Dnimbus.api.url=${msg.apiUrl}")
             cmd.add("-Dnimbus.api.token=${msg.apiToken}")

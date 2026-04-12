@@ -160,7 +160,14 @@ sealed class ClusterMessage {
          * or picked automatically from a non-APIPA / non-loopback interface. The controller
          * overrides the socket-derived peer address with this if non-empty.
          */
-        val publicHost: String = ""
+        val publicHost: String = "",
+        /**
+         * Authoritative list of services actively running on this agent at the time
+         * of auth. Used by the controller to reconcile its registry after a reconnect:
+         * any service pinned to this node in the controller's registry but missing
+         * from this list is purged. Sending an empty list means "I have no services".
+         */
+        val runningServices: List<String> = emptyList()
     ) : ClusterMessage()
 
     @Serializable @SerialName("HEARTBEAT_RESPONSE")
