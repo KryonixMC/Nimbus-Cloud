@@ -5,24 +5,24 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "file=$(echo \"$TOOL_INPUT\" | grep -oP '\"file_path\"\\s*:\\s*\"\\K[^\"]+'); if echo \"$file\" | grep -q '\\.kt$'; then module=$(echo \"$file\" | grep -oP 'nimbus-[^/]+' | head -1); if [ -n \"$module\" ]; then cd /mnt/e/DEV/Minecraft/Nimbus && ./gradlew \":${module}:compileKotlin\" --daemon -q 2>&1 | tail -20; fi; fi",
-            "timeout": 60000
+            "command": "code-review-graph update --skip-flows",
+            "timeout": 30
           }
         ]
       }
     ],
-    "PreToolUse": [
+    "SessionStart": [
       {
-        "matcher": "Bash",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$TOOL_INPUT\" | grep -qP 'git\\s+commit'; then echo 'PAUSE: Run /pre-commit-docs check before committing. Verify docs/ and CLAUDE.md are in sync with your changes.'; exit 2; fi",
-            "timeout": 5000
+            "command": "code-review-graph status",
+            "timeout": 10
           }
         ]
       }
