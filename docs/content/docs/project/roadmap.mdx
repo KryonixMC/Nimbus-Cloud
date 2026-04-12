@@ -24,6 +24,7 @@ This page tracks where Nimbus is, where it's going, and why. Each version has a 
 | [v0.5.0 – v0.5.3](#v05x--modded-support) | Released | Modded client routing, mod list matching |
 | [v0.6.0 – v0.6.2](#v06x--dedicated-services) | Released | Dedicated services, unified memory, dashboard design system, overview telemetry |
 | [v0.7.0 – v0.7.3](#v07x--multi-node-cluster) | Released | Cluster TLS, placement pinning, state sync, failover, daemon mode |
+| [v0.8.0](#v08x--production-readiness-audit) | Released | Security hardening, HikariCP, 65 audit fixes, production-ready |
 | [Vision](#vision--cloud-native) | Planned | Docker, S3 storage, multi-controller HA |
 
 ---
@@ -324,6 +325,44 @@ End-to-end failover testing with live agents uncovered cascading failures. This 
 
 ---
 
+## v0.8.x — Production Readiness Audit
+
+**Theme:** Harden every layer for production deployment. A comprehensive 65-finding audit covering API security, cluster TLS, service lifecycle, database integrity, module safety, Windows compatibility, and install scripts — all resolved in a single release.
+
+### v0.8.0 — Production Readiness (April 12, 2026)
+
+The "make it bulletproof" release. A full security and stability audit uncovered 65 findings (7 critical, 17 high, 19 medium, 22 low). All resolved.
+
+**Security hardening:**
+- All API endpoints authenticated (except `/api/health`)
+- Path traversal protection on file upload endpoints
+- Blank cluster token no longer bypasses authentication
+- Hardcoded keystore password replaced with auto-generated random
+- Cluster token moved from URL query strings to Authorization header
+- CORS default restricted from wildcard to dashboard + localhost
+- UUID validation on proxy event endpoints
+
+**Stability & data integrity:**
+- HikariCP connection pool for MySQL/PostgreSQL (configurable pool size)
+- Advisory locks prevent concurrent migration races
+- `runBlocking` deadlock in WebSocket handlers eliminated
+- Thread-safe collections for concurrent service operations
+- Atomic state writes with cross-volume fallback
+- ZIP bomb protection on template extraction
+
+**Database migrations:**
+- V5: Timestamp columns widened to VARCHAR(40)
+- V6: Performance indexes, actor column widened, BIGINT IDs for high-volume tables
+
+**Operational improvements:**
+- Install scripts restart on exit code 10 (auto-update support)
+- Agent exponential reconnect backoff (1s → 60s)
+- Windows native Java detection (Program Files paths + JAVA_HOME)
+- Configurable scaling tick interval and HikariCP pool size
+- MOTD broadcast debouncing under rapid player churn
+
+---
+
 ## Vision — Cloud-Native
 
 **Theme:** Enterprise features for large networks. These are long-term goals, not promises.
@@ -390,14 +429,14 @@ Transparent assessment of current feature maturity. This helps you understand wh
 | Service Lifecycle | 5/5 | Core loop is solid — start, stop, crash recovery, restart limits |
 | Auto-Scaling (player-based) | 5/5 | Cooldowns, thresholds, global caps, stress test awareness |
 | Smart Scaling (time/predictive) | 4/5 | Works well, but requires `nimbus-module-scaling` (not in core) |
-| REST API | 4/5 | 17 route files, rate limiting, CORS, JWT scoped auth (opt-in) |
+| REST API | 5/5 | 17 route files, rate limiting, CORS, JWT scoped auth (opt-in), all endpoints authenticated, path traversal protection |
 | WebSocket Events | 4/5 | Live events + bidirectional console work reliably |
 | Multi-Node Cluster | 5/5 | TLS fingerprint pinning, placement pinning, state sync, orphan sweep, reconnect reconciliation, failover, daemon mode |
 | TCP Load Balancer | 4/5 | Async NIO, PROXY protocol v2, health checks — production-capable |
 | Module System | 5/5 | ServiceLoader, dependency resolution, versioning, SetupWizard integration |
 | Permission System | 4/5 | Groups, inheritance, tracks, meta, LuckPerms — audit integration could go deeper |
 | Template System | 5/5 | 10+ server software types, auto-download, config patching, symlinks |
-| Database | 5/5 | SQLite/MySQL/PostgreSQL all verified, migrations auto-apply |
+| Database | 5/5 | SQLite/MySQL/PostgreSQL, HikariCP pool, advisory migration locks, V1–V6 auto-apply |
 | Audit Logging | 4/5 | Batch writes, 90-day retention, actor tracking — good coverage |
 | Stress Testing | 4/5 | Ramping, per-service distribution, scaling pause — works well |
 | Proxy Sync (MOTD/Tab/Chat) | 4/5 | Three separate configs, maintenance mode, stress count reflection |
@@ -405,15 +444,15 @@ Transparent assessment of current feature maturity. This helps you understand wh
 | Plugin Search | 5/5 | Hangar + Modrinth, multi-select, dependency resolution, version-aware |
 | Performance Optimizer | 4/5 | Aikar flags + Paper/Purpur config tuning, memory-aware |
 | Console UX | 5/5 | JLine3, interactive pickers, 30+ commands, ANSI formatting |
-| Install Scripts | 4/5 | Linux/macOS/Windows, Java auto-install, systemd/screen integration |
-| Auto-Updater | 4/5 | Semver comparison, backup, swap, manual prompt for major versions |
+| Install Scripts | 5/5 | Linux/macOS/Windows, Java auto-install, systemd/screen integration, SHA-256 verification, exit code 10 restart loop |
+| Auto-Updater | 5/5 | Semver comparison, backup, swap, JAR validation, install script restart loop, manual prompt for major versions |
 | Template Stacking | 4/5 | Multi-template composition, backwards compatible |
 | Warm Pool | 4/5 | Pre-staged services, background replenishment |
 | Player Module | 3/5 | Tracking, sessions, history — needs real-world testing |
 | Service Deployments | 4/5 | Hash-based copy-back, works on controller and agent nodes |
 | State Sync | 4/5 | Graceful-stop persistence, manifest-based delta, placement pinning, failover tested end-to-end |
 | Dedicated Services | 4/5 | Single-instance, fixed-port, proxy toggle, modpack import, cluster placement with sync |
-| Remote CLI | 4/5 | Full JLine3 experience, tab completion, events, screen sessions, session tracking with GeoIP |
+| Remote CLI | 5/5 | Full JLine3 experience, tab completion, events, screen sessions, session tracking with GeoIP, authenticated endpoints |
 | Web Dashboard | 3/5 | ALPHA — design system, memory charts, cluster topology canvas, light/dark theme, Phosphor icons |
 | Modded Client Routing | 4/5 | Protocol filtering, connection type matching, mod list overlap scoring, alternate group fallback |
 

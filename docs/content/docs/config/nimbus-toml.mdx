@@ -137,8 +137,9 @@ Resource limits and scaling engine settings.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `max_memory` | String | `"10G"` | Total memory budget for all running services. Format: number + `M` or `G` (e.g., `"512M"`, `"8G"`). Validated on startup — Nimbus will not start if the format is invalid. Nimbus will not start new services if the total allocated memory would exceed this limit. |
-| `max_services` | Int | `20` | Maximum number of concurrent services across all groups. Enforced as a global hard cap by the scaling engine — no new instances are started once this limit is reached, regardless of per-group `max_instances` settings. |
+| `max_services` | Int | `20` | Maximum number of concurrent services across all groups. Enforced as a global hard cap by the scaling engine — no new instances are started once this limit is reached, regardless of per-group `max_instances` settings. Also enforced by the warm pool manager. |
 | `heartbeat_interval` | Long | `5000` | Interval in milliseconds between scaling engine evaluation cycles. Each cycle checks player counts and applies scaling rules. |
+| `scaling_tick_interval` | Int | `10` | Interval in seconds between scaling engine evaluation ticks. Lower values (e.g., 5) make scaling more responsive for fast-paced game modes. Higher values reduce CPU overhead on large clusters. |
 
 ```toml title="config/nimbus.toml"
 [controller]
@@ -208,6 +209,7 @@ REST API and WebSocket server configuration.
 | `port` | Int | `8080` | Port for the API server. |
 | `token` | String | `""` | Bearer token for API authentication. If empty, Nimbus auto-generates a random token on **every start** and logs it to the console. Set a permanent token for production. |
 | `allowed_origins` | List\<String\> | `["dashboard.nimbuspowered.org"]` | CORS allowed origins. The official dashboard is included by default. Empty list allows all origins (with a warning). Use hostnames without scheme — both `http` and `https` are allowed automatically. |
+| `trust_forwarded_for` | Boolean | `false` | Trust `X-Forwarded-For` header for rate limiting. Enable when running behind a reverse proxy (Nginx, Traefik, Cloudflare) so rate limits apply to real client IPs instead of the proxy address. **Leave disabled** unless you control the proxy — spoofable otherwise. |
 | `jwt_enabled` | Boolean | `false` | Enable JWT scoped token generation. When enabled, the `POST /api/tokens` endpoint becomes available for generating scoped JWT tokens with fine-grained permissions. Legacy bearer tokens always work regardless of this setting. |
 
 ```toml title="config/nimbus.toml"
@@ -253,6 +255,7 @@ Database backend configuration for permissions and cloud metrics.
 | `name` | String | `"nimbus"` | Database name. Only used for MySQL and PostgreSQL. For MySQL, the database is auto-created if it doesn't exist. |
 | `username` | String | `""` | Database username. Only used for MySQL and PostgreSQL. |
 | `password` | String | `""` | Database password. Only used for MySQL and PostgreSQL. |
+| `pool_size` | Int | `10` | HikariCP connection pool maximum size. Only used for MySQL and PostgreSQL. Increase for large deployments with many concurrent scaling events. |
 
 ### SQLite (default)
 
@@ -450,7 +453,7 @@ Cluster mode is **disabled by default**. Single-node setups do not need it. All 
 | `placement_strategy` | String | `"least-services"` | Strategy for placing new services on nodes. `"least-services"` places on the node running the fewest services; `"least-memory"` uses the node with the most free memory. |
 | `tls_enabled` | Boolean | `true` | Enable TLS encryption for cluster WebSocket connections. When enabled without a keystore, Nimbus auto-generates a self-signed certificate. |
 | `keystore_path` | String | `""` | Path to a JKS/PKCS12 keystore for TLS. If empty and `tls_enabled = true`, a self-signed keystore is auto-generated at `config/cluster.jks`. |
-| `keystore_password` | String | `""` | Keystore password. If empty during auto-generation, uses a default internal password. Can be overridden via `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` env var. |
+| `keystore_password` | String | `""` | Keystore password. If empty during auto-generation, a cryptographically random password is generated. Set explicitly or override via `NIMBUS_CLUSTER_KEYSTORE_PASSWORD` env var. |
 | `extra_sans` | List&lt;String&gt; | `[]` | Additional SANs (hostnames or IPs) baked into the auto-generated TLS cert. Strings matching `N.N.N.N` are added as IP SANs, everything else as DNS SANs. **Only applied when the keystore is generated** — to change SANs after the fact, run `cluster cert regenerate` and restart. |
 | `public_host` | String | `""` | Hostname or IP returned in the `wsUrl` of the `/api/cluster/bootstrap` response. Defaults to the `bind` address (when not `0.0.0.0`) or the local hostname. Set this if the controller is behind NAT or has multiple interfaces. |
 | `sync_disk_quota_bytes` | Long | `0` | Maximum total size in bytes that state-sync canonical copies may occupy (under `services/state/` + any dedicated service roots). `0` = unlimited. Pushes that would exceed this limit are rejected with HTTP 507 Insufficient Storage. Example: `sync_disk_quota_bytes = 10737418240` for a 10 GB cap. |

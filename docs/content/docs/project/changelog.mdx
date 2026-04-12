@@ -9,6 +9,95 @@ All notable changes to Nimbus, organized by release. Each entry links to the cor
 
 ---
 
+## v0.8.0 (April 12, 2026)
+
+Production readiness audit: 65 findings resolved across security, stability, data integrity, performance, and polish. This release hardens every layer of Nimbus for real-world deployment.
+
+### Security
+
+- **Unauthenticated endpoint closed** (C1) — `POST /api/console/complete` now requires Bearer token auth, preventing command namespace enumeration
+- **Blank cluster token guards** (C2, C5) — Template download and agent WebSocket endpoints reject requests when `cluster.token` is blank instead of silently allowing access
+- **Path traversal blocked** (C3) — Modpack upload `fileName` parameter sanitized with `File.name` extraction + canonical path validation. `../../evil.jar` returns 400
+- **Hardcoded keystore password removed** (H7) — `"nimbus-auto"` replaced with auto-generated random 32-char password on first run. Existing installs should set `cluster.keystore_password` or `NIMBUS_CLUSTER_KEYSTORE_PASSWORD`
+- **Cluster token removed from URLs** (H6) — State sync requests use `Authorization: Bearer` header instead of `?token=` query parameter. Tokens no longer appear in access logs
+- **UUID validation** (H3) — `POST /api/proxy/events` validates UUID format via `UUID.fromString()` before downstream use, returning 400 on malformed input
+- **JWT heuristic hardened** (H4) — `looksLikeJwt()` now decodes the Base64 header and checks for `"alg"` field instead of just counting dots. Plain API tokens with two dots no longer misroute
+- **CORS default restricted** (M24) — Default `allowed_origins` changed from `["*"]` to `["https://dashboard.nimbuspowered.org", "http://localhost:3000"]`
+
+### Stability
+
+- **WebSocket deadlock eliminated** (C4) — `runBlocking` inside Ktor WebSocket handlers replaced with a channel-based `WebSocketCommandOutput` that drains via a coroutine. 10 concurrent Remote CLI sessions no longer exhaust the CIO thread pool
+- **Thread-safe `awaitServicesReady`** (H11) — `mutableSetOf()` replaced with `ConcurrentHashMap.newKeySet()` to prevent dropped READY signals during 20+ simultaneous service starts
+- **`restartService` waits for stop** (H13) — Polls for STOPPED/CRASHED state (up to 60s) before starting the new instance. No more `EADDRINUSE` on rapid restarts
+- **`deployBack` before unregister** (H12) — Deploy-back runs before state transition to STOPPED. If it fails, service stays in CRASHED state with a descriptive error instead of silently losing template changes
+- **Crashed backends removed from load balancer** (H14) — `TcpLoadBalancer` now subscribes to `ServiceCrashed` events alongside `ServiceStopped`, preventing dead backends from accumulating in the health manager
+- **Scale-down no longer blocked by pending** (H10) — `pendingCount > 0` now only skips scale-up evaluation; scale-down proceeds independently. Modded servers with 180s prepare timeouts no longer block idle-instance removal
+- **Module `disableAll()` catches Throwable** (M10) — Matches `initAll()`/`enableAll()` behavior. An `OutOfMemoryError` during module disable no longer crashes the shutdown sequence
+- **ConcurrentHashMap for `remoteHandles`** (M1) — Prevents `ConcurrentModificationException` during concurrent agent node registration/deregistration
+- **ServerListPing malformed MOTD handling** (M22) — `JsonDecodingException` caught with backoff (3 consecutive failures = skip). No more log spam from misbehaving servers
+
+### Data Integrity
+
+- **HikariCP connection pool** (C6) — MySQL and PostgreSQL connections now use HikariCP with `maximumPoolSize=10` (configurable via `[database] pool_size`), `connectionTimeout=30s`, `validationTimeout=5s`. SQLite unchanged (single-writer). Prevents connection exhaustion under burst load
+- **Distributed migration lock** (C7) — `MigrationManager` acquires advisory locks (`GET_LOCK` on MySQL, `pg_advisory_lock` on PostgreSQL) before running migrations. Concurrent controller starts no longer race on schema changes
+- **Collector init order fixed** (C8) — `MetricsCollector`, `AuditCollector`, and `CliSessionTracker` now start after `runMigrations()`, not before. Fresh installs no longer crash with "table does not exist" on fast startup events
+- **State sync on shutdown** (H8) — `stopAll()` calls `pushStateIfEnabled()` for each service before clearing handles, matching single-service `stopService()` behavior. Graceful shutdown = zero state loss
+- **AgentStateStore synchronized** (H9) — Read-modify-write operations on `services.json` protected by `synchronized` lock. Concurrent stop events no longer corrupt the state manifest
+- **Timestamp columns widened** (H15/H16) — All `VARCHAR(30)` timestamp columns changed to `VARCHAR(40)`. Nanosecond-precision ISO-8601 timestamps no longer truncate. V5 migration handles existing databases
+- **Actor column widened** (M15) — `VARCHAR(50)` → `VARCHAR(255)` for audit log actors like `api:/api/services/SomeLongGroupName-42/console`
+- **High-volume IDs changed to BIGINT** (M17) — `AuditLog`, `ServiceEvents`, `ServiceMetricSamples`, `ScalingEvents` table IDs upgraded from INT to BIGINT (V6 migration)
+- **Metrics composite index** (M16) — `(group_name, recorded_at)` index added to `ServiceMetricSamples` for efficient range queries
+
+### Performance
+
+- **GeoIP on Dispatchers.IO** (H1) — GeoIP lookup moved from `Dispatchers.Default` to `Dispatchers.IO`, preventing CPU-bound coroutine starvation during Remote CLI connections
+- **Rate limiter X-Forwarded-For** (H2) — New `api.trust_forwarded_for = false` config option. When enabled behind a reverse proxy, rate limiting keys on the real client IP from `X-Forwarded-For` instead of the proxy address
+- **ProxySyncManager debounce** (M20) — MOTD + tab list broadcasts debounced with 500ms delay. Rapid player churn during stress tests no longer floods proxies with updates
+- **JDBC validation timeout** (M14) — HikariCP validation timeout set to 5s alongside the existing 30s connection timeout
+
+### Compatibility
+
+- **Agent config tolerates unknown TOML keys** (LT1) — `AgentConfigLoader` and `ProxySyncManager` now use `ignoreUnknownNames = true`. Adding new config fields in future versions won't crash existing agents
+- **Windows native Java detection** (H19) — `JavaResolver` scans `C:\Program Files\{Java,Eclipse Adoptium,Microsoft,BellSoft,Amazon Corretto,Zulu}` and respects `JAVA_HOME`/`JDK_HOME` environment variables. WSL paths still work under WSL
+- **Auto-update JAR validation** (H17) — Downloaded JARs verified via `ZipFile` before accepting. Corrupt/truncated downloads are rejected and the existing JAR is preserved
+- **Install script restart loop** (H18) — `install.sh` and `install.ps1` detect exit code 10 and re-launch the JAR automatically. Enables zero-downtime auto-updates
+- **ATOMIC_MOVE cross-volume fallback** (M7) — `AtomicMoveNotSupportedException` caught in `AgentStateStore`, `ControllerStateStore`, and `ProxySyncManager` with copy+delete fallback. Fixes state persistence when `/tmp` and data dir are on different filesystems
+- **ZIP extraction limits** (M8) — Template extraction capped at 50,000 entries and 10 GB total to prevent zip bomb attacks
+- **Agent dumb terminal warning suppressed** (LT2) — System property `org.jline.terminal.dumb=true` set at startup. Non-interactive terminals (systemd, Docker) no longer show JLine warnings
+
+### Quality of Life
+
+- **Friendly DB connection error** (H5) — Failed database connections log a clear error with config hints and `exitProcess(1)` instead of an opaque `UninitializedPropertyAccessException`
+- **Human-readable uptime** (L5) — `GET /api/status` includes `uptimeHuman` field (e.g., "2h 15m 30s")
+- **Agent exponential reconnect backoff** (L8) — Reconnect delay escalates from 1s to 60s (1→2→4→8→16→32→60) instead of fixed 5s retry flood
+- **Reload command notes DB restart requirement** (M23) — `reload` output now includes "Database, API, and cluster config changes require a full restart"
+- **WarmPool respects global service cap** (M4) — Pre-staging checks total service count against `controller.max_services` before warming
+- **WarmPool cleanup on group delete** (M19) — PREPARING slots released when a group is disabled at runtime
+- **ScalingEngine tick interval configurable** (M18) — New `controller.scaling_tick_interval` config (default 10s) for high-frequency game modes that need faster reaction
+- **Smart Scaling accounts for warm pool** (L9) — Predictive warmup target subtracts `warm_pool_size` to avoid double-counting pre-staged services
+- **Bootstrap URL port fix** (L7) — `cluster bootstrap-url` no longer appends redundant port when `public_host` already contains a port
+- **NimbusVersion IDE fallback** (L21) — Reads `nimbusVersion` from `gradle.properties` when JAR manifest is unavailable during development
+- **Install script SHA-256 verification** (L14) — `install.sh` verifies JAR checksum from release if available
+- **Agent directory permissions** (L15) — `install-agent.sh` sets 750 instead of world-writable
+- **TOML line ending normalization** (L16) — Config writes force `\n` line endings on Windows to prevent ktoml parse warnings
+- **ServerListPing timeout increased** (L17) — Default raised from 3s to 5s for slow VMs
+- **Dashboard login error message** (L18) — "Network Error" replaced with troubleshooting hints (check address, controller running, port open)
+- **Cardboard download error logging** (L12) — iCommon dependency failure now logged instead of silent
+- **Pufferfish version filtering** (L13) — Versions older than 1.19 filtered from CI listing
+- **nimbus-bridge version-stamped** (M25) — Embedded JAR renamed to `nimbus-bridge-<version>.jar` for version identification
+- **ProcessHandle Windows limitation documented** (M21) — KDoc notes grandchild process limitation for services started via shell wrappers
+
+### New Dependencies
+
+- **HikariCP 5.1.0** — JDBC connection pooling for MySQL/PostgreSQL
+
+### New Migrations
+
+- **V5_TimestampColumnWidth** — Widens all `VARCHAR(30)` timestamp columns to `VARCHAR(40)` (MySQL/PostgreSQL)
+- **V6_IndexesAndColumnFixes** — Adds metrics composite index, widens actor column, upgrades high-volume IDs to BIGINT (MySQL/PostgreSQL)
+
+---
+
 ## v0.7.3 (April 12, 2026)
 
 Cluster hardening: orphan sweep, reconnect reconciliation, graceful shutdown ordering, daemon mode, and a Railway-style cluster topology canvas.
