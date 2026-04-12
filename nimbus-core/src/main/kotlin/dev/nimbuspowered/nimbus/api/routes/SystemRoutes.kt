@@ -10,6 +10,7 @@ import dev.nimbuspowered.nimbus.service.ServiceManager
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.nio.file.Path
 import java.time.Instant
 
@@ -39,6 +40,21 @@ fun Route.systemRoutes(
                 groupsLoaded = 0,
                 message = "Reload failed: ${e.message}"
             ))
+        }
+    }
+
+    // POST /api/shutdown — Gracefully stop the controller. Essential when the
+    // controller is running in daemon mode (no TTY, no console REPL) — without
+    // this, the only way to stop is SIGKILL which orphans backends.
+    //
+    // We respond 202 Accepted immediately, then spawn a background coroutine to
+    // call System.exit(0) after a short delay so the response can be flushed.
+    // The JVM shutdown hook then runs the normal graceful cleanup path.
+    post("/api/shutdown") {
+        call.respond(ApiMessage(true, "Shutdown initiated"))
+        scope.launch {
+            kotlinx.coroutines.delay(250)
+            System.exit(0)
         }
     }
 }
