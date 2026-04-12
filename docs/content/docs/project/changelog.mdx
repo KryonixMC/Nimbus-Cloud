@@ -1,794 +1,691 @@
 ---
 title: Changelog
-description: Detailed release history for every Nimbus version.
+description: All notable changes to Nimbus, organized by release.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-All notable changes to Nimbus, organized by release. Each entry links to the corresponding GitHub Release where available.
+All notable changes to this project are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<Callout type="info">
+  Nimbus is pre-1.0. Minor releases (0.X.0) may introduce breaking changes. Patch releases (0.x.Y) are backwards-compatible.
+</Callout>
 
 ---
 
-## v0.8.0 (April 12, 2026)
+## [0.8.1] - 2026-04-13
 
-Production readiness audit: 65 findings resolved across security, stability, data integrity, performance, and polish. This release hardens every layer of Nimbus for real-world deployment.
+Stability fixes: 15 production-critical findings resolved plus a cluster TLS keystore bug that prevented restarts.
+
+### Fixed
+
+- **OOM on large downloads** — Modpack imports and server software downloads now stream to disk instead of loading entire files into memory
+- **HTTP client resource leak** — Modpack installer and template downloader now properly close their HTTP clients after use
+- **Unbounded collector queues** — Metrics and audit collectors capped at 10,000 pending events; excess events are dropped with a warning instead of consuming unbounded memory
+- **HikariCP connection pool leak** — Database connection pool now properly closes on shutdown instead of leaking connections
+- **SQLite "database is locked" under load** — Added 5-second busy timeout after WAL mode to handle concurrent writes gracefully
+- **Port scan exhaustion** — External port occupancy check results are now cached instead of probing sockets on every service start
+- **Scale-down kills services abruptly** — Services now enter DRAINING state before being stopped, allowing in-progress work to complete
+- **State file corruption under concurrent writes** — Controller state store now uses a read-write lock for atomic read-modify-write operations
+- **ConcurrentModificationException in scaling engine** — Service map keys are now snapshot before iteration to prevent modification during scale-down evaluation
+- **Stale service data after concurrent updates** — `merge()` return values are no longer used for control flow; map is re-read after mutation
+- **Invalid memory values accepted in group config** — Memory now validated to be between 128M and 512G at config load time
+- **Circular template references cause infinite loop** — Template stacking now tracks visited templates and errors on cycles
+- **Silent coroutine crashes** — Uncaught coroutine exceptions now logged via SLF4J instead of vanishing silently
+- **Retention cleanup blocks event loop** — Metrics and audit retention pruning now deletes in batches of 5,000 with cooperative yields between batches
+- **Cluster TLS keystore fails on restart** — Keystore password was randomly generated but never persisted, causing "keystore password was incorrect" on every restart. Now derives a deterministic password from the cluster token via SHA-256 and auto-regenerates the keystore if the password doesn't match
+- **False "Cluster started" log** — `ClusterStarted` event now only fires when the cluster server is actually running
+
+---
+
+## [0.8.0] - 2026-04-12
+
+Production readiness audit: 65 findings resolved across security, stability, data integrity, and performance.
+
+### Added
+
+- **HikariCP connection pool** — MySQL and PostgreSQL connections now use HikariCP with configurable pool size (default 10), connection timeout (30s), and validation timeout (5s). SQLite unchanged
+- **Distributed migration lock** — `MigrationManager` acquires advisory locks on MySQL/PostgreSQL before running migrations, preventing concurrent controller starts from racing on schema changes
+- **Rate limiter X-Forwarded-For support** — New `api.trust_forwarded_for` config option. When behind a reverse proxy, rate limiting keys on the real client IP instead of the proxy address
+- **Configurable scaling tick interval** — New `controller.scaling_tick_interval` config (default 10s) for game modes needing faster scaling reaction
+- **Install script restart on exit code 10** — `install.sh` and `install.ps1` detect exit code 10 and re-launch automatically, enabling zero-downtime auto-updates
+- **Install script SHA-256 verification** — `install.sh` verifies JAR checksum from release assets when available
+- **Human-readable uptime** — `GET /api/status` includes `uptimeHuman` field (e.g., "2h 15m 30s")
+- **Bridge JAR version-stamped** — Embedded JAR renamed to `nimbus-bridge-<version>.jar` for identification
+- **V5 migration** — Widens all timestamp columns from VARCHAR(30) to VARCHAR(40) for nanosecond-precision ISO-8601
+- **V6 migration** — Adds metrics composite index, widens actor column to VARCHAR(255), upgrades high-volume table IDs to BIGINT
+
+### Changed
+
+- **CORS default restricted** — Default `allowed_origins` changed from `["*"]` to dashboard + localhost only
+- **ProxySyncManager debounced** — MOTD and tab list broadcasts debounced with 500ms delay to prevent flooding under rapid player churn
+- **Agent exponential reconnect backoff** — Reconnect delay escalates from 1s to 60s (1→2→4→8→16→32→60) instead of fixed 5s retry flood
+- **Reload command notes restart requirement** — Output now includes "Database, API, and cluster config changes require a full restart"
+- **WarmPool respects global service cap** — Pre-staging checks total service count against `controller.max_services`
+- **Smart Scaling accounts for warm pool** — Predictive warmup target subtracts `warm_pool_size` to avoid double-counting
+- **ServerListPing timeout raised** — Default from 3s to 5s for slow VMs
+- **Pufferfish versions filtered** — Versions older than 1.19 filtered from CI listing
+
+### Fixed
+
+- **WebSocket deadlock under concurrent sessions** — `runBlocking` inside Ktor WebSocket handlers replaced with channel-based output. 10+ concurrent Remote CLI sessions no longer exhaust the thread pool
+- **Dropped READY signals during mass startup** — Thread-safe set for `awaitServicesReady` prevents missed READY events during 20+ simultaneous service starts
+- **EADDRINUSE on rapid restarts** — `restartService` now polls for STOPPED/CRASHED state (up to 60s) before starting the new instance
+- **Silent template data loss on deploy-back failure** — Deploy-back now runs before state transition. If it fails, service stays in CRASHED state with a descriptive error
+- **Dead backends stuck in load balancer** — Load balancer now subscribes to `ServiceCrashed` events alongside `ServiceStopped`
+- **Scale-down blocked by pending services** — Pending services only block scale-up evaluation, not scale-down
+- **Module disable crash takes down shutdown** — `disableAll()` catches Throwable (not just Exception) to match init/enable behavior
+- **ConcurrentModificationException during node registration** — Thread-safe map for remote service handles
+- **Log spam from misbehaving server MOTD** — Malformed JSON caught with backoff (3 consecutive failures = skip)
+- **Collector init before migration** — Metrics, audit, and CLI session collectors now start after migrations complete. Fresh installs no longer crash on first event
+- **State sync skipped on bulk shutdown** — `stopAll()` now calls state push for each service before clearing handles
+- **Agent state file corruption** — Synchronized read-modify-write on `services.json`
+- **Timestamp truncation** — Nanosecond-precision timestamps no longer truncate in VARCHAR(30) columns
+- **Audit actor truncation** — Actor column widened from VARCHAR(50) to VARCHAR(255)
+- **INT overflow on high-volume tables** — Audit, events, metrics, and scaling table IDs upgraded to BIGINT
+- **Auto-update accepts corrupt downloads** — Downloaded JARs now verified via ZIP validation before accepting
+- **ATOMIC_MOVE fails across filesystems** — Copy+delete fallback when `/tmp` and data dir are on different volumes
+- **WarmPool not cleaned on group delete** — PREPARING slots released when a group is disabled
+- **Bootstrap URL double port** — `cluster bootstrap-url` no longer appends redundant port when `public_host` already includes one
+- **Dashboard login "Network Error"** — Replaced with troubleshooting hints (check address, controller running, port open)
+- **Cardboard dependency failure silent** — iCommon download errors now logged
+- **Database connection error opaque** — Failed connections now log a clear error with config hints and exit cleanly
+- **GeoIP blocks CPU coroutines** — Lookup moved to IO dispatcher
 
 ### Security
 
-- **Unauthenticated endpoint closed** (C1) — `POST /api/console/complete` now requires Bearer token auth, preventing command namespace enumeration
-- **Blank cluster token guards** (C2, C5) — Template download and agent WebSocket endpoints reject requests when `cluster.token` is blank instead of silently allowing access
-- **Path traversal blocked** (C3) — Modpack upload `fileName` parameter sanitized with `File.name` extraction + canonical path validation. `../../evil.jar` returns 400
-- **Hardcoded keystore password removed** (H7) — `"nimbus-auto"` replaced with auto-generated random 32-char password on first run. Existing installs should set `cluster.keystore_password` or `NIMBUS_CLUSTER_KEYSTORE_PASSWORD`
-- **Cluster token removed from URLs** (H6) — State sync requests use `Authorization: Bearer` header instead of `?token=` query parameter. Tokens no longer appear in access logs
-- **UUID validation** (H3) — `POST /api/proxy/events` validates UUID format via `UUID.fromString()` before downstream use, returning 400 on malformed input
-- **JWT heuristic hardened** (H4) — `looksLikeJwt()` now decodes the Base64 header and checks for `"alg"` field instead of just counting dots. Plain API tokens with two dots no longer misroute
-- **CORS default restricted** (M24) — Default `allowed_origins` changed from `["*"]` to `["https://dashboard.nimbuspowered.org", "http://localhost:3000"]`
-
-### Stability
-
-- **WebSocket deadlock eliminated** (C4) — `runBlocking` inside Ktor WebSocket handlers replaced with a channel-based `WebSocketCommandOutput` that drains via a coroutine. 10 concurrent Remote CLI sessions no longer exhaust the CIO thread pool
-- **Thread-safe `awaitServicesReady`** (H11) — `mutableSetOf()` replaced with `ConcurrentHashMap.newKeySet()` to prevent dropped READY signals during 20+ simultaneous service starts
-- **`restartService` waits for stop** (H13) — Polls for STOPPED/CRASHED state (up to 60s) before starting the new instance. No more `EADDRINUSE` on rapid restarts
-- **`deployBack` before unregister** (H12) — Deploy-back runs before state transition to STOPPED. If it fails, service stays in CRASHED state with a descriptive error instead of silently losing template changes
-- **Crashed backends removed from load balancer** (H14) — `TcpLoadBalancer` now subscribes to `ServiceCrashed` events alongside `ServiceStopped`, preventing dead backends from accumulating in the health manager
-- **Scale-down no longer blocked by pending** (H10) — `pendingCount > 0` now only skips scale-up evaluation; scale-down proceeds independently. Modded servers with 180s prepare timeouts no longer block idle-instance removal
-- **Module `disableAll()` catches Throwable** (M10) — Matches `initAll()`/`enableAll()` behavior. An `OutOfMemoryError` during module disable no longer crashes the shutdown sequence
-- **ConcurrentHashMap for `remoteHandles`** (M1) — Prevents `ConcurrentModificationException` during concurrent agent node registration/deregistration
-- **ServerListPing malformed MOTD handling** (M22) — `JsonDecodingException` caught with backoff (3 consecutive failures = skip). No more log spam from misbehaving servers
-
-### Data Integrity
-
-- **HikariCP connection pool** (C6) — MySQL and PostgreSQL connections now use HikariCP with `maximumPoolSize=10` (configurable via `[database] pool_size`), `connectionTimeout=30s`, `validationTimeout=5s`. SQLite unchanged (single-writer). Prevents connection exhaustion under burst load
-- **Distributed migration lock** (C7) — `MigrationManager` acquires advisory locks (`GET_LOCK` on MySQL, `pg_advisory_lock` on PostgreSQL) before running migrations. Concurrent controller starts no longer race on schema changes
-- **Collector init order fixed** (C8) — `MetricsCollector`, `AuditCollector`, and `CliSessionTracker` now start after `runMigrations()`, not before. Fresh installs no longer crash with "table does not exist" on fast startup events
-- **State sync on shutdown** (H8) — `stopAll()` calls `pushStateIfEnabled()` for each service before clearing handles, matching single-service `stopService()` behavior. Graceful shutdown = zero state loss
-- **AgentStateStore synchronized** (H9) — Read-modify-write operations on `services.json` protected by `synchronized` lock. Concurrent stop events no longer corrupt the state manifest
-- **Timestamp columns widened** (H15/H16) — All `VARCHAR(30)` timestamp columns changed to `VARCHAR(40)`. Nanosecond-precision ISO-8601 timestamps no longer truncate. V5 migration handles existing databases
-- **Actor column widened** (M15) — `VARCHAR(50)` → `VARCHAR(255)` for audit log actors like `api:/api/services/SomeLongGroupName-42/console`
-- **High-volume IDs changed to BIGINT** (M17) — `AuditLog`, `ServiceEvents`, `ServiceMetricSamples`, `ScalingEvents` table IDs upgraded from INT to BIGINT (V6 migration)
-- **Metrics composite index** (M16) — `(group_name, recorded_at)` index added to `ServiceMetricSamples` for efficient range queries
-
-### Performance
-
-- **GeoIP on Dispatchers.IO** (H1) — GeoIP lookup moved from `Dispatchers.Default` to `Dispatchers.IO`, preventing CPU-bound coroutine starvation during Remote CLI connections
-- **Rate limiter X-Forwarded-For** (H2) — New `api.trust_forwarded_for = false` config option. When enabled behind a reverse proxy, rate limiting keys on the real client IP from `X-Forwarded-For` instead of the proxy address
-- **ProxySyncManager debounce** (M20) — MOTD + tab list broadcasts debounced with 500ms delay. Rapid player churn during stress tests no longer floods proxies with updates
-- **JDBC validation timeout** (M14) — HikariCP validation timeout set to 5s alongside the existing 30s connection timeout
+- **Tab completion endpoint unauthenticated** — `POST /api/console/complete` now requires Bearer token auth
+- **Blank cluster token bypasses auth** — Template download and agent WebSocket endpoints now reject blank tokens
+- **Path traversal on modpack upload** — File names sanitized with canonical path validation
+- **Hardcoded keystore password** — Replaced with auto-generated random 32-char password on first run
+- **Cluster token in URL query strings** — State sync requests now use Authorization header. Tokens no longer appear in access logs
+- **UUID injection on proxy events** — `POST /api/proxy/events` validates UUID format before downstream use
+- **JWT bypass with dotted API tokens** — Token type detection now decodes Base64 header and checks for `"alg"` field
+- **ZIP bomb on template extraction** — Capped at 50,000 entries and 10 GB total
 
 ### Compatibility
 
-- **Agent config tolerates unknown TOML keys** (LT1) — `AgentConfigLoader` and `ProxySyncManager` now use `ignoreUnknownNames = true`. Adding new config fields in future versions won't crash existing agents
-- **Windows native Java detection** (H19) — `JavaResolver` scans `C:\Program Files\{Java,Eclipse Adoptium,Microsoft,BellSoft,Amazon Corretto,Zulu}` and respects `JAVA_HOME`/`JDK_HOME` environment variables. WSL paths still work under WSL
-- **Auto-update JAR validation** (H17) — Downloaded JARs verified via `ZipFile` before accepting. Corrupt/truncated downloads are rejected and the existing JAR is preserved
-- **Install script restart loop** (H18) — `install.sh` and `install.ps1` detect exit code 10 and re-launch the JAR automatically. Enables zero-downtime auto-updates
-- **ATOMIC_MOVE cross-volume fallback** (M7) — `AtomicMoveNotSupportedException` caught in `AgentStateStore`, `ControllerStateStore`, and `ProxySyncManager` with copy+delete fallback. Fixes state persistence when `/tmp` and data dir are on different filesystems
-- **ZIP extraction limits** (M8) — Template extraction capped at 50,000 entries and 10 GB total to prevent zip bomb attacks
-- **Agent dumb terminal warning suppressed** (LT2) — System property `org.jline.terminal.dumb=true` set at startup. Non-interactive terminals (systemd, Docker) no longer show JLine warnings
-
-### Quality of Life
-
-- **Friendly DB connection error** (H5) — Failed database connections log a clear error with config hints and `exitProcess(1)` instead of an opaque `UninitializedPropertyAccessException`
-- **Human-readable uptime** (L5) — `GET /api/status` includes `uptimeHuman` field (e.g., "2h 15m 30s")
-- **Agent exponential reconnect backoff** (L8) — Reconnect delay escalates from 1s to 60s (1→2→4→8→16→32→60) instead of fixed 5s retry flood
-- **Reload command notes DB restart requirement** (M23) — `reload` output now includes "Database, API, and cluster config changes require a full restart"
-- **WarmPool respects global service cap** (M4) — Pre-staging checks total service count against `controller.max_services` before warming
-- **WarmPool cleanup on group delete** (M19) — PREPARING slots released when a group is disabled at runtime
-- **ScalingEngine tick interval configurable** (M18) — New `controller.scaling_tick_interval` config (default 10s) for high-frequency game modes that need faster reaction
-- **Smart Scaling accounts for warm pool** (L9) — Predictive warmup target subtracts `warm_pool_size` to avoid double-counting pre-staged services
-- **Bootstrap URL port fix** (L7) — `cluster bootstrap-url` no longer appends redundant port when `public_host` already contains a port
-- **NimbusVersion IDE fallback** (L21) — Reads `nimbusVersion` from `gradle.properties` when JAR manifest is unavailable during development
-- **Install script SHA-256 verification** (L14) — `install.sh` verifies JAR checksum from release if available
-- **Agent directory permissions** (L15) — `install-agent.sh` sets 750 instead of world-writable
-- **TOML line ending normalization** (L16) — Config writes force `\n` line endings on Windows to prevent ktoml parse warnings
-- **ServerListPing timeout increased** (L17) — Default raised from 3s to 5s for slow VMs
-- **Dashboard login error message** (L18) — "Network Error" replaced with troubleshooting hints (check address, controller running, port open)
-- **Cardboard download error logging** (L12) — iCommon dependency failure now logged instead of silent
-- **Pufferfish version filtering** (L13) — Versions older than 1.19 filtered from CI listing
-- **nimbus-bridge version-stamped** (M25) — Embedded JAR renamed to `nimbus-bridge-<version>.jar` for version identification
-- **ProcessHandle Windows limitation documented** (M21) — KDoc notes grandchild process limitation for services started via shell wrappers
-
-### New Dependencies
-
-- **HikariCP 5.1.0** — JDBC connection pooling for MySQL/PostgreSQL
-
-### New Migrations
-
-- **V5_TimestampColumnWidth** — Widens all `VARCHAR(30)` timestamp columns to `VARCHAR(40)` (MySQL/PostgreSQL)
-- **V6_IndexesAndColumnFixes** — Adds metrics composite index, widens actor column, upgrades high-volume IDs to BIGINT (MySQL/PostgreSQL)
+- **Agent tolerates unknown config keys** — Adding new config fields in future versions won't crash existing agents
+- **Windows Java auto-detection** — Scans Program Files for Java, Eclipse Adoptium, Microsoft, BellSoft, Amazon Corretto, and Zulu installations. Respects JAVA_HOME/JDK_HOME
+- **Agent dumb terminal warning** — Non-interactive terminals (systemd, Docker) no longer show JLine warnings
+- **TOML line endings on Windows** — Config writes force LF to prevent parse warnings
+- **Version fallback for IDE builds** — Reads version from `gradle.properties` when JAR manifest is unavailable
+- **Agent directory permissions** — Install script sets 750 instead of world-writable
 
 ---
 
-## v0.7.3 (April 12, 2026)
+## [0.7.3] - 2026-04-12
 
-Cluster hardening: orphan sweep, reconnect reconciliation, graceful shutdown ordering, daemon mode, and a Railway-style cluster topology canvas.
+Cluster hardening: orphan sweep, reconnect reconciliation, graceful shutdown ordering, daemon mode, and failover.
 
 ### Added
-- **Marker-file orphan sweep**: Each spawned backend writes `.nimbus-owner` into its workdir (pid + service + owner + startedAt). On recovery, both agents and controller walk known workdir roots and kill any still-alive PID whose marker matches their owner tag. Replaces the `ProcessHandle.info().commandLine()` approach which returned empty on Windows for reparented children
-- **Reconnect reconciliation**: `AuthRequest` gained `runningServices: List<String>` — agents send the authoritative list of what they currently host on every (re)auth. Controller compares against its registry and purges ghost entries that the agent doesn't claim, releasing ports and unblocking the scaling engine
-- **`POST /api/shutdown` endpoint**: Responds 200, then kicks off `System.exit(0)` after 250ms so the HTTP response flushes. Essential for daemon mode (no TTY → no console REPL) where the only alternative was SIGKILL
-- **Daemon mode**: `NimbusConsole` detects `System.console() == null` and enters an `awaitCancellation` loop instead of running JLine's REPL. Launching via systemd, Docker without `-it`, or `cmd.exe /c` with `< nul` no longer causes the JVM to exit immediately
-- **Agent public host auto-detection**: `AuthRequest` carries a `publicHost` field. Agent picks the first non-loopback, non-APIPA, non-link-local, site-local IPv4 from any up interface (skipping Hyper-V / vEthernet / VMware / Tailscale / WSL), or honours `[agent] public_host` from `agent.toml`. Controller uses this over the socket-derived peer address — fixes Velocity routing to `169.254.x` APIPA addresses on Windows
-- **`DiscardSyncWorkdir` cluster message**: Controller sends it to the source node after a successful migration; agent deletes the cached workdir if the service isn't still running there
-- **ScalingEngine static-sync retry backoff**: Exponential schedule (10s → 30s → 90s → 5min → 15min, capped) for repeated placement failures per group. Resets on first READY instance. Skips if an in-flight PREPARING/PREPARED/STARTING instance already exists
-- **Railway-style cluster topology canvas**: Interactive dashboard visualization with draggable card-based nodes, obstacle-aware orthogonal edge routing, heartbeat pulse animations (controller→node→service), pan/zoom with keyboard shortcuts (+/-/0/F/arrows), dynamic port selection, and auto-fit. Renders even with 0 remote nodes, showing controller + local services
+
+- **Marker-file orphan sweep** — Spawned backends write `.nimbus-owner` markers. On recovery, orphaned processes are detected and killed based on these markers instead of unreliable `ProcessHandle.commandLine()`
+- **Reconnect reconciliation** — Agents send their running service list on every reconnect. Controller purges ghost entries the agent doesn't claim
+- **`POST /api/shutdown` endpoint** — REST endpoint for daemon-mode controllers with no TTY
+- **Daemon mode** — Controller detects headless environment and stays alive without JLine. Works under systemd, Docker, or `cmd.exe /c`
+- **Agent public host auto-detection** — Agents detect their real host IP (skipping Hyper-V, VMware, WSL, Tailscale interfaces) and report it to the controller
+- **Agent-crash failover** — Controller detects node failure and re-places affected services on available nodes
+- **Railway-style cluster topology** — Interactive dashboard canvas with draggable nodes, heartbeat pulse animations, pan/zoom, and auto-fit
 
 ### Changed
-- **Graceful shutdown ordering**: Both shutdown paths (SIGTERM hook and console-exit) now send `ShutdownAgent` to every node and wait 500ms for agents to start their shutdown *before* tearing down the cluster WebSocket server. Previously `clusterServer?.stop()` ran first, dropping queued frames and leaving Paper backends running on every node
-- **Memory budget raised**: `ServiceMemoryResolver` overhead 30%/256MB → 50%/384MB. Paper with Aikar flags, Netty direct buffers, JIT code cache, metaspace and thread stacks typically adds 40–50% on top of `-Xmx`. Terminal states now report 0 MB instead of stale cached values
-- **State machine expanded**: `CRASHED → STOPPING` and `PREPARING/STARTING → STOPPING` now allowed. CRASHED services can be stopped/restarted via API without a controller restart. `stopService` routes CRASHED to `purgeService` so slots free cleanly
-- **`STOPPED → CRASHED` transition allowed**: Ready-timeout handler can fire after normal shutdown; now silently relabels instead of logging a spurious warning
-- **Startup crash handling**: `monitorProcess` no longer treats exit-code-0-while-STARTING as clean shutdown (Paper/Velocity catch `BindException` and `System.exit(0)`). Only `READY → exit 0` is clean; `STARTING → exit` is a crash regardless of code
-- **Rate limiting split**: `GET /api/stress` status read is no longer under the 5/min mutation rate limit — dashboards polling stress test status no longer hit 429
-- **Migration completion**: `migrateService` now waits until the new instance reaches READY before logging "complete"
-- **Netty Unsafe warnings suppressed**: Added JVM args to suppress `sun.misc.Unsafe` access warnings on Java 21+
+
+- **Graceful shutdown ordering** — `ShutdownAgent` sent to all nodes before closing the cluster WebSocket server. Previously the server closed first, dropping queued frames
+- **Memory budget raised** — JVM overhead estimate raised from 30%/256MB to 50%/384MB to better reflect real-world RSS. Terminal states now report 0 MB
+- **State machine expanded** — CRASHED services can now be stopped/restarted without a controller restart. CRASHED→STOPPING and PREPARING/STARTING→STOPPING transitions allowed
+- **Startup crash detection** — Exit code 0 during STARTING is now treated as a crash (Paper/Velocity catch BindException and call System.exit(0))
+- **Rate limiting split** — `GET /api/stress` status read separated from mutation rate limit. Dashboards polling stress status no longer hit 429
+- **Scaling retry backoff** — Exponential schedule (10s → 30s → 90s → 5min → 15min, capped) for repeated placement failures
 
 ### Fixed
-- **Orphan cascade on agent hard-kill**: Killing an agent mid-run left Paper children reparented and alive, holding `session.lock`. Each restart attempt crashed at `DirectoryLock.create`, and the 5-second scaling-retry loop spawned up to 7 orphan Javas per slot. Fixed by marker-file sweep + exponential retry backoff + duplicate StartService dedup on agent
-- **Ghost services after transient reconnect**: A WS drop followed by fresh-state agent reconnect left READY ghost entries in the controller registry, blocking `max_instances` and preventing re-placement. Reconnect reconciliation purges these
-- **Dedicated services crashing at boot**: `ServiceFactory.prepareDedicated` was not patching `server.properties` / `velocity.toml` for the configured port — Paper read the pre-existing file (often 25565) and collided with the proxy
-- **Duplicate dedicated-start loop**: Phase 3 of `startMinimumInstances` already starts dedicated services; the second loop in `Nimbus.kt` caused "already running" warnings on every boot
-- **Agent-crash failover never happened**: `NodeManager` gained an `onNodeFailover` hook; `ServiceManager.handleNodeFailover` purges CRASHED registry entries and starts fresh instances (dedicated stays pinned, groups re-place)
-- **Node placement to APIPA addresses on Windows**: Controller now uses agent-reported `publicHost` over the socket-derived peer address
+
+- **Orphan cascade on agent hard-kill** — Killing an agent left backend processes alive, holding session.lock. Each restart attempt spawned additional orphans. Fixed by marker-file sweep + exponential retry + dedup
+- **Ghost services after transient reconnect** — WebSocket drop followed by fresh-state reconnect left stale READY entries blocking max_instances
+- **Dedicated services crash at boot** — Port patching was missing for dedicated services, causing collisions with the proxy
+- **Duplicate dedicated-start on boot** — Dedicated services no longer started twice during phased startup
+- **Node placement to APIPA addresses on Windows** — Controller uses agent-reported public host instead of socket peer address
 
 ---
 
-## v0.7.2 (April 11, 2026)
+## [0.7.2] - 2026-04-11
 
-State sync simplified to graceful-stop-only persistence. Removes live-sync complexity in favor of the one model that actually works reliably.
+State sync simplified to graceful-stop-only persistence. Removes live-sync complexity.
 
 ### Changed
-- **State sync reduced to push-on-stop / pull-on-start**: The periodic snapshot loop, manual trigger endpoint, save-all flush coordination, and in-flight sync UI were removed. On graceful stop the agent pushes the full workdir; on next start it pulls back. Static services gain persistence across node moves without the operational complexity of live syncing
+
+- **State sync model simplified** — Reduced to push-on-stop / pull-on-start. Periodic snapshots, manual triggers, and flush coordination removed. Simpler and more reliable
 - **"Sync" badge renamed to "Persistent"** in the dashboard
-- **`[group.sync] enabled = true` on non-STATIC groups** now logs a warning and force-disables — dynamic sync has no sensible semantics under the simpler model
+- **Dynamic group sync disabled with warning** — `[group.sync] enabled = true` on non-STATIC groups logs a warning and force-disables
 
 ### Removed
-- `[group.sync]` fields: `snapshot_interval`, `snapshot_flush_command`, `snapshot_flush_wait_ms`
+
+- Snapshot interval, flush command, and flush wait config fields from `[group.sync]`
 - `POST /api/services/{name}/sync/trigger` endpoint
-- `TRIGGER_SYNC` cluster message
-- `Nimbus.triggerStateSync()` / `NimbusClient.triggerStateSync()` / `NimbusSelfService.triggerStateSync()` SDK helpers
-- Dashboard "Sync now" dropdown action and detail-page button
-- "Syncing…" in-flight UI + animation
-- `SYNC_COMPLETED` toast (graceful-stop is ambient — `SYNC_FAILED` is kept as the one case worth surfacing)
+- `TRIGGER_SYNC` cluster message and related SDK helpers
+- Dashboard "Sync now" action and in-flight sync UI
 
 ### Fixed
-- **Sync push EOFException**: Paper rewriting region files mid-upload caused multipart size mismatch. File bytes are now snapshotted into a `ByteArray` at form-build time (≤64 MB cap, larger files fall back to streaming)
-- **`Invalid state transition X → X` log spam**: Same-state transitions are now silent no-ops; `READY → STOPPED` added to allowed set
-- **Windows agent RAM = 0**: Agent's `readRssMb` was Linux-only; added `tasklist` fallback
-- **Template download OOM**: `TemplateDownloader.ensureTemplate` read entire ZIP into heap. Now streams HTTP body to a temp file and copies entries with a 64 KB buffer — peak heap ~64 KB regardless of template size
-- **SHA-256 mismatches on sync push**: Paper rewrites config files between manifest scan and upload. Receiver now accepts actual streamed bytes and patches the committed manifest with observed hash
-- **NTFS-over-WSL rename failure**: `moveWithRetry` with exponential backoff (100/250/500/1000/2000ms) handles Windows AV file handle contention
-- **Prometheus sync metrics**: Crashed services now show their canonical on disk via `StateSyncManager.listSyncServices()`
-- **Ready timeouts bumped**: 60→180s (agent), 120→180s (controller), modded 180→240s. Large sync-pulled canonicals need more time to boot
+
+- **Sync push corrupted by active file writes** — Files now snapshotted into memory at form-build time (up to 64 MB, larger files stream)
+- **"Invalid state transition X → X" log spam** — Same-state transitions are now silent no-ops
+- **Windows agent reports 0 MB RAM** — Added tasklist fallback for RSS reading
+- **Template download OOM on agents** — Streams to disk with 64 KB buffer instead of loading entire ZIP into heap
+- **SHA-256 mismatches on sync push** — Receiver accepts actual streamed bytes when files change between manifest scan and upload
+- **NTFS rename failure under Windows Defender** — Retry with exponential backoff (100ms → 2s)
+- **Ready timeouts too short** — Raised to 180s controller/agent, 240s modded
 
 ---
 
-## v0.7.1 (April 11, 2026)
+## [0.7.1] - 2026-04-11
 
-Sync hardening: snapshots, health checks, quota enforcement, and reconciliation for state sync.
+Sync hardening: health checks, quota enforcement, and reconciliation.
 
 ### Added
-- **Sync health checks**: Per-service health tracking (last push time, canonical size, in-flight status) exposed via `GET /api/metrics` in Prometheus format
-- **Sync quota**: Configurable maximum canonical size per service to prevent runaway world growth from consuming all disk
-- **Sync reconciliation**: On controller startup, reconciles on-disk canonicals against the service registry to detect orphaned state directories
-- **Manual sync trigger**: `POST /api/services/{name}/sync/trigger` → controller → `TRIGGER_SYNC` cluster message → agent `pushStateNow`. SDK helpers `Nimbus.triggerStateSync()` / `NimbusClient.triggerStateSync()`
-- **Dashboard sync indicators**: `nodeId` column on services list, sync health badge (Persistent/Syncing/Failed), "Sync now" dropdown action, global toast listener for `PLACEMENT_BLOCKED` / `SYNC_COMPLETED` / `SYNC_FAILED` events
+
+- **Sync health metrics** — Per-service last push time, canonical size, and in-flight status on `GET /api/metrics`
+- **Sync quota** — Configurable maximum canonical size per service
+- **Sync reconciliation** — Controller detects orphaned state directories on startup
+- **Manual sync trigger** — `POST /api/services/{name}/sync/trigger` endpoint and SDK helpers
+- **Dashboard sync indicators** — Node ID column, sync health badge, "Sync now" action, global toast for placement/sync events
 
 ### Fixed
-- **Scaling slot reuse race**: Mutex around service name allocation + atomic register prevents two concurrent scale-up decisions from allocating the same `<Group>-<N>` slot
+
+- **Scaling slot reuse race** — Mutex + atomic register prevents two concurrent scale-ups from claiming the same service name
 
 ---
 
-## v0.7.0 (April 11, 2026)
+## [0.7.0] - 2026-04-11
 
-Multi-node cluster: easy setup with TLS fingerprint pinning, placement pinning, dynamic state sync for floating stateful services, and service name stability.
+Multi-node cluster: easy TLS setup, placement pinning, dynamic state sync, and service name stability.
 
 ### Added
-- **Easy cluster setup**: Agent setup wizard calls `GET /api/cluster/bootstrap` (gated by cluster token) to fetch the controller's TLS fingerprint, PEM certificate, and `wsUrl`. User confirms the fingerprint on the agent — no manual keytool or truststore work. Console commands: `cluster cert`, `cluster cert regenerate`, `cluster bootstrap-url`
-- **`/api/cluster/bootstrap` endpoint**: Returns `{ fingerprint, certPem, wsUrl, validUntil, sans }` so agents can auto-pin the controller cert on first connect
-- **Placement pinning**: `[group.placement] node = "worker-1"` or `[dedicated.placement] node = "..."` pins a group/service to a specific agent node. `fallback` controls behavior when the pinned node is offline: `wait` (default, refuse start), `local` (run on controller, unsafe for stateful), `fail` (error immediately)
-- **Dynamic state sync**: `[group.sync] enabled = true` (or `[dedicated.sync]`) stores a canonical copy of the service's working directory on the controller under `services/state/<name>/`. Agent pulls delta via manifest comparison on start, pushes delta on graceful stop. Atomic staging + per-service lock. Supports `excludes` glob patterns
-- **Service name stability**: `ServiceFactory.prepare` reuses the lowest-numbered CRASHED/STOPPED slot instead of always incrementing. `Lobby-1` stays `Lobby-1` across crash-respawn cycles — critical for sync canonical state keyed by name
-- **Dedicated services on agent nodes**: `[dedicated.placement]` with mandatory state sync. Controller's `dedicated/<name>/` is the canonical copy; agent pulls on start, pushes on stop
-- **`extra_sans` config**: `[cluster] extra_sans = ["controller.example.com", "10.0.0.5"]` adds Subject Alternative Names to the auto-generated cluster cert
-- **`public_host` config**: `[cluster] public_host = "controller.example.com"` overrides the `wsUrl` in the bootstrap response for NAT/multi-interface setups
-- **Cluster TLS & Security guide**: New docs page covering the threat model, trust-on-first-use flow, cert rotation, custom CA support, and troubleshooting
-- **State sync data loss model**: Graceful stop = zero loss; unplanned crash = loss since last push. Documented in dedicated services and multi-node guides
+
+- **Easy cluster setup** — Agent setup wizard fetches the controller's TLS fingerprint via `/api/cluster/bootstrap`. SSH-style trust-on-first-use, no manual keytool or truststore work
+- **Placement pinning** — `[group.placement] node = "worker-1"` pins services to specific nodes. `fallback = wait | local | fail` controls offline behavior
+- **Dynamic state sync** — `[group.sync] enabled = true` stores a canonical copy on the controller. Agent pulls delta on start, pushes on graceful stop. SHA-based delta detection
+- **Service name stability** — Lowest-numbered CRASHED/STOPPED slot reused instead of always incrementing. `Lobby-1` stays `Lobby-1` across crash-respawn cycles
+- **Dedicated services on agent nodes** — `[dedicated.placement]` with mandatory state sync
+- **`extra_sans` and `public_host` cluster config** — For custom SANs and NAT/multi-interface setups
+- **Cluster TLS & Security docs** — Threat model, cert rotation, custom CA, troubleshooting
 
 ### Changed
-- **Agent template downloads stream to disk**: Previously slurped entire ZIP to heap, causing OOM on 512 MB agents with concurrent downloads. Now streams to temp file + extracts with 64 KB buffer
-- **Cluster `AuthRequest` extended**: Gained `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`, `publicHost`, `runningServices` fields
-- **Push lock per service**: Prevents concurrent sync pushes to the same canonical from racing
+
+- **Agent template downloads stream to disk** — Prevents OOM on low-memory agents
+- **Cluster auth extended** — Agents report hostname, OS, CPU, RAM, Java version, and running services on connect
 
 ### Fixed
-- **Service placement on agent nodes**: Fixed TLS trust for `TemplateDownloader` when agents download templates from the controller
-- **Velocity routing to wrong addresses**: Agents report their real host IP instead of the controller using the WebSocket peer address (which could be a NAT or loopback address)
+
+- **TLS trust for template downloads** — Agents can now download templates from TLS-enabled controllers
+- **Velocity routing to wrong addresses** — Agents report real host IP instead of controller using WebSocket peer address
 
 ---
 
-## v0.6.2 (April 10, 2026)
+## [0.6.2] - 2026-04-10
 
-Overview-first dashboard: host system telemetry, cluster nodes get the full picture, and every icon swapped to Phosphor Regular.
+Overview-first dashboard with host system telemetry and cluster node metrics.
 
 ### Added
-- **Controller host system stats**: new `SystemInfoCollector` (`nimbus-core/.../system/SystemInfoCollector.kt`) reads OS name/version, CPU model + core count, live system CPU load, process CPU load, system RAM used/total, Java version/vendor and hostname from the host the controller is running on. Exposed as a nested `system` object on `GET /api/controller/info` (new `SystemInfoResponse` DTO), with static fields (hostname, CPU model) cached for the JVM lifetime
-- **Cluster protocol system specs**: `AuthRequest` extended with `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`. `HeartbeatResponse` gained `processCpuLoad`. Agents report all of this at auth time, `NodeConnection` persists the static fields and the controller passes them through as `NodeResponse.system` so the dashboard Nodes page shows the same rich telemetry for every remote agent
-- **Overview page rebuilt around host telemetry**: new `<SystemStatsCard>` component renders CPU bar (system + process), memory bar, and a specs grid (hostname, OS, arch, Java). The controller host card sits next to a new Nimbus runtime card (services memory budget + JVM heap + uptime/started), with the update-available banner and a "What's new" accordion below. All of this replaces the old sidebar `<InfoSheet>` slide-out, which is gone
-- **"What's new" card on Overview**: collapsible accordion (closed by default) showing only the latest release's notes inline, with a "Full changelog" button linking directly to [cloud.nimbuspowered.org/docs/project/changelog](https://cloud.nimbuspowered.org/docs/project/changelog). Lazy-fetches `/api/controller/changelog` on first expand instead of on every Overview mount
-- **Nodes page rebuilt as a grid of `<SystemStatsCard>`**: two-column card grid (one per node) replaces the old 7-column table. Each card shows CPU + memory bars, OS / arch / cores / Java, connected/disconnected badge and agent version. Auto-refreshes every 5 s
-- **Light/dark theme toggle**: `next-themes`-powered `<ThemeProvider>` wired into the root layout with a `<ThemeToggle>` button in the site header. Respects system preference by default, remembers the last choice
-- **Phosphor Icons across the dashboard**: all 51 unique icons across 21 dashboard files migrated from `lucide-react` to `@phosphor-icons/react` at the Regular weight via a new central `src/lib/icons.tsx` wrapper module. Call sites only needed an import-path swap — every JSX usage stayed untouched
+
+- **Controller host system stats** — CPU model, cores, live CPU/RAM usage, Java version, and hostname exposed on `GET /api/controller/info`
+- **Cluster node system specs** — Agents report hardware info at auth time. Nodes page shows system stats for every remote agent
+- **Overview page rebuilt** — System stats cards, memory budget, uptime, "What's new" accordion with latest release notes
+- **Light/dark theme toggle** — Respects system preference, remembers last choice
+- **Phosphor Icons** — All dashboard icons migrated from Lucide to Phosphor Regular weight
 
 ### Changed
-- **Agent heartbeat reports real system memory**: `getUsedMemoryMb()` on the agent was returning the agent JVM's own heap usage (via `Runtime.getRuntime()`) while `memoryTotalMb` reported system-wide total, producing nonsensical percentages on the Nodes page (e.g. 40 MB / 32 GB). Now uses `osBean.totalMemorySize - osBean.freeMemorySize` consistently, so "memory used" and "memory total" are both system-wide and comparable
-- **Status card on Overview**: removed the `CircleDot` indicator in front of "Online" / "Offline" — the `StatCard`'s `tone="primary|destructive"` prop already color-codes the whole tile, so the extra dot was redundant
+
+- **Agent heartbeat reports real system memory** — Previously reported JVM heap instead of system-wide usage
 
 ### Fixed
-- **Base UI `Button` crash when rendering an anchor**: `<Button render={<a>...</a>} />` threw at runtime with `"nativeButton is true"` because Base UI's `Button` primitive defaults `nativeButton: true` and expects a real `<button>` element. Added `nativeButton={false}` to the two sites that render an anchor through `Button`: the changelog card's "Full changelog" link and the Overview update banner's "View release" link
+
+- **Button crash when rendering as anchor** — Base UI's Button primitive now correctly handles anchor elements
 
 ### Removed
-- **`dashboard/src/components/info-sheet.tsx`**: the old sidebar slide-out is replaced by the inline Overview cards. The sidebar footer no longer has an "Info" button
-- **v0.6.2 version bump** in `gradle.properties`
+
+- **Info sheet sidebar** — Replaced by inline Overview cards
 
 ---
 
-## v0.6.1 (April 10, 2026)
+## [0.6.1] - 2026-04-10
 
-Dashboard design-system pass, historical memory charts and an audit-log fix.
+Dashboard design system pass, historical memory charts, and audit log fix.
 
 ### Added
-- **Unified dashboard design system**: a canonical `<PageHeader>` (title + description + actions + hairline separator) on every page, plus shared `<StatCard>`, `<EmptyState>`, `<SectionLabel>` and `<MemoryBar>` components so Overview, Services, Groups, Dedicated, Nodes, Console, Plugins, Stress Test, Audit Log, Settings and every module page now share the exact same page shell, loading states and empty states
-- **Canonical sheet layout**: `<SheetContent>` gained a `size="sm|md|lg|xl"` prop and a new `<SheetBody>` that handles scroll + padding in one place. Edit sheets (Display, Permissions, Player) no longer need `p-0` + wrapper hacks; the Display edit sheet header is no longer double-padded
-- **Historical memory graph on service detail**: new `service_metric_samples` table (migration V4) populated every 30 s by `MetricsCollector.startMemorySampling()` with memory RSS + player count per running service. `GET /api/services/{name}/metrics/history?minutes=60` returns the last N minutes of samples. The dashboard chart now pre-loads history on mount and keeps appending live samples — no more blank charts on page enter
-- **`<MemoryBar>` component**: inline memory progress bar with tone-coded pressure (primary → yellow → destructive), used in the services list and service detail instead of raw `used/max MB` text
-- **Dashboard breadcrumbs** now mirror the sidebar labels exactly (`Dashboard`, `Services`, `Dedicated`, `Stress Test`, `Audit Log`, `Sync Proxy`, …). Added the missing `dedicated` → "Dedicated" mapping
+
+- **Unified dashboard design system** — Shared `PageHeader`, `StatCard`, `EmptyState`, `SectionLabel`, `MemoryBar`, and `SheetBody` components across all pages
+- **Historical memory charts** — `service_metric_samples` table (V4 migration) records RSS + player count every 30s. Service detail page shows last hour on load
+- **Memory bar component** — Inline progress bar with pressure-coded colors (green → yellow → red)
+- **Dashboard breadcrumbs** now mirror sidebar labels exactly
 
 ### Changed
-- **Accent color retuned to match the logo**: all color tokens (`--primary`, `--accent`, `--ring`, `--sidebar-primary`, `--sidebar-ring`, `--chart-1..5`) moved from hue 210 (teal-cyan) to hue 235 (sky-blue), lightness raised to match the `public/icon.png` cloud. Buttons, ring focus and charts now feel like part of the brand instead of sitting next to it
-- **TPS removed from the dashboard**: TPS was unreliable because only SDK-reporting services actually sent it, so the services list and service detail now focus on memory usage instead. TPS is still tracked internally for health checks; it just isn't shown in the dashboard anymore
-- **Permissions "Create group" moved into the page header** as a button-triggered dialog, consistent with how Services and Groups expose their create actions
-- **Info sheet, Perms group-edit sheet, Player sheet** all switched to the new `SheetBody` + `SectionLabel` pattern so every sheet feels identical
-- **Audit log route uses proper `@Serializable` DTOs** (`AuditEntryResponse`, `AuditListResponse`) instead of `mapOf<String, Any?>`
+
+- **Accent color matched to logo** — Color tokens moved from hue 210 (teal-cyan) to hue 235 (sky-blue)
+- **TPS hidden from dashboard** — Only SDK-reporting services had TPS data. Dashboard now focuses on memory. TPS still tracked internally for health
+- **Audit log uses proper serialization** — DTOs instead of untyped maps
 
 ### Fixed
-- **Audit log was empty in the dashboard**: `/api/audit` returned `mapOf<String, Any?>`, which kotlinx.serialization can't serialize (no polymorphic `Any` support), so every request silently 500'd and the dashboard showed an empty table. The console `audit` command worked because it queried the DB directly. Now fixed with real DTOs
-- **Service detail memory chart was ~500 px tall**: `ChartContainer` bakes in `aspect-video`, which at full card width forced a 16:9 chart. Overridden with `!aspect-auto` + fixed height so the graph stays compact
-- **Display module edit sheet title was weirdly indented**: the page wrapped `<SheetHeader>` (which already has `p-6`) in its own `p-6 pb-0` div, producing a double-padded header. Fixed by removing the wrapper and using the canonical sheet pattern
-- **Service detail stat cards collapsed under each other** on normal desktop widths. Forced to `grid-cols-3` so Group / Port / Players stay side-by-side
-- **v0.6.1 version bump** in `gradle.properties`
+
+- **Audit log empty in dashboard** — API endpoint silently returned 500 due to kotlinx.serialization not supporting `Map<String, Any?>`. Fixed with typed DTOs
+- **Service detail memory chart too tall** — Overridden aspect ratio to fixed height
+- **Display module edit sheet misaligned** — Double-padding removed
+- **Service detail stat cards stacking on desktop** — Forced to 3-column grid
 
 ---
 
-## v0.6.0 (April 10, 2026)
+## [0.6.0] - 2026-04-10
 
-Dedicated Services: single-instance, fixed-port servers without templates — plus a unified memory-reading pipeline and a Controller Info sheet in the dashboard.
+Dedicated services: single-instance, fixed-port servers plus unified memory reading.
 
 ### Added
-- **Dedicated Services**: a new first-class concept for single-instance, fixed-port servers. Each dedicated service lives in a managed directory under `paths.dedicated/<name>/` (default `dedicated/`), no template required. Users only pick a name, port, software, version and memory; Nimbus auto-creates the directory and downloads the correct server JAR on first start
-- **`config/dedicated/*.toml`**: per-service config files loaded at startup alongside group configs
-- **`PathsConfig.dedicated`**: new `paths.dedicated` option in `nimbus.toml` (default: `"dedicated"`)
-- **Dedicated REST API**: `GET/POST/PUT/DELETE /api/dedicated`, `POST /api/dedicated/{name}/start|stop|restart`, plus `POST /api/dedicated/modpack/import` and `POST /api/dedicated/modpack/upload` for importing Modrinth/CurseForge modpacks or `.mrpack` / server-pack ZIPs directly into a dedicated service
-- **`dedicated` console command**: `dedicated list|create|start|stop|restart|delete|info` with an interactive creation wizard mirroring the `create` command for groups
-- **Dashboard — Dedicated page**: `/dedicated` with a list view, create dialog (auto-fetches software list and versions from `/api/software` — same flow as groups), modpack import dialog with source & upload modes, edit dialog for post-creation changes (port, memory, proxy toggle, restart-on-crash), and inline start/stop/restart/delete actions
-- **Dashboard — Controller Info sheet**: new slide-out sheet in the sidebar footer showing Nimbus version, memory budget with live usage, update-available banner, and a collapsible changelog per version fetched from `docs/content/docs/project/changelog.mdx` on GitHub `main` (5 minute cache)
-- **`GET /api/controller/info`**: returns version, uptime, controller JVM heap, services memory budget (`controller.max_memory`), sum of allocated memory for running services, sum of actual RSS, and update-check result
-- **`GET /api/controller/changelog`**: parses the docs changelog into per-version entries
-- **`ProcessMemoryReader`**: new utility that reads resident set size (RSS) of service processes by PID via `/proc/<pid>/status` on Linux/WSL and `tasklist /FI "PID eq <pid>"` on native Windows
-- **`ServiceMemoryResolver`**: single source of truth for per-service memory stats across REST routes, console commands and the dashboard. Reads RSS for local services, uses agent-pushed value for remote (cluster) services, and budgets a realistic JVM overhead (`-Xmx + max(256 MB, -Xmx × 30%)`) so RSS doesn't appear to overflow the configured heap
-- **Dashboard sidebar redesign**: split nav into labeled sections — **Overview**, **Infrastructure** (Services, Groups, Dedicated, Nodes), **Operations** (Console, Plugins, Stress Test), **Monitoring** (Audit Log), **Modules**. Uses the existing `scrollbar-thin` custom scrollbar style on the info sheet. Login page uses `banner.svg` instead of the square icon
+
+- **Dedicated services** — Single-instance, fixed-port servers in managed directories. No template required. Auto-downloads server JAR on first start. Config via `config/dedicated/*.toml`
+- **Dedicated REST API** — Full CRUD at `/api/dedicated/*` plus modpack import/upload endpoints
+- **`dedicated` console command** — List, create, start, stop, restart, delete, info with interactive creation wizard
+- **Dashboard dedicated page** — Create, configure, modpack import, and management actions
+- **Controller info API** — `GET /api/controller/info` returns version, uptime, memory budget, and update status
+- **Unified memory reading** — RSS read from `/proc/<pid>/status` (Linux/WSL) or `tasklist` (Windows) for every service. No longer requires SDK integration
+- **Agent memory heartbeats** — Cluster agents push RSS in heartbeats for accurate remote service memory
+- **Dashboard sidebar redesign** — Nav split into labeled sections: Overview, Infrastructure, Operations, Monitoring, Modules
 
 ### Changed
-- **Proxy forwarding mod sync is now start-time and edit-time**: `ServiceFactory.syncProxyForwardingMods()` is called on every service prepare (groups and dedicated) and ensures the correct mod for the current software is present while cleaning up stale mods from other modloaders (e.g. Forge→Fabric). `syncDedicatedProxyForwarding()` additionally patches `neoforwarding-server.toml` / `proxy-compatible-forge-server.toml` / `FabricProxy-Lite.toml` with the Velocity secret
-- **NeoForge 1.20.1 ↔ 1.20.2 swap**: `ensureForwardingMod()` now checks for the _expected_ mod family for the current version instead of any forwarding mod, and removes the stale mod from the other family before installing the correct one — so switching a NeoForge group between pre-1.20.2 (proxy-compatible-forge) and 1.20.2+ (NeoForwarding) does the right thing
-- **Dedicated service proxy toggle**: `PUT /api/dedicated/{name}` detects `proxyEnabled` changes on modded services and installs/removes the forwarding mod + patches the config immediately (no restart needed to see it in the directory)
-- **SDK `reportHealth(tps)`**: the SDK no longer reports `memoryUsedMb`/`memoryMaxMb` — memory is read from `/proc` (or `tasklist`) by the controller itself, so every service (modded, custom, dedicated, proxy) gets accurate RSS stats. The API endpoint still accepts the old shape for backwards compatibility but ignores memory fields
-- **Agent `ServiceHeartbeat.memoryUsedMb`**: agents now read RSS via `/proc` on their own host and push it in the cluster heartbeat, so the controller shows correct memory for services on remote nodes too
-- **EULA auto-accept for dedicated services**: written into the service directory on creation (skipped for Velocity-software dedicated services)
-- **v0.6.0 version bump** in `gradle.properties`
+
+- **Proxy forwarding mod sync on every start** — Cleans up stale mods from wrong modloaders automatically
+- **NeoForge mod family auto-swap** — Pre-1.20.2 and 1.20.2+ forwarding mods swap automatically when software version changes
+- **SDK simplified** — `reportHealth()` only sends TPS now. Memory is the controller's job. Backwards-compatible
 
 ### Fixed
-- **Services list showed 0 memory for non-SDK services**: previously only the Velocity proxy (which runs the bridge plugin) had live memory stats. All other services — modded Paper/Purpur backends, dedicated services, custom JARs — showed `0 / <-Xmx> MB`. Now every service reports real resident memory
-- **Info sheet showed controller JVM heap instead of services budget**: the old implementation exposed `Runtime.getRuntime().maxMemory()` which is the controller process's own `-Xmx` (~256 MB), not the memory budget available to services. The sheet now reads `controller.max_memory` from `nimbus.toml`
-- **RSS exceeded `-Xmx` display**: JVM processes always use more resident memory than their heap (metaspace, thread stacks, code cache, native buffers). Memory max displayed in the UI now includes a realistic overhead budget so `1150 / 1024 MB` becomes `1150 / 1331 MB` (≈86% used)
-- **PUT `/api/dedicated/{name}` used request-body `name` instead of URL path**: could cause config inconsistency if a client sent a different name in the body. The URL path is now authoritative, and port conflicts with other dedicated services are now detected on update
+
+- **Non-SDK services showed 0 memory** — All services now report real resident memory
+- **Controller info showed JVM heap instead of services budget** — Now reads `controller.max_memory` from config
+- **RSS exceeds displayed max** — JVM overhead budget added to displayed maximum
+- **Dedicated service name mismatch** — URL path is now authoritative over request body
 
 ---
 
-## v0.5.3 (April 9, 2026)
+## [0.5.3] - 2026-04-09
 
 Smart modded client routing via mod list matching.
 
 ### Added
-- **Mod list matching for modded client routing**: The proxy now reads the client's mod list (from the Forge handshake) and routes to the group whose server mods best overlap, instead of blindly sending all modded clients to the least-loaded modded server. Prevents a Forge 1.20.1 client from landing on a NeoForge 1.21.1 ATM10 server
-- **ModScanner**: New utility (`nimbus-core/.../template/ModScanner.kt`) scans a template's `mods/` directory on group load, extracting mod IDs from NeoForge/Forge `mods.toml`, Fabric `fabric.mod.json`, and legacy `mcmod.info`. Mod IDs are cached on `ServerGroup` and exposed via `GET /api/groups` as `modIds`
-- **Protocol version filtering**: Modded client routing now filters groups by Minecraft protocol version — a 1.20.1 Forge client (protocol 763) won't match a 1.21.4 NeoForge group (protocol 769)
-- **Connection type compatibility**: `LEGACY_FORGE` clients only match Forge groups; `MODERN_FORGE` clients match both Forge and NeoForge groups
-- **Alternate group fallback on kick**: When a modded client is kicked from a modded server, the bridge now tries to find a different modded group at the same protocol version before disconnecting
+
+- **Mod list matching** — Proxy routes modded clients to the group with the best mod overlap score (`|clientMods ∩ serverMods| / |serverMods|`, threshold 0.5)
+- **ModScanner** — Extracts mod IDs from template `mods/` directories on group load. Supports NeoForge/Forge `mods.toml`, Fabric `fabric.mod.json`, and legacy `mcmod.info`
+- **Protocol version filtering** — Client protocol version must match the group's MC version
+- **Connection type compatibility** — `LEGACY_FORGE` matches Forge only; `MODERN_FORGE` matches Forge or NeoForge
+- **Alternate group fallback on kick** — Modded clients try a different modded group before disconnecting
 
 ### Changed
-- **`GET /api/groups` response**: Now includes `modIds` field (sorted list of mod IDs scanned from the group's template)
-- **GroupManager**: Now accepts `templatesDir` and scans mod IDs for FORGE/NEOFORGE/FABRIC groups during `loadGroups()` and `reloadGroups()`
-- **Bridge ConnectionListener**: `moddedServerFinder` now accepts connection type, protocol version, and client mod IDs instead of returning a simple `Optional<RegisteredServer>`
+
+- **`GET /api/groups`** now includes `modIds` field
 
 ---
 
-## v0.5.2 (April 9, 2026)
+## [0.5.2] - 2026-04-09
 
 Auto-configure Velocity for large modpacks.
 
 ### Fixed
-- **Velocity max-known-packs**: Auto-sets `-Dvelocity.max-known-packs=512` on proxy JVM args when any backend group uses Forge/NeoForge/Fabric. Default Velocity limit of 64 caused silent disconnects during configuration phase with large modpacks (e.g. AllTheMods10 with 400+ mods)
+
+- **Silent disconnects with large modpacks** — Auto-sets `-Dvelocity.max-known-packs=512` when modded backends exist. Default limit of 64 caused disconnects with 400+ mods
 
 ---
 
-## v0.5.1 (April 9, 2026)
+## [0.5.1] - 2026-04-09
 
 Modded client routing hotfixes.
 
 ### Fixed
-- **NeoForge forwarding mod**: NeoForge 1.20.2+ now auto-installs [NeoForwarding](https://modrinth.com/mod/neoforwarding) instead of proxy-compatible-forge, which caused `Empty key` errors on modern NeoForge servers
-- **Modded client detection**: Uses Velocity's internal `ConnectionType` (set during FML handshake) instead of `player.getModInfo()` which was empty at initial server selection time
-- **Modded groups API parsing**: Bridge now correctly parses the `{"groups": [...]}` wrapper from `/api/groups` (was trying to parse as plain array)
-- **Kick loop for modded clients**: Modded clients kicked from a modded server are no longer redirected to a vanilla lobby where they'd get kicked again
-- **Bridge version**: Now shows the actual Nimbus version (from `gradle.properties`) instead of hardcoded `0.2.0`
+
+- **NeoForge forwarding errors** — NeoForge 1.20.2+ now uses NeoForwarding instead of proxy-compatible-forge, which caused `Empty key` errors
+- **Modded client detection timing** — Uses Velocity's `ConnectionType` (set during FML handshake) instead of `player.getModInfo()` which was empty at initial server selection
+- **Modded groups API parsing** — Bridge correctly handles the `{"groups": [...]}` wrapper
+- **Kick loop for modded clients** — Modded clients kicked from a modded server no longer redirect to a vanilla lobby
 
 ### Changed
-- **ConfigPatcher**: Auto-detects NeoForwarding vs proxy-compatible-forge in the `mods/` directory and patches the correct config file (`neoforwarding-server.toml` or `proxy-compatible-forge-server.toml`)
+
+- **Config patching auto-detects forwarding mod** — Patches the correct config file based on which mod is present
 
 ---
 
-## v0.5.0 (April 9, 2026)
+## [0.5.0] - 2026-04-09
 
 Modded client support: automatic routing and Velocity configuration for Forge/NeoForge/Fabric players.
 
 ### Added
-- **Modded client routing**: Bridge plugin detects Forge/NeoForge/Fabric clients via Velocity's `player.getModInfo()` API and automatically routes them to the least-loaded server from a modded group instead of the Paper lobby. Prevents the "incompatible mods" kick that NeoForge clients get when connecting to vanilla/Paper servers
-- **Automatic Velocity modded config**: `VelocityConfigGen` detects modded backend groups and auto-sets `announce-forge = true` (root level) and increases `connection-timeout` (10s) and `read-timeout` (60s) under `[advanced]` for large modpack handshakes
-- **Modded groups cache**: Bridge fetches group software types from `/api/groups` on startup and refreshes on controller reconnect. No proxy restart needed when modded groups are added
+
+- **Modded client routing** — Bridge detects Forge/NeoForge/Fabric clients and routes them to modded backend groups instead of the Paper lobby
+- **Automatic Velocity modded config** — Detects modded backends and auto-sets `announce-forge = true`, increases connection/read timeouts for large modpack handshakes
+- **Modded groups cache** — Bridge fetches group software types from API and refreshes on reconnect. No proxy restart needed when modded groups are added
 
 ### Fixed
-- **`announce-forge` placement**: Correctly placed at TOML root level (not under `[advanced]`) matching Velocity's default config structure
-- **Dashboard**: Service console commands now use `send()` instead of raw WebSocket writes
-- **Dashboard**: Fixed non-null assertion for group in save dialog
-- **Dashboard**: Fixed proxy body forwarding, WebSocket session reuse, and missing API fields
-- **ScalingEngineTest**: Added missing `PREPARED` branch in exhaustive `when` expression
+
+- **`announce-forge` placement** — Correctly placed at TOML root level matching Velocity's default config structure
 
 ---
 
-## v0.4.7 (April 9, 2026)
+## [0.4.7] - 2026-04-09
 
 Module startup ordering fix.
 
 ### Fixed
-- **Permissions module crash on fresh installs**: `PermissionManager.init()` queried the `permission_groups` table during module `init()`, but database migrations hadn't run yet. Moved DB-dependent initialization to `enable()` which runs after migrations
-- **Module lifecycle ordering**: Split `enableAll()` into `initAll()` (registers migrations, commands, routes) and `enableAll()` (DB-dependent setup). Migrations now run between the two phases, guaranteeing tables exist before modules query them
+
+- **Permissions module crash on fresh installs** — DB queries moved from `init()` to `enable()`, which runs after migrations
+- **Module lifecycle ordering** — Split into `initAll()` (registers migrations) → migrations run → `enableAll()` (DB-dependent setup)
 
 ---
 
-## v0.4.6 (April 9, 2026)
+## [0.4.6] - 2026-04-09
 
-Module loading hotfix — bypasses broken ServiceLoader entirely.
+Module loading hotfix — bypasses broken ServiceLoader.
 
 ### Fixed
-- **Module loading on Java 21**: `ServiceLoader` AND direct `META-INF/services` file reading both failed silently on certain Java 21 VPS configurations. Module classes are now declared via `main_class` in `module.properties` and loaded directly with `Class.forName()` — completely bypasses the broken service discovery mechanism
-- **Version compatibility skip was a no-op**: Modules flagged for version incompatibility were still loaded because `continue` only exited the version-check loop, not the actual loading loop. Now properly removes incompatible modules before loading
-- **Silent `Error` subclass crashes**: `catch (Exception)` in module load/init/enable missed `ServiceConfigurationError`, `NoClassDefFoundError`, and other `Error` subclasses. Changed to `catch (Throwable)` so these are logged instead of crashing or vanishing
 
-### Changed
-- **Module properties**: All built-in modules now declare `main_class` in `module.properties`. Third-party modules can use either `main_class` (preferred) or the legacy `META-INF/services` file as fallback
+- **Module loading on certain Java 21 configurations** — Modules now declare `main_class` in `module.properties` and load via `Class.forName()`, bypassing unreliable ServiceLoader
+- **Version-incompatible modules still loaded** — Skip logic now correctly removes modules before loading
+- **Silent Error-class crashes** — `catch (Throwable)` instead of `catch (Exception)` to surface NoClassDefFoundError and similar
 
 ---
 
-## v0.4.5 (April 9, 2026)
+## [0.4.5] - 2026-04-09
 
-Intermediate hotfix — improved module loading diagnostics (superseded by v0.4.6).
+Intermediate module loading diagnostics (superseded by v0.4.6).
 
 ---
 
-## v0.4.4 (April 9, 2026)
+## [0.4.4] - 2026-04-09
 
 NeoForge symlink fix and module loading improvements.
 
 ### Fixed
-- **NeoForge startup on Linux**: `Files.walk()` in `findArgsFile` now uses `FOLLOW_LINKS` so it traverses the symlinked `libraries/` directory correctly. Previously, NeoForge/Forge servers crashed instantly with exit code 1 because the args file was not found through the symlink, falling back to `-jar server.jar` which doesn't work for modded servers
-- **Module version skip logic**: Modules skipped due to version incompatibility were still attempted for loading. Fixed by properly removing skipped JARs from the load map before ServiceLoader runs
-- **Module loading error handling**: Changed `catch (Exception)` to `catch (Throwable)` in module load/init/enable phases to catch `NoClassDefFoundError` and similar linkage errors that previously crashed silently
 
-### Changed
-- **Module loading diagnostics**: Added warnings for JARs missing `module.properties`, JARs with no `NimbusModule` implementation, and failed property reads. Makes debugging broken module JARs much easier
+- **NeoForge startup on Linux** — `Files.walk()` now follows symlinks so `libraries/` is found through symlinked directories
+- **Module version skip logic** — Skipped modules properly removed before ServiceLoader runs
+- **Module error handling** — `catch (Throwable)` to surface linkage errors
 
 ---
 
-## v0.4.3 (April 9, 2026)
+## [0.4.3] - 2026-04-09
 
 Dashboard proxy and chunked modpack upload.
 
 ### Added
-- **Server-side proxy**: Hosted dashboard (`https://dashboard.nimbuspowered.org`) can now connect to HTTP controllers without users needing TLS certificates. REST requests are proxied through Next.js API routes, bypassing browser mixed-content restrictions
-- **WebSocket SSE bridge**: Server-Sent Events bridge for WebSocket connections (console, live events) through the proxy — transparent to the user, auto-detected
-- **Chunked modpack upload**: Large modpack uploads (up to 2 GB) work through the proxy by splitting files into 4 MB chunks. Zero RAM usage on client (`File.slice`), proxy (streamed), and controller (direct disk append). Upload progress percentage shown in UI
-- **Chunked upload API**: Three new endpoints on the controller — `POST /api/modpacks/upload/init`, `POST /api/modpacks/upload/chunk`, `POST /api/modpacks/upload/finalize`. Stale uploads auto-cleaned after 1 hour
+
+- **Server-side proxy** — Hosted dashboard can connect to HTTP controllers without TLS certificates
+- **WebSocket SSE bridge** — Server-Sent Events bridge for WebSocket connections through the proxy
+- **Chunked modpack upload** — Large uploads (up to 2 GB) split into 4 MB chunks with zero RAM buffering on client, proxy, and controller
 
 ### Changed
-- **Login form simplified**: Only requires IP/hostname instead of full URL. Port defaults to 8080 if not specified. No default values in fields
-- **Direct uploads preserved**: Non-proxy connections (localhost, same network) still use single-shot streaming for best performance
+
+- **Login simplified** — Only requires IP/hostname. Port defaults to 8080
 
 ---
 
-## v0.4.2 (April 9, 2026)
+## [0.4.2] - 2026-04-09
 
-CORS configuration hotfix for new installations.
+CORS configuration hotfix.
 
 ### Fixed
-- **CORS default missing**: New installs via SetupWizard now include `allowed_origins = ["dashboard.nimbuspowered.org"]` in the generated `nimbus.toml`. Previously the field was omitted, causing the dashboard to fail with CORS errors on fresh setups
-- **Unknown config keys crash**: TOML parser now tolerates unknown keys (e.g. typos like `cors_origins`) instead of refusing to start. Nimbus silently ignores unrecognized fields for forward compatibility
-- **Wrong key name in docs**: Dashboard guide referenced `cors_origins` instead of the correct `allowed_origins`, leading users to add an invalid key that crashed Nimbus
 
-### Changed
-- **ApiConfig default**: `allowed_origins` defaults to `["dashboard.nimbuspowered.org"]` even when the field is absent from `nimbus.toml`, matching the documented behavior
+- **CORS missing on new installs** — SetupWizard now includes `allowed_origins` in generated config
+- **Unknown config keys crash** — TOML parser now tolerates unknown keys for forward compatibility
+- **Wrong key name in docs** — Dashboard guide referenced `cors_origins` instead of `allowed_origins`
 
 ---
 
-## v0.4.1 (April 8, 2026)
+## [0.4.1] - 2026-04-08
 
 CurseForge modpack support and server pack ZIP import.
 
 ### Added
-- **CurseForge modpack support**: Import modpacks from CurseForge via slug (`import curseforge:all-the-mods-10`), URL (`import https://curseforge.com/minecraft/modpacks/all-the-mods-10`), or by uploading the server pack ZIP. Requires an optional `[curseforge] api_key` in `nimbus.toml` for API-based fetching
-- **Server pack ZIP import**: Upload pre-built CurseForge server pack ZIPs (e.g. `ServerFiles-6.6.zip`) via CLI (`import /path/to/ServerFiles.zip`) or the dashboard. Auto-detects modloader type, version, and Minecraft version from installer JARs and startup scripts
-- **Modpack upload API** (`POST /api/modpacks/upload`): Streamed file upload endpoint for the dashboard. Files are written directly to disk with a 64KB buffer — no memory buffering, no OOM for large packs. Parameters passed as query params
-- **Dashboard modpack upload**: New upload mode in the Import Modpack dialog with drag-and-drop file picker. Supports both Modrinth/CurseForge sources and server pack ZIP uploads with group type, memory, and instance configuration
+
+- **CurseForge modpack support** — Import via slug, URL, or server pack ZIP upload. Optional `[curseforge] api_key` in config
+- **Server pack ZIP import** — Upload pre-built server packs via CLI or dashboard. Auto-detects modloader and MC version
+- **Dashboard modpack upload** — Drag-and-drop file picker in the Import Modpack dialog
 
 ### Changed
-- **Import command** now accepts CurseForge URLs, `curseforge:slug` prefix, and `.zip` files alongside existing Modrinth sources
-- **Memory input normalization**: Bare numbers in memory prompts are auto-suffixed (e.g. `8` → `8G`, `512` → `512M`) across `import` and `create` commands
+
+- **Import command** now accepts CurseForge URLs, `curseforge:slug` prefix, and `.zip` files
+- **Memory input normalization** — Bare numbers auto-suffixed (e.g., `8` → `8G`, `512` → `512M`)
 
 ### Fixed
-- **NeoForge startup on Windows**: `TemplateManager` now uses Windows directory junctions (`mklink /J`) as fallback when symlinks fail (no admin rights required). Previously, the `libraries/` symlink silently failed on Windows without Developer Mode, causing NeoForge servers to crash with `-jar server.jar` instead of `@libraries/.../win_args.txt`
-- **NeoForge installation detection**: `hasServerJar()` now recognizes modern NeoForge installations that use `libraries/` with args files instead of a standalone server JAR. Prevents the installer from re-running on every service start
+
+- **NeoForge startup on Windows** — Directory junctions as fallback when symlinks fail (no admin rights required)
+- **NeoForge installation detection** — Recognizes modern installations using `libraries/` with args files
 
 ---
 
-## v0.4.0 (April 8, 2026)
+## [0.4.0] - 2026-04-08
 
 Web Dashboard: manage your cloud from the browser.
 
 <Callout type="warn">
-  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected. Report issues on [GitHub](https://github.com/NimbusPowered/Nimbus/issues).
+  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected.
 </Callout>
 
 ### Added
-- **Web Dashboard** (ALPHA): Self-hosted Next.js web UI for managing your Nimbus cloud, live at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org). Features include:
-  - **Service overview** with live status, player counts, and uptime
-  - **Group management** — view, create, and configure server groups
-  - **Real-time console** per service with ANSI log rendering
-  - **Plugin management** — search and install plugins from Hangar + Modrinth
-  - **Modpack import** — import Modrinth/CurseForge modpacks or upload server pack ZIPs from the dashboard
-  - **Stress testing** — start, stop, and monitor stress tests
-  - **Audit log viewer** — browse the full audit trail with filters
-  - **Node management** — monitor connected agent nodes
-  - **Module configuration** — configure Display, Permissions, Players, and SyncProxy modules
-  - **Metrics & charts** — visualize player counts, service health, and resource usage
-  - **Authentication** — login with your API token, session management
-  - **Responsive design** — works on desktop and mobile
-- **Modpack import API** (`POST /api/modpacks/import`, `GET /api/modpacks/platforms`): Import Modrinth modpacks via REST API, used by both console and dashboard
-- **Plugin management API** (`GET /api/plugins/search`, `POST /api/plugins/install`, `GET /api/plugins/installed/{group}`): Search Hangar + Modrinth, install plugins, and list installed plugins via REST
-- **Software versions API** (`GET /api/software`, `GET /api/software/{type}/versions`): Query available server software types and their versions via REST
 
-### Changed
-- **CORS configuration** updated to allow dashboard origin (`dashboard.nimbuspowered.org`)
-- **GroupRoutes** extended with additional metadata for dashboard consumption
-- **ModuleRoutes** extended with configuration read/write endpoints for dashboard
+- **Web Dashboard** (ALPHA) — Next.js + shadcn/ui management UI at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org):
+  - Service overview with live status, player counts, uptime
+  - Group management with create/configure flows
+  - Real-time console per service with ANSI rendering
+  - Plugin management (Hangar + Modrinth search and install)
+  - Modpack import (Modrinth, CurseForge, ZIP upload)
+  - Stress testing controls
+  - Audit log viewer with filters
+  - Node management for multi-node clusters
+  - Module configuration (Display, Permissions, Players, SyncProxy)
+  - Metrics visualization with charts
+  - Responsive design (desktop + mobile)
+- **Modpack import API** — `POST /api/modpacks/import`, `GET /api/modpacks/platforms`
+- **Plugin management API** — `GET /api/plugins/search`, `POST /api/plugins/install`, `GET /api/plugins/installed/{group}`
+- **Software versions API** — `GET /api/software`, `GET /api/software/{type}/versions`
 
 ---
 
-## v0.3.1 (April 7, 2026)
+## [0.3.1] - 2026-04-07
 
-Remote management tooling: manage your cloud from anywhere.
+Remote CLI: manage your cloud from anywhere.
 
 ### Added
-- **Remote CLI** (`nimbus-cli`): Standalone 11MB JLine3 console that connects to the controller's REST API + WebSocket. Same commands, same tab completion, same ANSI formatting as the local console. Interactive setup wizard on first run, saved connection profiles in `~/.nimbus/cli.json`. Supports `--host`, `--port`, `--token`, `--profile` flags
-- **Console API endpoints**: `POST /api/console/complete` for server-side tab completion, `WS /api/console/stream` for multiplexed command execution, live event streaming, and remote screen sessions
-- **CLI session tracking**: Every Remote CLI connection logged in `cli_sessions` DB table (V3 migration). Tracks client username, hostname, OS, IP address, GeoIP location (via ip-api.com), connection duration, and command count
-- **`sessions` command**: `sessions active` shows currently connected CLI sessions, `sessions history [--limit N]` shows historical sessions with user@host, IP, location, duration, commands, and status
-- **CLI connected/disconnected events**: Live events in local console and WebSocket showing Remote CLI connections with client identity, IP, location, and OS (e.g., `◆ CLI jonas@DESKTOP-ABC connected from 85.123.45.67 (Berlin, Germany) [Windows 11 amd64]`)
-- **GeoIP location lookup**: Async location resolution via ip-api.com for public IPs, skipped for local/private addresses
-- **Install scripts**: `install-cli.sh` (Linux/macOS) and `install-cli.ps1` (Windows) for one-command CLI installation
+
+- **Remote CLI** (`nimbus-cli`) — Standalone JLine3 console that connects to the controller's API. Same commands, tab completion, and ANSI formatting as the local console. Interactive setup wizard, saved connection profiles in `~/.nimbus/cli.json`
+- **Console API endpoints** — `POST /api/console/complete` for tab completion, `WS /api/console/stream` for multiplexed command execution and event streaming
+- **CLI session tracking** — Connections logged in DB with client username, hostname, OS, IP, GeoIP location, duration, and command count
+- **`sessions` command** — `sessions active` and `sessions history` to monitor Remote CLI connections
+- **CLI connection events** — Live events in local console showing who connected, from where, with OS details
+- **Install scripts** — `install-cli.sh` and `install-cli.ps1` for one-command CLI installation
 
 ### Changed
-- **All 26+ console commands** refactored to use `CommandOutput` interface as canonical execution path. `execute(args)` now delegates to `execute(args, output)` via `ConsoleOutput()` — zero logic duplication between local and remote execution
-- **`CommandDispatcher`** now has `dispatch(input, output: CommandOutput)` overload for remote command execution with typed output streaming
-- **Release workflow** updated to build and upload `nimbus-cli-<version>.jar` alongside controller and agent JARs
 
-### Fixed
-- JLine native access warning on Java 21+ suppressed via auto-relaunch with `--enable-native-access=ALL-UNNAMED` (same pattern as controller)
+- **All console commands** refactored to `CommandOutput` interface for remote execution support
 
 ---
 
-## v0.3.0 (April 7, 2026)
+## [0.3.0] - 2026-04-07
 
 Competitive features: closing the gaps with SimpleCloud and CloudNET.
 
 ### Added
-- **Template stacking**: Groups can now compose multiple templates via `templates = ["base", "overlay"]` in group config. Templates are applied in order — later templates override earlier ones. Backwards compatible with single `template` field. Agent and cluster protocol support included
-- **Warm pool / prepared services**: New `PREPARED` service state. `WarmPoolManager` pre-stages services in the background (15s loop). Configured per group via `scaling.warm_pool_size`. When scaling triggers, a prepared service starts in seconds instead of minutes
-- **Player module** (`nimbus-module-players`): Centralized player tracking as a controller module. In-memory player map + DB persistence (`player_sessions`, `player_tracking` tables). REST endpoints (`/api/players/online`, `/api/players/history/{uuid}`, `/api/players/info/{uuid}`, `/api/players/stats`). Console command `players list|info|history|stats` with Bridge remote execution support (`/cloud players`)
-- **Service deployments**: Automatically copy changed files from a service's working directory back to its template on stop. Configured via `lifecycle.deploy_on_stop` and `lifecycle.deploy_excludes`. Hash-based file comparison to only copy actual changes
-- **Remote file management API**: Browse, read, write, and delete files on agent-hosted services via the existing REST API. New cluster protocol messages (`FileListRequest/Response`, `FileReadRequest/Response`, `FileWriteRequest/Response`, `FileDeleteRequest/Response`). `RemoteFileProxy` with `CompletableDeferred`-based request/response (10s timeout). Path traversal protection on agent side
-- **Proxy event endpoint**: Generic `POST /api/proxy/events` for the Bridge to report player connect/disconnect/switch events. Core emits events on EventBus, modules subscribe. No module-specific logic in Bridge or Core
-- **Module auto-sync**: `ModuleManager.syncEmbeddedModules()` automatically updates installed module JARs from embedded versions on startup. No more manual copying after rebuilds
-- **`PlayerServerSwitch` event**: New core event emitted when a player moves between servers. Bridge reports via proxy event endpoint
-- **`ServiceDeployed` event**: Emitted after deploy-back completes, includes file count
-- **`ServicePrepared` / `WarmPoolReplenished` events**: Warm pool lifecycle events with console and WebSocket support
+
+- **Template stacking** — `templates = ["base", "overlay"]` in group config, applied in order. Later templates override earlier ones. Full cluster support
+- **Warm pool** — New PREPARED service state with background replenishment. Configured via `scaling.warm_pool_size`. Prepared services start in seconds instead of minutes
+- **Player module** (`nimbus-module-players`) — Centralized player tracking with DB persistence, REST API, console commands, and Bridge integration
+- **Service deployments** — Hash-based copy-back of changed files from service to template on stop. Configured via `lifecycle.deploy_on_stop` and `lifecycle.deploy_excludes`
+- **Remote file management API** — Browse, read, write, delete files on agent-hosted services via REST with path traversal protection
+- **Module auto-sync** — Embedded module JARs automatically updated from build on startup
+
+---
+
+## [0.2.1] - 2026-04-07
+
+Bug fixes, console feedback, and config validation.
+
+### Fixed
+
+- **Console command feedback** — `start`, `stop`, `restart` report actual success/failure with details
+- **Silent memory parsing** — Invalid cluster node memory formats now logged instead of silently returning 0
 
 ### Changed
-- **`PlayerConnected`/`PlayerDisconnected` events** now include `uuid` field (previously name-only)
-- **`TemplateRoutes.resolveGlobalDirs`** now includes Pufferfish, Leaf, and Folia (previously only Paper, Purpur, Velocity)
-- **Core `PlayersCommand` removed** — replaced entirely by Player Module's richer command with subcommands
-- **Player session tracking removed from Core** — `PlayerSessions` table, `MetricsCollector` player logic, and `V1_Baseline` migration no longer include player-specific code. All player tracking is now exclusively in the Player Module
-- **Console**: Player connect/disconnect/switch events suppressed from CLI output (available via `players` command and WebSocket)
 
-### Fixed
-- Legacy `player_sessions` table (pre-v0.3.0 schema without UUIDs) cleanly dropped and recreated by Player Module migration
-- Player module uses `player_tracking` table name to avoid collision with Permissions module's `player_meta` table
-- Bridge `reportPlayerConnect` moved from `onPostLogin` (player has no server yet) to `onServerConnected` for correct timing
+- **Config validation on startup** — `controller.max_memory`, `bedrock.base_port`, and `database.port` validated at load time
+- **Scaling debug logging** — Cooldown and pending-service skips logged at DEBUG level
+- **Proxy sync error logging** — Full stack traces on TOML parse failures
 
 ---
 
-## v0.2.1 (April 7, 2026)
-
-Bug fixes, improved console feedback, and config validation hardening.
-
-### Fixed
-- **Console command feedback**: `start`, `stop`, and `restart` commands now check return values and report success or failure accurately. `start` shows allocated service name and port, `restart` shows the new service name and port
-- **Silent memory parsing**: `NodeConnection.parseMemoryMb()` now logs a warning on invalid memory formats (e.g., `"abc"`, `"10GB"`) instead of silently returning 0, which could cause incorrect node placement decisions in cluster mode
-
-### Improved
-- **Config validation on startup**: `controller.max_memory` format (must match `^\d+[MmGg]$`), `bedrock.base_port` range (1-65535), and `database.port` range (1-65535) are now validated at config load time instead of failing later with cryptic errors
-- **Scaling debug logging**: The scaling engine now logs at DEBUG level when scale-up or scale-down is skipped due to cooldown or pending services, making it easier to diagnose why scaling isn't triggering
-- **Proxy sync error logging**: `ProxySyncManager` now logs full stack traces when TOML config parsing fails (motd.toml, tablist.toml, chat.toml), instead of only the exception message
-
----
-
-## v0.2.0 (April 7, 2026)
+## [0.2.0] - 2026-04-07
 
 Security, stability, and production readiness.
 
 ### Added
-- **Database migration system**: `MigrationManager` with `schema_migrations` tracking table, versioned schema changes, auto-bootstrap for pre-0.2.0 databases. Modules register migrations via `ModuleContext.registerMigrations()`. Core V1 (baseline) + V2 (audit log), Perms V1000, Scaling V2000
-- **Audit logging**: `AuditCollector` subscribes to EventBus, batch-writes to `audit_log` table. Actor tracking on `NimbusEvent` (`system`, `console`, `api:admin`, `api:service`). Console command `audit [limit] [--action TYPE] [--actor NAME]`, REST endpoint `GET /api/audit` (admin-only, paginated, filterable). Configurable retention via `[audit]` config section (default 90 days)
-- **Environment variable overrides**: `NIMBUS_API_TOKEN`, `NIMBUS_DB_TYPE`, `NIMBUS_DB_HOST`, `NIMBUS_DB_PORT`, `NIMBUS_DB_NAME`, `NIMBUS_DB_USER`, `NIMBUS_DB_PASSWORD`, `NIMBUS_CLUSTER_TOKEN` override TOML config values. Agent supports `NIMBUS_AGENT_TOKEN`, `NIMBUS_AGENT_CONTROLLER`. Logged without revealing values
-- **Cluster TLS**: Cluster WebSocket server switched from CIO to Netty with native `sslConnector`. Auto-generates self-signed keystore at `config/cluster.jks` if none configured. Agent default URL changed `ws://` to `wss://` (**breaking**). Configurable trust via `tls_verify`, `truststore_path`
-- **Local PID persistence**: `ControllerStateStore` persists service PIDs to `state/services.json` — services survive controller restarts
-- **Process adoption**: `ProcessHandle.adopt()` re-attaches to running OS processes by PID with Windows-compatible fallback
-- **State reconciliation**: Grace period (`reconciliation_delay`, default 10s) before starting minimum instances, allows agents to report recovered services
-- **Remote service recovery**: Reconnecting agents report currently running services with PIDs, ports, and state — controller rebuilds registry before scaling
-- **JWT scoped API auth** (opt-in via `jwt_enabled = true`): HMAC-SHA256 signed tokens with 13 permission scopes (`services:read/write`, `groups:read/write`, `metrics:read`, `cluster:read/write`, `files:read/write`, `config:read/write`, `audit:read`, `admin`)
-- **Token management endpoints**: `POST /api/tokens` to generate scoped JWT tokens, `GET /api/tokens/scopes` to list available scopes
-- **Service-level JWT**: Game servers automatically receive scoped JWT with limited permissions when JWT is enabled
-- **Leaf server software**: Paper fork from `api.leafmc.one`, treated as Paper-based
-- **`ServiceRecovered` event** with CLI display (`RECOVERED`)
-- **`AUTH_FAILED`, `INSUFFICIENT_SCOPE` API error codes**
-- **`PortAllocator.reserve()`** for recovered service ports
+
+- **Database migration system** — Versioned schema changes with auto-bootstrap for pre-0.2.0 databases. Module migrations via `ModuleContext.registerMigrations()`
+- **Audit logging** — EventBus-driven batch writes to `audit_log` table. Actor tracking, console command, REST endpoint, configurable retention (default 90 days)
+- **Environment variable overrides** — `NIMBUS_API_TOKEN`, `NIMBUS_DB_*`, `NIMBUS_CLUSTER_TOKEN`, `NIMBUS_AGENT_TOKEN`, `NIMBUS_AGENT_CONTROLLER` override TOML config
+- **Cluster TLS** — Auto-generated self-signed keystore, `wss://` default. Configurable trust via `tls_verify`, `truststore_path`
+- **Local PID persistence** — Services survive controller restarts via `state/services.json`
+- **State reconciliation** — Grace period before starting minimum instances, allows agents to report recovered services
+- **JWT scoped API auth** (opt-in) — HMAC-SHA256 tokens with 13 granular permission scopes
+- **Leaf server software** — Paper fork from `api.leafmc.one`
+- **Interactive pickers** — Arrow-key selection replacing Y/N prompts
 
 ### Changed
-- **Org rename**: `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
-- **Cluster default protocol**: Agent connections now use `wss://` instead of `ws://` (breaking)
-- **Docs migration**: VitePress replaced with Fumadocs (Next.js)
-- **Interactive pickers**: Arrow-key selection replacing Y/N prompts throughout console
+
+- **Org rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
+- **Cluster default protocol** — `wss://` instead of `ws://` (**breaking**)
+- **Docs migration** — VitePress replaced with Fumadocs (Next.js)
 
 ### Fixed
-- Migration bootstrap edge cases when upgrading from older versions
-- PostgreSQL port 3306 silent override now throws an error
-- **Windows file-lock tolerance**: `TemplateManager` skips locked files instead of crashing
-- **mainClass reference**: Updated from `dev.kryonix.nimbus.NimbusKt` to `dev.nimbuspowered.nimbus.NimbusKt`
+
+- Migration bootstrap edge cases on upgrade
+- PostgreSQL port 3306 override now throws an error
+- Windows file-lock tolerance in template manager
 
 ---
 
-## v0.1.4 (April 5, 2026)
+## [0.1.4] - 2026-04-05
 
 API polish and health monitoring.
 
 ### Added
-- **Machine-readable API errors** (`ApiErrors.kt`): Standardized error codes like `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`, `RATE_LIMITED` across all endpoints
-- **`health` console command**: Quick overview of service health across all groups
-- **`/api/services/health` endpoint**: Aggregated health summary (total, healthy, degraded, unhealthy counts per group)
-- **Bridge health integration**: Velocity plugin reports health status to controller
-- **`list` command improvements**: Health column, Unicode rendering fixes
+
+- **Machine-readable API errors** — Standardized codes like `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`
+- **`health` command** — Overview of service health across all groups
+- **`/api/services/health` endpoint** — Aggregated health summary per group
+- **Bridge health integration** — Velocity plugin reports health status
 
 ### Changed
-- Smart Scaling module set to `default=false` — opt-in during SetupWizard instead of pre-installed
+
+- Smart Scaling module set to opt-in (not pre-installed during setup)
 
 ---
 
-## v0.1.3 (April 5, 2026)
+## [0.1.3] - 2026-04-05
 
 Java baseline bump and operational improvements.
 
-### Changed
-- **Java 16+ baseline**: Dropped Java 8/11 support, all plugins compiled to Java 16 bytecode
-- **Versioned JARs**: JAR filenames now include version number
-
 ### Added
-- **`version` command**: Shows running version, checks for available updates
-- **JDK auto-download**: Multi-provider fallback (Adoptium, Azul, Oracle) with streaming progress bars
-- **Smart start scripts**: Auto-restart after update, configurable restart behavior
-- **Windows ZIP support**: JDK auto-download handles `.zip` archives on Windows
 
-### Fixed
-- Screen session prompt overlap in console
-- Log encoding crash on non-UTF-8 systems
+- **`version` command** — Shows running version, checks for updates
+- **JDK auto-download** — Multi-provider fallback (Adoptium, Azul, Oracle) with streaming progress
+- **Smart start scripts** — Auto-restart after update
+
+### Changed
+
+- **Java 16+ baseline** — Dropped Java 8/11 support
 
 ---
 
-## v0.1.2 (April 5, 2026)
+## [0.1.2] - 2026-04-05
 
 Smart scaling and module extraction.
 
 ### Added
-- **Smart Scaling module** (`nimbus-module-scaling`):
-  - Time-based schedules (e.g., "scale up BedWars at 14:00 on weekends")
-  - Predictive warmup from 7-day rolling player count history
-  - Per-group configuration in `config/modules/scaling/*.toml`
-- **Phased startup**: Proxy services must reach READY state before any backend services start — prevents players connecting to proxies with no backends
-- **Dynamic Bridge commands**: Controller pushes command registry to Velocity plugin at runtime
+
+- **Smart Scaling module** — Time-based schedules, predictive warmup from 7-day player history
+- **Phased startup** — Proxies must reach READY before backends start
+- **Dynamic Bridge commands** — Controller pushes command registry to Velocity at runtime
 
 ### Changed
-- **Module extraction complete**: All permissions and display logic moved from core into standalone module JARs
-- **Plugin search**: Unified Hangar + Modrinth search with multi-select UI and automatic dependency resolution
 
-### Fixed
-- Release workflow CRLF handling on Windows
+- Permissions and Display logic fully extracted into standalone module JARs
 
 ---
 
-## v0.1.1 (April 4, 2026)
+## [0.1.1] - 2026-04-04
 
 Module system architecture and security hardening.
 
 ### Added
-- **Module system**: Dynamic loading via ServiceLoader + URLClassLoader
-  - `NimbusModule` interface with `init()` / `enable()` / `disable()` lifecycle
-  - `ModuleContext` providing EventBus, DatabaseManager, ServiceRegistry, GroupManager access
-  - Command registration, route registration, migration registration
-  - Dependency resolution with topological sort
-  - Version compatibility checks (minimum Nimbus version per module)
-  - Embedded modules auto-extracted from shadowJar during SetupWizard
-- **`modules` command**: `install`, `uninstall`, `list`, `info` subcommands
-- **`plugins` command**: Live search across Hangar + Modrinth with version matching
-- **`kick` / `broadcast` commands**: Player management from console
-- **Least-players lobby balancing**: New players routed to least-populated lobby
-- **Module API endpoints**: REST routes registered by modules
-- **Event-driven permission cache refresh**: Permissions update without restart
+
+- **Module system** — Dynamic loading with lifecycle hooks (`init` / `enable` / `disable`), dependency resolution, version compatibility checks, embedded module auto-extraction
+- **`modules` command** — Install, uninstall, list, info
+- **`plugins` command** — Live search across Hangar + Modrinth with version matching and dependency resolution
+- **`kick` / `broadcast` commands**
+- **Least-players lobby balancing**
 
 ### Changed
-- **Package rename**: `dev.nimbus` to `dev.kryonix.nimbus`
-- **ProtocolLib dependency removed**: All NMS interactions replaced with API-only approaches
-- **Interactive pickers**: Arrow-key selection for module install, group selection, etc.
+
+- Package rename from `dev.nimbus` to `dev.kryonix.nimbus`
+- ProtocolLib dependency removed (API-only approaches)
 
 ### Fixed
-- **Zip slip vulnerability** in agent template extraction (security)
-- **Scaling deadlock** when all instances of a group crash simultaneously
-- **Nametag rendering**: MiniMessage tags now parsed correctly in display names
-- **Graceful shutdown**: ScalingEngine properly stops before services are terminated
+
+- Zip slip vulnerability in agent template extraction
+- Scaling deadlock when all group instances crash simultaneously
+- Nametag MiniMessage rendering
 
 ### Security
-- Comprehensive security hardening audit across all input boundaries
-- Agent template extraction validates paths against directory traversal
+
+- Security hardening audit across all input boundaries
+- Agent template extraction validates against directory traversal
 - API input sanitization for command injection prevention
 
 ---
 
-## v0.1.0 (April 1, 2026)
+## [0.1.0] - 2026-04-01
 
-Initial public release. The complete Minecraft cloud system, built from scratch.
+Initial public release — the complete Minecraft cloud system, built from scratch.
 
 ### Core
-- Service lifecycle management: start, stop, restart, crash detection, auto-restart
-- Server groups with TOML configuration (`config/groups/*.toml`)
-- Port allocation: 25565+ for proxies, 30000+ for backends
-- Service naming: `<GroupName>-<N>` convention
-- Static services (persistent) and dynamic services (temporary)
-- Graceful shutdown order: game servers, then lobbies, then proxies
-- Shutdown confirmation: `shutdown` + `shutdown confirm` within 30 seconds
 
-### Scaling
-- Player-count-based auto-scaling with configurable thresholds
-- Scale-up cooldown: 30 seconds, scale-down cooldown: 120 seconds
-- Global service cap via `controller.max_services`
-- Paused during active stress tests
+- Service lifecycle: start, stop, restart, crash detection, auto-restart
+- Server groups with TOML configuration
+- Port allocation: 25565+ for proxies, 30000+ for backends
+- Static and dynamic services, graceful shutdown ordering
+- Player-count-based auto-scaling with configurable thresholds and cooldowns
 
 ### Server Software
-- **Paper-based**: Paper, Purpur, Pufferfish, Leaf, Folia
-- **Modded**: Forge, NeoForge, Fabric (+ optional Cardboard for Bukkit compat)
-- **Custom**: Any server JAR via direct URL
-- Auto-download from official sources
-- EULA auto-acceptance for supported software
-- Via plugin support: ViaVersion, ViaBackwards, ViaRewind with dependency enforcement
 
-### Proxy
-- Velocity auto-management: server list, forwarding secret, port config
-- Modern forwarding for 1.13+, legacy BungeeCord forwarding for older versions
-- Proxy sync: MOTD, tab list, chat formatting via separate TOML configs
-- Maintenance mode: global + per-group with whitelist and custom kick message
-- Nimbus Bridge: Velocity plugin with hub commands, cloud integration
+- Paper, Purpur, Pufferfish, Leaf, Folia, Forge, NeoForge, Fabric, Custom
+- Auto-download from official sources, EULA auto-acceptance
+- ViaVersion/ViaBackwards/ViaRewind support with dependency enforcement
 
-### API
-- REST API v0.2 with bearer token authentication
-- Auto-generated 64-char hex token, timing-safe comparison
-- Derived HMAC tokens for service-level access
-- Rate limiting: 120 req/min global, 5 req/min for stress endpoints
-- CORS with configurable origin whitelist
-- WebSocket live events stream (`/api/events`)
-- Bidirectional console per service (`/api/services/{name}/console`)
-- Endpoints: services, groups, status, players, maintenance, stress, reload, shutdown, load balancer, nodes, metrics, audit
+### Networking
 
-### Console
-- JLine3 interactive REPL with tab completion
-- 30+ commands: `list`, `start`, `stop`, `restart`, `info`, `groups`, `create`, `delete`, `exec`, `log`, `maintenance`, `stress`, `audit`, `reload`, `shutdown`, and more
-- ANSI-colored output via ConsoleFormatter
-- Banner display on startup
+- Velocity auto-management with modern + legacy forwarding
+- Proxy sync: MOTD, tab list, chat formatting, maintenance mode
+- TCP load balancer with round-robin/least-players, PROXY protocol v2
+- Geyser + Floodgate for Bedrock support
 
-### Database
-- SQLite (default), MySQL/MariaDB, PostgreSQL
-- Exposed ORM with versioned migrations (`MigrationManager`)
-- Core migrations: V1 (baseline tables), V2 (audit log)
-- Module migrations via `ModuleContext.registerMigrations()`
-- WAL mode + foreign keys for SQLite
-- SSL/TLS for MySQL/PostgreSQL connections
+### API & Console
 
-### Multi-Node Cluster
-- Agent nodes connect via WebSocket (Ktor Netty with native TLS)
-- Self-signed keystore auto-generation
-- Configurable trust: `tls_verify`, custom truststore
-- Placement strategies: least-services, least-memory, round-robin
-- Agent state persistence: `AgentStateStore` with PID tracking and service recovery
-- Heartbeat monitoring with configurable interval and timeout
-- Node failure handling: affected services marked CRASHED, rescheduled
+- REST API v0.2 with bearer token auth, WebSocket live events, bidirectional console
+- 30+ JLine3 console commands with tab completion and ANSI formatting
+- Rate limiting: 120 req/min global, 5 req/min stress endpoints
 
-### Load Balancer
-- Async TCP load balancer via Java NIO `AsynchronousServerSocketChannel`
-- Strategies: round-robin, least-players
-- PROXY protocol v2 for client IP passthrough
-- Backend health manager with failure tracking
-- Connection draining, idle timeout watchdog
-- Per-connection semaphore (configurable max connections)
+### Infrastructure
 
-### Plugins & SDK
-- **Nimbus SDK**: Server-side API for backend Minecraft servers (Spigot 1.8.8+, Paper, Folia)
-- **Nimbus Perms**: Permission plugin with builtin or LuckPerms provider
-- **Nimbus Display**: Server selector signs (1.13+) + NPCs via FancyNpcs (Paper 1.20+)
-- **Nimbus Bridge**: Velocity plugin for hub commands and cloud integration
-- Cross-version compatibility: `VersionHelper`, `SchedulerCompat`, `TextCompat`
-- Auto-deployed to backend servers via module-registered `PluginDeployment`
+- SQLite/MySQL/PostgreSQL via Exposed ORM with versioned migrations
+- Multi-node cluster via TLS WebSocket with placement strategies
+- One-command installers for Linux/macOS/Windows
+- GitHub Releases auto-updater with semver comparison
 
-### Bedrock
-- Geyser + Floodgate auto-download from GeyserMC API
-- Centralized `key.pem` management
-- Separate UDP port allocation per proxy
-- Auto-generated Geyser config
+### Plugins
 
-### Performance
-- Aikar's JVM flags (memory-aware tuning)
-- Paper/Purpur server config optimization
-- `jvm.optimize = true` by default
-
-### Stress Testing
-- `stress start <players> [group] [--ramp <seconds>]`
-- Distributes simulated players across backends respecting `max_players`
-- Scaling engine paused during active tests
-- Proxy MOTD + tab reflect simulated counts
-- REST API: start, stop, ramp, status
-
-### Monitoring
-- Metrics collection with 30-day auto-prune
-- Audit logging with 90-day retention (configurable)
-- Actor tracking: `system`, `console`, `api:admin`, `api:service`
-- `audit` command + `/api/audit` endpoint
-- Event bus: sealed event classes with `NimbusEvent.actor` field
-
-### Deployment
-- One-command installers: `curl | bash` (Linux/macOS), `irm | iex` (Windows)
-- Separate installer for controller and agent nodes
-- Java 21 auto-installed if missing
-- Auto-updater: GitHub Releases, semver comparison, backup + swap
-- Release workflow: GitHub Actions, manual trigger, draft releases
+- Nimbus SDK (Spigot 1.8.8+ through latest Paper/Folia)
+- Nimbus Perms (builtin or LuckPerms provider)
+- Nimbus Display (signs + NPCs via FancyNpcs)
+- Nimbus Bridge (Velocity hub commands + cloud integration)
+- Performance optimizer: Aikar's JVM flags + Paper/Purpur config tuning
+- Stress testing with simulated player load

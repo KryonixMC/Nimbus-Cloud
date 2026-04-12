@@ -1,508 +1,160 @@
 ---
 title: Roadmap
-description: Current development status, planned features, and long-term vision for Nimbus.
+description: Where Nimbus is headed — vision, current focus, and long-term goals.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-This page tracks where Nimbus is, where it's going, and why. Each version has a clear theme — features are grouped by the problem they solve, not by when someone thought of them.
+## Vision
+
+Nimbus exists to make running a Minecraft network **simple, fast, and self-sufficient**. One JAR, one config folder, no external dependencies beyond Java — whether you're running a 20-player lobby or a 2,000-player network across multiple machines.
+
+The long-term goal: **any operator, from solo hobbyist to large network team, can deploy and scale a Minecraft network in minutes** — with modded support, multi-node clusters, and production-grade reliability out of the box.
+
+Nimbus is not trying to be Kubernetes for Minecraft. It's trying to be the tool you reach for *instead* of Kubernetes — because for most Minecraft networks, the complexity of container orchestration is the problem, not the solution.
+
+---
+
+## Guiding Principles
+
+These shape what gets built and what gets cut:
+
+- **Zero external dependencies** — No database server, no web server, no Docker daemon required to get started. SQLite ships embedded, the API server is built in, everything works from a single JAR
+- **Convention over configuration** — Sensible defaults that work for 90% of use cases. Advanced operators can customize everything, but new users shouldn't need to
+- **Console-first** — The CLI is the primary interface. The dashboard and REST API are complementary, not required
+- **Vanilla to modded** — Paper lobbies and NeoForge modpacks are equally first-class. No feature should assume vanilla-only
+- **Operator autonomy** — Self-hosted, no phone-home, no telemetry, no vendor lock-in. Your infrastructure, your data
 
 <Callout type="info">
-  Nimbus follows [Semantic Versioning](https://semver.org/). Patch releases (0.x.Y) are backwards-compatible fixes and improvements. Minor releases (0.X.0) introduce new features. The API is not yet stable — breaking changes are possible before 1.0.
+  Nimbus follows [Semantic Versioning](https://semver.org/). The API is not yet stable — breaking changes are possible before 1.0. See the [Changelog](/docs/project/changelog) for detailed release history.
 </Callout>
 
 ---
 
-## Current Status
+## Now — Current Focus
 
-| Version | Status | Theme |
-|---------|--------|-------|
-| [v0.1.0 – v0.1.4](#v01x--foundation) | Released | Foundation & core cloud features |
-| [v0.2.0 – v0.2.1](#v02x--security--production-readiness) | Released | Security, stability & production readiness |
-| [v0.3.0 – v0.3.1](#v03x--competitive-features) | Released | Template stacking, warm pool, player module, remote CLI |
-| [v0.4.0 – v0.4.7](#v04x--web-dashboard) | Released (ALPHA) | Web Dashboard, modpack import, module loading fixes |
-| [v0.5.0 – v0.5.3](#v05x--modded-support) | Released | Modded client routing, mod list matching |
-| [v0.6.0 – v0.6.2](#v06x--dedicated-services) | Released | Dedicated services, unified memory, dashboard design system, overview telemetry |
-| [v0.7.0 – v0.7.3](#v07x--multi-node-cluster) | Released | Cluster TLS, placement pinning, state sync, failover, daemon mode |
-| [v0.8.0](#v08x--production-readiness-audit) | Released | Security hardening, HikariCP, 65 audit fixes, production-ready |
-| [Vision](#vision--cloud-native) | Planned | Docker, S3 storage, multi-controller HA |
+What's actively being worked on or is next in the queue.
 
----
+### Stabilize for Real-World Use (v0.9.x)
 
-## v0.1.x — Foundation
+The core engine, cluster system, and module framework are feature-complete for most use cases. The current focus is making everything rock-solid under real operator workloads.
 
-**Theme:** Build a complete, working Minecraft cloud system from scratch.
+| Goal | Why it matters |
+|------|----------------|
+| **Dashboard → BETA** | The web dashboard is currently ALPHA. Stabilize the UX, fix edge cases, and reach a state where operators can rely on it daily |
+| **Documentation completeness** | Several guides are thin or missing (advanced cluster topologies, backup strategies, migration from CloudNet/SimpleCloud). Docs need to match the feature set |
+| **Real-world deployment feedback** | Run Nimbus on production networks, collect operator pain points, and fix what actually breaks — not what we imagine might break |
+| **Error messages & diagnostics** | When something goes wrong, the operator should know *what* and *why* without reading source code. Better error context, actionable suggestions, diagnostic commands |
 
-Everything in v0.1.x was about getting the core right: start servers, manage groups, auto-scale, handle proxies, and provide an API. The full v0.1.x changelog is available on the [Changelog](/docs/project/changelog) page.
+### Community & Ecosystem
 
-### v0.1.0 — Initial Release (April 1, 2026)
-
-The first public release shipped a fully functional cloud system:
-
-- **Core Engine** — Service lifecycle, group configs, port allocation, phased startup (proxies first, then backends)
-- **Auto-Scaling** — Player-count-based scaling with configurable thresholds and cooldowns
-- **Velocity Proxy** — Auto-managed server list, modern + legacy forwarding, Via plugin support
-- **REST API v0.2** — Bearer token auth, WebSocket live events, bidirectional console
-- **Console** — JLine3 REPL with 30+ commands, tab completion, ANSI formatting
-- **Server Software** — Paper, Purpur, Pufferfish, Folia, Forge, Fabric, NeoForge, Custom
-- **SDK + Plugins** — Server SDK, Bridge (Velocity), Permissions, Display (signs + NPCs)
-- **Database** — SQLite/MySQL/PostgreSQL via Exposed ORM with versioned migrations
-- **Proxy Sync** — MOTD, tab list, chat formatting, maintenance mode
-- **TCP Load Balancer** — Async NIO with round-robin/least-players, PROXY protocol v2
-- **Bedrock** — Geyser + Floodgate auto-download and config generation
-- **Performance** — Aikar's JVM flags, Paper/Purpur config tuning
-- **Stress Testing** — Simulated player load with ramping and per-service distribution
-- **Multi-Node Cluster** — Agent nodes via WebSocket, TLS with self-signed certs, placement strategies
-- **Install Scripts** — One-command installers for Linux/macOS/Windows (controller + agent)
-- **Auto-Updater** — GitHub Releases based, semver comparison, backup + swap
-- **Cross-Version** — All plugins support Spigot 1.8.8+ through latest Paper/Folia
-
-### v0.1.1 — Module System (April 4, 2026)
-
-- **Dynamic Module Loading** — ServiceLoader + URLClassLoader architecture
-- **Module API** — NimbusModule, ModuleContext, lifecycle hooks, dependency resolution
-- **Extracted Modules** — Permissions, Display, Smart Scaling as standalone JARs
-- **Security Hardening** — Zip slip fix in agent, scaling deadlock fix
-- **Plugin Search** — Live search on Hangar + Modrinth with multi-select and dependency resolution
-- **Package Rename** — `dev.nimbus` to `dev.kryonix.nimbus` (later `dev.nimbuspowered.nimbus`)
-
-### v0.1.2 — Smart Scaling (April 5, 2026)
-
-- **Smart Scaling Module** — Time-based schedules, predictive warmup from 7-day player history
-- **Phased Startup** — Proxy must be READY before any backends start
-- **Dynamic Bridge Commands** — Controller pushes command registry to Velocity plugin
-- **Module Extraction** — Permissions and Display logic fully moved out of core
-
-### v0.1.3 — Quality of Life (April 5, 2026)
-
-- **Java 16+ Baseline** — Dropped legacy Java 8/11 support
-- **`version` Command** — Shows running version, checks for updates
-- **JDK Auto-Download** — Multi-provider fallback with streaming progress
-- **Versioned JARs** — Smart start scripts with auto-restart after update
-
-### v0.1.4 — API Errors & Health (April 5, 2026)
-
-- **Machine-Readable Errors** — `ApiErrors.kt` with codes like `SERVICE_NOT_FOUND`, `VALIDATION_FAILED`
-- **Health System** — `health` command, `/api/services/health` endpoint, Bridge integration
-- **Smart Scaling Default** — Module set to `default=false` (opt-in during setup)
+| Goal | Why it matters |
+|------|----------------|
+| **Module developer experience** | The Module API (`nimbus-module-api`) needs better documentation, examples, and a published Maven artifact so third-party developers can build modules |
+| **Migration guides** | Operators coming from CloudNet or SimpleCloud need a clear path. Concept mapping, config translation, step-by-step guides |
+| **Community module registry** | A way for operators to discover and share community-built modules beyond the built-in ones |
 
 ---
 
-## v0.2.x — Security & Production Readiness
+## Next — Path to 1.0
 
-**Theme:** Make Nimbus production-ready. Fix the gaps that matter when real players are online and real money is on the line.
+What needs to be true before Nimbus can call itself stable. These are **outcomes**, not a feature list — the specific implementation may change.
 
-### v0.2.0 — Security & Production Readiness (April 7, 2026)
+### Stable API Contract
 
-Three pillars: **resilience** (services survive controller crashes), **security** (proper API auth), and **correctness** (no duplicate services after restart).
+The REST API (currently v0.2) needs a stability guarantee. Operators and tool developers need confidence that their integrations won't break on minor updates.
 
-- **Database Migration System** — `MigrationManager` with versioned schema changes, auto-bootstrap for pre-0.2.0 databases, module migrations via `ModuleContext.registerMigrations()`
-- **Audit Logging** — `AuditCollector` with EventBus subscription, actor tracking, `audit` console command, `GET /api/audit` endpoint, configurable retention (default 90 days)
-- **Environment Variable Overrides** — `NIMBUS_API_TOKEN`, `NIMBUS_DB_*`, `NIMBUS_CLUSTER_TOKEN`, `NIMBUS_AGENT_TOKEN`, `NIMBUS_AGENT_CONTROLLER` override TOML config
-- **Cluster TLS** — Netty engine with native `sslConnector`, auto-generated self-signed keystore, `wss://` default (breaking)
-- **Local PID Persistence** — `ControllerStateStore` persists service PIDs to `state/services.json`, re-adopts running processes via `ProcessHandle.adopt()` (Windows-compatible)
-- **State Reconciliation** — Grace period (`reconciliation_delay`, default 10s) lets agents report running services before new instances start
-- **JWT Scoped API Auth** — Opt-in via `jwt_enabled = true`, HMAC-SHA256 tokens with 13 granular scopes, token management endpoints, service-level JWT
-- **Leaf Support** — Leaf (Paper fork) added as supported server software
-- **Org Rename** — `KryonixMC` to `NimbusPowered`, package `dev.nimbuspowered.nimbus`
-- **Fumadocs** — Documentation migrated from VitePress to Next.js + Fumadocs
-- **Interactive Pickers** — Arrow-key selection replacing Y/N prompts throughout
+- Versioned API with deprecation policy
+- Published OpenAPI/Swagger spec
+- Breaking changes only on major versions
 
-### v0.2.1 — Polish & Hardening (April 7, 2026)
+### Operational Confidence
 
-- **Console command feedback** — `start`, `stop`, `restart` now check return values and report actual success/failure. `start` shows allocated service name and port
-- **Config validation** — `controller.max_memory`, `bedrock.base_port`, and `database.port` validated at startup instead of failing later
-- **Scaling debug logging** — Cooldown and pending-service skips now logged at DEBUG level
-- **Memory parsing warnings** — Invalid cluster node memory formats logged instead of silently returning 0
-- **Proxy sync error details** — Full stack traces on TOML parse failures
+Operators running Nimbus in production need to trust that it handles failure gracefully and recovers without intervention.
 
----
+- Comprehensive integration test suite covering lifecycle, scaling, cluster failover
+- Chaos testing: random service kills, network partitions, disk full scenarios
+- Documented backup and disaster recovery procedures
+- Upgrade path testing (can you go from 0.8 → 1.0 without data loss?)
 
-## v0.3.x — Competitive Features
+### Performance Baselines
 
-**Theme:** Close the gaps with SimpleCloud and CloudNET. Add the features that make operators choose Nimbus over alternatives.
+Quantified performance so operators can capacity-plan:
 
-### v0.3.0 — Competitive Features (April 7, 2026)
+- Published benchmarks: startup time, scaling latency, API throughput, memory overhead per service
+- Performance regression tests in CI
+- Tuning guide for large networks (500+ services, 10+ nodes)
 
-Five major features closing the gap with SimpleCloud and CloudNET:
+### Polish
 
-- **Template Stacking** — `templates = ["base", "overlay"]` in group config, applied in order (later overrides earlier). Reduces duplication across groups sharing common plugins. Full agent/cluster protocol support
-- **Warm Pool / Prepared Services** — New `PREPARED` service state with `WarmPoolManager` background replenishment (15s loop). Configurable via `scaling.warm_pool_size` per group. Prepared services start in seconds instead of minutes
-- **Player Module** (`nimbus-module-players`) — Centralized player tracking as a controller module. In-memory map + DB persistence (`player_sessions`, `player_tracking`). REST endpoints, console commands, Bridge remote execution (`/cloud players`). Clean event-driven architecture via `POST /api/proxy/events`
-- **Service Deployments** — Hash-based copy-back of changed files from service to template on stop. Configurable via `lifecycle.deploy_on_stop` and `lifecycle.deploy_excludes`
-- **Remote File Management API** — Browse, read, write, and delete files on agent-hosted services via REST. Transparent proxy through cluster WebSocket with path traversal protection
-- **Module Auto-Sync** — Embedded module JARs automatically updated on startup, no manual copying after rebuilds
+The kind of work that separates "it works" from "it's good":
 
-
-### v0.3.1 — Remote CLI (April 7, 2026)
-
-A standalone binary (`nimbus-cli`, 11MB JAR) that connects to the controller's API and provides the full JLine console experience remotely:
-
-- **Remote CLI** (`nimbus-cli`) — Standalone JLine3 REPL with same commands, tab completion, and ANSI formatting as the local console. Connects via REST (tab completion) + WebSocket (command streaming, live events, screen sessions). Interactive setup wizard on first run, connection profiles saved in `~/.nimbus/cli.json`
-- **CommandOutput migration** — All 26+ console commands refactored to use `CommandOutput` interface as canonical execution path. `execute(args)` delegates to `execute(args, output)` via `ConsoleOutput()` — zero logic duplication
-- **Console API endpoints** — `POST /api/console/complete` for tab completion, `WS /api/console/stream` for multiplexed command execution, event streaming, and screen sessions
-- **CLI session tracking** — Every Remote CLI connection logged in `cli_sessions` DB table with client username, hostname, OS, IP, GeoIP location, duration, and command count. New `sessions` command (`sessions active`, `sessions history`)
-- **CLI connected/disconnected events** — Live events in local console showing who connected from where: `◆ CLI jonas@DESKTOP-ABC connected from 85.123.45.67 (Berlin, Germany) [Windows 11 amd64]`
-- **GeoIP lookup** — Async location resolution via ip-api.com for public IPs
-- **Install scripts** — `install-cli.sh` (Linux/macOS) and `install-cli.ps1` (Windows)
+- Consistent error handling across all console commands and API endpoints
+- Configuration validation with helpful messages on every field
+- Graceful handling of every edge case found in real deployments
 
 ---
 
-## v0.4.x — Web Dashboard
+## Later — Long-Term Goals
 
-**Theme:** Manage your cloud from the browser. The dashboard is a separate Next.js application that connects to the existing REST API + WebSocket infrastructure.
+These are directions, not commitments. They'll be pursued if there's real demand and they align with the vision. Ordered roughly by expected impact.
 
-<Callout type="warn">
-  The Web Dashboard is currently in **ALPHA**. Features may change, and bugs are expected.
-</Callout>
+### Docker Runtime
 
-### v0.4.0 — Web Dashboard (April 8, 2026)
+Run services as containers instead of bare JVM processes. Useful for operators who want resource isolation, reproducible environments, or CI/CD-driven server images.
 
-A self-hosted web UI available at [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org):
-
-- **Web Dashboard** (ALPHA) — Full management UI built with Next.js + shadcn/ui. Connect by entering your controller's API URL and token. Features:
-  - Service overview with live status, player counts, uptime
-  - Group management: view, create, configure server groups
-  - Real-time console per service with ANSI rendering
-  - Plugin management: search Hangar + Modrinth, install plugins
-  - Modpack import from Modrinth, CurseForge, and server pack ZIP upload
-  - Stress testing: start, stop, monitor
-  - Audit log viewer with filters
-  - Node management for multi-node clusters
-  - Module configuration (Display, Permissions, Players, SyncProxy)
-  - Metrics visualization with charts
-  - Responsive design (desktop + mobile)
-- **New API endpoints** — Modpack import (`/api/modpacks/*`), plugin management (`/api/plugins/*`), and software versions (`/api/software/*`) added to core for dashboard and external tool consumption
-
-### v0.4.1 — CurseForge & Server Pack Import (April 8, 2026)
-
-CurseForge modpack support and server pack ZIP upload — the most requested modpack feature:
-
-- **CurseForge support** — Import modpacks from CurseForge via slug, URL, or server pack ZIP. Optional `[curseforge] api_key` in `nimbus.toml` for API-based fetching
-- **Server pack ZIP import** — Upload pre-built server packs (e.g. ATM10 `ServerFiles-6.6.zip`) via CLI or dashboard. Auto-detects modloader, MC version, and mod count from installer JARs and startup scripts
-- **Dashboard upload** — Drag-and-drop file upload in the Import Modpack dialog. Streamed directly to controller (no memory buffering)
-- **NeoForge Windows fix** — Directory junctions as symlink fallback, proper `libraries/` detection
-
-### v0.4.2 — CORS Hotfix (April 9, 2026)
-
-- **CORS defaults** — New installs now include `allowed_origins` for the dashboard. Existing installs with missing field get a safe default instead of blocking all dashboard requests
-
-### v0.4.3 — Dashboard Proxy (April 9, 2026)
-
-- **Server-side proxy** — Hosted dashboard can connect to HTTP controllers without TLS certificates. SSE bridge for WebSocket connections through the proxy
-- **Chunked modpack upload** — Large modpack uploads (up to 2 GB) split into 4 MB chunks with zero RAM buffering on client, proxy, and controller
-
-### v0.4.4 – v0.4.7 — Module Loading Fixes (April 9, 2026)
-
-A series of rapid-fire fixes for module loading issues discovered on production VPS deployments:
-
-- **NeoForge symlink traversal** — `Files.walk()` now follows symlinks so `libraries/` is found correctly on Linux
-- **Module loading bypass** — `ServiceLoader` replaced with `main_class` in `module.properties` for reliable direct class loading on all Java 21 configurations
-- **Module lifecycle ordering** — `initAll()` (registers migrations) runs before DB migrations, `enableAll()` (queries DB) runs after — guarantees tables exist before modules query them
-- **Error handling** — `catch (Throwable)` instead of `catch (Exception)` to surface `NoClassDefFoundError` and `ServiceConfigurationError`
-
-### How to connect
-
-1. Open [dashboard.nimbuspowered.org](https://dashboard.nimbuspowered.org) in your browser
-2. Enter your controller's API URL (e.g., `http://your-server:8080`)
-3. Enter your API token (shown in console on startup, or set in `nimbus.toml`)
-4. Click **Connect** — the dashboard connects directly to your controller's REST API
-
-<Callout type="info">
-  The dashboard runs entirely in your browser. Your API token is stored locally and all requests go directly from your browser to your controller. No data passes through any third-party server.
-</Callout>
-
----
-
-## v0.5.x — Modded Support
-
-**Theme:** Make modded servers first-class citizens. Automatic routing, proxy configuration, and smart client matching so operators can run multiple modpacks on one network without manual setup.
-
-### v0.5.0 — Modded Client Routing (April 9, 2026)
-
-- **Modded client detection** — Bridge detects Forge/NeoForge clients via Velocity's internal `ConnectionType` (FML handshake marker) and routes them to modded backend groups instead of the Paper lobby
-- **Automatic Velocity modded config** — `VelocityConfigGen` detects modded backends and auto-sets `announce-forge = true`, increases `connection-timeout` (10s) and `read-timeout` (60s) for large modpack handshakes
-- **Modded groups cache** — Bridge fetches group software types from `/api/groups` on startup and refreshes on controller reconnect
-
-### v0.5.1 — Modded Hotfixes (April 9, 2026)
-
-- **NeoForwarding mod** — NeoForge 1.20.2+ now uses [NeoForwarding](https://modrinth.com/mod/neoforwarding) instead of proxy-compatible-forge (which caused `Empty key` errors)
-- **Connection type detection** — Uses Velocity's internal `ConnectionType` instead of `player.getModInfo()` which was empty at initial server selection
-- **Kick loop prevention** — Modded clients kicked from a modded server are no longer redirected to a vanilla lobby
-
-### v0.5.2 — Velocity Max Packs (April 9, 2026)
-
-- **`velocity.max-known-packs`** — Auto-sets `-Dvelocity.max-known-packs=512` on proxy JVM args when modded backends exist. Default limit of 64 caused silent disconnects with large modpacks (400+ mods)
-
-### v0.5.3 — Mod List Matching (April 9, 2026)
-
-Smart routing based on mod list overlap — the key feature for networks running multiple modpacks:
-
-- **ModScanner** — Scans template `mods/` directories on group load, extracting mod IDs from NeoForge/Forge `mods.toml`, Fabric `fabric.mod.json`, and legacy `mcmod.info`. Cached on `ServerGroup`, exposed via `GET /api/groups` as `modIds`
-- **Protocol version filtering** — Client protocol version must match the group's MC version (prevents 1.20.1 Forge clients landing on 1.21.1 NeoForge servers)
-- **Connection type compatibility** — `LEGACY_FORGE` matches Forge only; `MODERN_FORGE` matches Forge or NeoForge
-- **Mod overlap scoring** — `|clientMods ∩ serverMods| / |serverMods|` with 0.5 threshold. Best-scoring group wins, ties broken by player count
-- **Alternate group fallback on kick** — Modded clients kicked from one group try a different modded group before disconnecting
-
----
-
-## v0.6.x — Dedicated Services
-
-**Theme:** Sometimes you don't want a template. Let operators drop a server into a managed directory with a fixed port and a name — no scaling, no template juggling, no plugin patching. And while we're in there, stop pretending the controller only knows about its own heap: read real process memory for every service.
-
-### v0.6.0 — Dedicated Services (April 10, 2026)
-
-- **Dedicated Services** — A new first-class concept alongside groups. Single instance, fixed name, fixed port, managed directory under `paths.dedicated/<name>/`, no template. Ideal for sandbox servers, custom modpacks the operator hand-curates, or anything that doesn't fit the "spawn N identical copies from a template" model. On first start Nimbus auto-creates the directory and downloads the correct server JAR (Paper/Purpur/Folia/Forge/NeoForge/Fabric/etc.)
-- **Dedicated modpack import** — `/api/dedicated/modpack/import` (Modrinth or CurseForge source) and `/api/dedicated/modpack/upload` (ZIP / `.mrpack` file) install directly into the dedicated service's directory, detect the modloader and MC version from the pack, and auto-install the correct proxy forwarding mod
-- **Dedicated page in the dashboard** — List, create, edit, delete, start/stop/restart. The create flow auto-fetches software list and versions the same way the groups page does. Modpack import has source and upload modes with a resolve-preview step
-- **Controller Info sheet** — New slide-out sheet in the dashboard sidebar showing runtime stats (version, uptime, memory budget with live usage) and the full changelog fetched from the docs folder on GitHub, with per-version collapsibles and the first entry auto-expanded
-- **Unified memory reading** — `ProcessMemoryReader` reads resident set size from `/proc/<pid>/status` on Linux/WSL or `tasklist` on native Windows. `ServiceMemoryResolver` is the single source of truth used by every surface (services list, health command, info sheet, dashboard). Previously only the Velocity proxy (which runs the bridge SDK) had accurate memory — every other service showed 0. Now modded backends, dedicated services, and custom JARs all report real RSS
-- **Agent memory heartbeats** — Cluster agents read RSS on their own host and push it in the service heartbeat so the controller shows correct memory for remote services too
-- **SDK simplified** — `reportHealth(tps)` only reports TPS now. Memory is the controller's job. Backwards-compatible: the API still accepts the old body shape
-- **Proxy forwarding sync on every start** — `syncProxyForwardingMods` runs on every service prepare (groups and dedicated) and cleans up stale mods from other modloaders if the group's software was changed. The NeoForge 1.20.1 ↔ 1.20.2 swap between proxy-compatible-forge and NeoForwarding now happens automatically
-- **Dashboard sidebar redesign** — Nav split into labeled sections (Overview, Infrastructure, Operations, Monitoring, Modules) with tighter spacing. Login page now uses `banner.svg` instead of the square icon
-
-### v0.6.1 — Dashboard Design System (April 10, 2026)
-
-- **Unified design system across every dashboard page** — A canonical `<PageHeader>` (title + description + actions + hairline separator), shared `<StatCard>`, `<EmptyState>`, `<SectionLabel>` and `<MemoryBar>` components, plus a new `<SheetBody>` + `SheetContent size="..."` prop so every sheet (Info, Display, Perms, Player) follows the exact same layout. Fixes the long-standing "Display edit sheet title is weirdly indented" bug caused by double-padding, and gets rid of pixel-hardcoded widths and `p-0` hacks
-- **Accent color tuned to the logo** — All color tokens moved from hue 210 (teal-cyan) to hue 235 (sky-blue) with lightness matched to the cloud icon. Buttons, focus rings and chart colors now belong to the brand
-- **Historical memory charts** — New `service_metric_samples` table (migration V4) writes memory RSS + player count every 30 s for every running service. `GET /api/services/{name}/metrics/history?minutes=60` returns the history. The service detail page pre-loads the last hour on mount and keeps appending live samples — no more charts that start blank when you open the page
-- **TPS dropped from the dashboard** — TPS was only reported by SDK-enabled services, so half the rows showed fake numbers. Services list and service detail now focus on memory (with an inline `MemoryBar` showing used / max and a tone-coded fill). TPS is still tracked internally for health checks
-- **Dashboard breadcrumbs** now mirror the sidebar labels exactly, including the missing `Dedicated` mapping
-- **Audit log dashboard empty-state bug fixed** — Root cause was `/api/audit` returning `mapOf<String, Any?>`, which kotlinx.serialization can't serialize, so every request silently 500'd. Proper `@Serializable` DTOs now
-
-### v0.6.2 — Overview Telemetry & Phosphor Icons (April 10, 2026)
-
-- **Controller host telemetry on the Overview page** — New `SystemInfoCollector` reads OS name/version, CPU model + cores, live system/process CPU load, system RAM used/total, Java version/vendor and hostname from the controller's host. Exposed as `system` on `GET /api/controller/info`. Rendered in a new `<SystemStatsCard>` with CPU and RAM bars plus a specs grid. The old slide-out Info Sheet is gone — all runtime data lives on Overview now
-- **Cluster nodes show full system specs** — The cluster protocol's `AuthRequest` gained `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`. `HeartbeatResponse` gained `processCpuLoad`. Agents report all of this at auth time; the Nodes page became a grid of `<SystemStatsCard>` (one card per node) so every remote agent shows the same rich telemetry as the controller host
-- **Agent memory heartbeat fix** — `getUsedMemoryMb()` on the agent was returning the agent JVM's own heap usage instead of system-wide memory, making the Nodes page show nonsensical percentages. Now uses `osBean.totalMemorySize - osBean.freeMemorySize`
-- **"What's new" accordion on Overview** — Shows only the latest release inline, with a "Full changelog" button linking to the docs. Collapsed by default, lazy-fetches on first open — no GitHub hit on every Overview load
-- **Light/dark theme toggle** — `next-themes`-powered provider wired into the root layout with a toggle button in the site header
-- **Phosphor Icons (Regular weight) across the dashboard** — All 51 unique icons across 21 files migrated from `lucide-react` to `@phosphor-icons/react` via a new central `src/lib/icons.tsx` wrapper. Call sites only needed an import-path swap
-
----
-
-## v0.7.x — Multi-Node Cluster
-
-**Theme:** Make multi-node clusters production-ready. Easy setup, stateful services that float between nodes, automatic failover, and the operational hardening that comes from live end-to-end testing.
-
-### v0.7.0 — Cluster Setup & State Sync (April 11, 2026)
-
-The easy-setup release: agents auto-pin the controller's TLS cert on first connect, services can be pinned to specific nodes, and stateful services float across the cluster with automatic state persistence.
-
-- **Easy cluster setup** — Agent setup wizard fetches the controller's TLS fingerprint via `/api/cluster/bootstrap` (gated by cluster token). User confirms the fingerprint, wizard saves it to `agent.toml` — no keytool, no truststore, SSH-style trust-on-first-use
-- **Placement pinning** — `[group.placement] node = "worker-1"` or `[dedicated.placement] node = "..."` pins services to a specific agent. `fallback = wait | local | fail` controls offline behavior
-- **Dynamic state sync** — `[group.sync] enabled = true` stores a canonical copy on the controller. Agent pulls delta on start, pushes on graceful stop. Atomic staging, per-service lock, SHA-based delta detection
-- **Service name stability** — Lowest-numbered CRASHED/STOPPED slot is reused instead of always incrementing, keeping `Lobby-1` as `Lobby-1` across crash-respawn cycles
-- **Dedicated services on agent nodes** — `[dedicated.placement]` with mandatory state sync. Controller's `dedicated/<name>/` is the canonical copy
-- **Cluster TLS & Security guide** — New docs page covering threat model, cert rotation, custom CA, troubleshooting
-
-### v0.7.1 — Sync Hardening (April 11, 2026)
-
-- **Sync health metrics** — Per-service canonical size, last push time, in-flight status on `GET /api/metrics` (Prometheus format)
-- **Dashboard sync indicators** — `nodeId` column, sync health badge, "Sync now" action, global placement/sync toast listener
-- **Slot race fix** — Mutex + atomic register prevents two concurrent scale-ups from claiming the same service name
-
-### v0.7.2 — Sync Simplification (April 11, 2026)
-
-Live-sync (periodic snapshots, manual trigger, flush coordination) removed in favor of graceful-stop-only persistence. Simpler, more reliable, no operational complexity.
-
-- **Template download streaming** — Agent streams ZIP to disk with 64 KB buffer instead of loading into heap (prevents OOM on 512 MB agents)
-- **SHA tolerance** — Receiver accepts actual streamed bytes when files change between manifest scan and upload
-- **Ready timeouts raised** — 180s controller/agent, 240s modded (from 60/120/180)
-
-### v0.7.3 — Cluster Hardening (April 12, 2026)
-
-End-to-end failover testing with live agents uncovered cascading failures. This release breaks the cascade at every layer.
-
-- **Marker-file orphan sweep** — `.nimbus-owner` markers replace `ProcessHandle.commandLine()` (broken on Windows). Both agent and controller kill orphaned backends on recovery
-- **Reconnect reconciliation** — Agent sends `runningServices` on every auth; controller purges ghost entries the agent doesn't claim
-- **`POST /api/shutdown`** — REST endpoint for daemon-mode controllers with no TTY
-- **Daemon mode** — Controller detects headless environment and stays alive without JLine
-- **Graceful shutdown ordering** — `ShutdownAgent` sent before cluster server teardown, not after
-- **Agent-crash failover** — `NodeManager.onNodeFailover` hook + `ServiceManager.handleNodeFailover` purges CRASHED entries and re-places
-- **Railway-style cluster topology** — Interactive dashboard canvas with draggable cards, orthogonal edge routing, heartbeat pulse animations
-
----
-
-## v0.8.x — Production Readiness Audit
-
-**Theme:** Harden every layer for production deployment. A comprehensive 65-finding audit covering API security, cluster TLS, service lifecycle, database integrity, module safety, Windows compatibility, and install scripts — all resolved in a single release.
-
-### v0.8.0 — Production Readiness (April 12, 2026)
-
-The "make it bulletproof" release. A full security and stability audit uncovered 65 findings (7 critical, 17 high, 19 medium, 22 low). All resolved.
-
-**Security hardening:**
-- All API endpoints authenticated (except `/api/health`)
-- Path traversal protection on file upload endpoints
-- Blank cluster token no longer bypasses authentication
-- Hardcoded keystore password replaced with auto-generated random
-- Cluster token moved from URL query strings to Authorization header
-- CORS default restricted from wildcard to dashboard + localhost
-- UUID validation on proxy event endpoints
-
-**Stability & data integrity:**
-- HikariCP connection pool for MySQL/PostgreSQL (configurable pool size)
-- Advisory locks prevent concurrent migration races
-- `runBlocking` deadlock in WebSocket handlers eliminated
-- Thread-safe collections for concurrent service operations
-- Atomic state writes with cross-volume fallback
-- ZIP bomb protection on template extraction
-
-**Database migrations:**
-- V5: Timestamp columns widened to VARCHAR(40)
-- V6: Performance indexes, actor column widened, BIGINT IDs for high-volume tables
-
-**Operational improvements:**
-- Install scripts restart on exit code 10 (auto-update support)
-- Agent exponential reconnect backoff (1s → 60s)
-- Windows native Java detection (Program Files paths + JAVA_HOME)
-- Configurable scaling tick interval and HikariCP pool size
-- MOTD broadcast debouncing under rapid player churn
-
----
-
-## Vision — Cloud-Native
-
-**Theme:** Enterprise features for large networks. These are long-term goals, not promises.
-
-### Docker Runtime Module
-
-Run services as Docker containers instead of bare JVM processes:
-
-- Custom service factory registered via module system
+- Optional module — bare JVM remains the default
 - Configurable base image per group
 - Port mapping, volume mounts, resource limits
-- Container logs forwarded to controller
-- Enables CI/CD workflows for custom server images
+- Container logs forwarded to controller console
 
-### S3 / SFTP Template Storage
+### Pluggable Template Storage (S3 / SFTP)
 
-Pluggable template storage backends beyond local filesystem:
+Template storage backends beyond the local filesystem. Becomes important for large clusters where copying templates between nodes is a bottleneck.
 
-- **S3** — Store templates in AWS S3, MinIO, or compatible storage
-- **SFTP** — Remote template storage on dedicated file servers
-- Template sync across cluster nodes without manual copying
-- Hash-based cache invalidation (already implemented for agent template verification)
+- S3, MinIO, or compatible object storage
+- SFTP for remote file servers
+- Hash-based cache invalidation (the foundation already exists in agent template sync)
 
-### Multi-Controller HA
+### Multi-Controller High Availability
 
-Remove the single point of failure by supporting multiple controllers:
+Remove the controller as a single point of failure. This is the most architecturally complex item on the roadmap and will only be pursued if large networks need it.
 
 - Leader election for placement decisions
 - Shared state via database (already the case for most data)
-- Automatic failover: if leader dies, another controller takes over
-- Agent reconnects to any available controller
+- Automatic failover when the leader dies
+- Agents reconnect to any available controller
 
-This is a significant architectural change and will only be pursued if there's real demand from large networks.
+### Kubernetes Operator
 
-### Web Dashboard Enhancements
-
-The ALPHA dashboard will continue to evolve:
-
-- File browser (built on Remote File Management API)
-- Template management and editing
-- ~~Permission group editor~~ — v0.4.0 ✓
-- ~~Real-time metrics dashboards with historical data~~ — v0.6.1 ✓ (memory charts with 30s sampling)
-- Multi-language support
-
-### Cloudflare DNS Module
-
-Automatically manage DNS records for services:
-
-- Create SRV records when proxy services start
-- Remove records when services stop
-- Configurable per group (which domain, which zone)
-- Useful for networks with multiple proxy endpoints
-
-**Inspiration:** CloudNET v4's Cloudflare module.
+For operators who *do* want Kubernetes — a native operator that manages Nimbus controllers and agents as Kubernetes resources. This is the furthest-out item and may never be built if the Docker runtime module covers enough use cases.
 
 ---
 
-## Feature Audit
+## Completed Milestones
 
-Transparent assessment of current feature maturity. This helps you understand what's battle-tested and what's newer.
+For detailed release notes, see the [Changelog](/docs/project/changelog).
 
-| Feature | Maturity | Notes |
-|---------|----------|-------|
-| Service Lifecycle | 5/5 | Core loop is solid — start, stop, crash recovery, restart limits |
-| Auto-Scaling (player-based) | 5/5 | Cooldowns, thresholds, global caps, stress test awareness |
-| Smart Scaling (time/predictive) | 4/5 | Works well, but requires `nimbus-module-scaling` (not in core) |
-| REST API | 5/5 | 17 route files, rate limiting, CORS, JWT scoped auth (opt-in), all endpoints authenticated, path traversal protection |
-| WebSocket Events | 4/5 | Live events + bidirectional console work reliably |
-| Multi-Node Cluster | 5/5 | TLS fingerprint pinning, placement pinning, state sync, orphan sweep, reconnect reconciliation, failover, daemon mode |
-| TCP Load Balancer | 4/5 | Async NIO, PROXY protocol v2, health checks — production-capable |
-| Module System | 5/5 | ServiceLoader, dependency resolution, versioning, SetupWizard integration |
-| Permission System | 4/5 | Groups, inheritance, tracks, meta, LuckPerms — audit integration could go deeper |
-| Template System | 5/5 | 10+ server software types, auto-download, config patching, symlinks |
-| Database | 5/5 | SQLite/MySQL/PostgreSQL, HikariCP pool, advisory migration locks, V1–V6 auto-apply |
-| Audit Logging | 4/5 | Batch writes, 90-day retention, actor tracking — good coverage |
-| Stress Testing | 4/5 | Ramping, per-service distribution, scaling pause — works well |
-| Proxy Sync (MOTD/Tab/Chat) | 4/5 | Three separate configs, maintenance mode, stress count reflection |
-| Bedrock/Geyser | 3/5 | Works but minimal customization, Velocity-only |
-| Plugin Search | 5/5 | Hangar + Modrinth, multi-select, dependency resolution, version-aware |
-| Performance Optimizer | 4/5 | Aikar flags + Paper/Purpur config tuning, memory-aware |
-| Console UX | 5/5 | JLine3, interactive pickers, 30+ commands, ANSI formatting |
-| Install Scripts | 5/5 | Linux/macOS/Windows, Java auto-install, systemd/screen integration, SHA-256 verification, exit code 10 restart loop |
-| Auto-Updater | 5/5 | Semver comparison, backup, swap, JAR validation, install script restart loop, manual prompt for major versions |
-| Template Stacking | 4/5 | Multi-template composition, backwards compatible |
-| Warm Pool | 4/5 | Pre-staged services, background replenishment |
-| Player Module | 3/5 | Tracking, sessions, history — needs real-world testing |
-| Service Deployments | 4/5 | Hash-based copy-back, works on controller and agent nodes |
-| State Sync | 4/5 | Graceful-stop persistence, manifest-based delta, placement pinning, failover tested end-to-end |
-| Dedicated Services | 4/5 | Single-instance, fixed-port, proxy toggle, modpack import, cluster placement with sync |
-| Remote CLI | 5/5 | Full JLine3 experience, tab completion, events, screen sessions, session tracking with GeoIP, authenticated endpoints |
-| Web Dashboard | 3/5 | ALPHA — design system, memory charts, cluster topology canvas, light/dark theme, Phosphor icons |
-| Modded Client Routing | 4/5 | Protocol filtering, connection type matching, mod list overlap scoring, alternate group fallback |
+| Version | Date | Theme |
+|---------|------|-------|
+| **v0.8.1** | April 13, 2026 | 15 production-critical fixes + cluster TLS keystore bug |
+| **v0.8.0** | April 12, 2026 | Production readiness audit — 65 findings resolved across security, stability, and performance |
+| **v0.7.0 – v0.7.3** | April 11–12, 2026 | Multi-node cluster — TLS setup wizard, placement pinning, state sync, failover, daemon mode |
+| **v0.6.0 – v0.6.2** | April 10, 2026 | Dedicated services — single-instance servers, unified memory reading, dashboard design system |
+| **v0.5.0 – v0.5.3** | April 9, 2026 | Modded support — client routing, mod list matching, NeoForwarding, protocol filtering |
+| **v0.4.0 – v0.4.7** | April 8–9, 2026 | Web dashboard (ALPHA) — Next.js UI, modpack import, CurseForge, server pack upload |
+| **v0.3.0 – v0.3.1** | April 7, 2026 | Competitive features — template stacking, warm pool, player module, Remote CLI |
+| **v0.2.0 – v0.2.1** | April 7, 2026 | Security & production readiness — migrations, audit logging, cluster TLS, PID persistence |
+| **v0.1.0 – v0.1.4** | April 1–5, 2026 | Foundation — core engine, 30+ commands, REST API, SDK, proxy, scaling, cluster, cross-version plugins |
 
 ---
 
-## Competitive Position
+## How This Roadmap Works
 
-How Nimbus compares to the two major Minecraft cloud systems as of April 2026:
+This roadmap is organized by **time horizon**, not by version number:
 
-### What only Nimbus has
+- **Now** — Actively in progress or queued for the next release cycle
+- **Next** — Required outcomes before Nimbus reaches 1.0 stability
+- **Later** — Long-term directions that depend on community demand
 
-- Built-in REST API (SimpleCloud uses gRPC only, CloudNET has REST as separate module)
-- Audit logging with actor tracking
-- Stress testing system
-- Time-based scaling schedules + predictive warmup
-- Performance optimizer (Aikar flags + server config tuning)
-- Built-in TCP load balancer with PROXY protocol
-- One-command installers
-- Live plugin search (Hangar + Modrinth)
-- Bedrock/Geyser support
-- Folia compatibility across all plugins
-- Remote CLI with session tracking and GeoIP (SimpleCloud has CLI but no session auditing)
-- Web Dashboard (ALPHA) — browser-based management UI connecting to existing API (SimpleCloud's dashboard is hosted/commercial)
-- Smart modded client routing with mod list matching (no manual config, auto-scans template mods)
-- Stateful service sync with automatic failover (graceful-stop persistence, manifest-based delta, placement pinning)
-- Daemon mode (headless operation via systemd/Docker without TTY)
-- Interactive cluster topology visualization in the dashboard
-
-### What competitors have that we don't (yet)
-
-| Feature | Who has it | Our status |
-|---------|-----------|----------|
-| Services survive controller crash (local) | SimpleCloud (Screen), CloudNET (Wrapper) | v0.2.0 ✓ |
-| State reconciliation on restart | SimpleCloud (auto-reattach) | v0.2.0 ✓ |
-| JWT/scoped API auth | CloudNET (module-rest) | v0.2.0 ✓ |
-| Warm pool / prepared services | CloudNET (smart module) | v0.3.0 ✓ |
-| Cross-server player management | SimpleCloud (Player Droplet) | v0.3.0 ✓ |
-| Template stacking | CloudNET (multi-template tasks) | v0.3.0 ✓ |
-| Docker runtime | CloudNET (dockerized-services) | Vision |
-| S3/SFTP template storage | CloudNET (storage-s3, storage-sftp) | Vision |
-| Web dashboard | SimpleCloud (hosted) | v0.4.0 ✓ (ALPHA) |
-| BungeeCord support | Both | No plans (Velocity-only by design) |
-| Peer-to-peer cluster (no SPOF) | CloudNET | Vision (if demand exists) |
-
-### Our philosophy
-
-Nimbus is **lightweight by design**. We don't aim to match every feature of systems that have been developed for years. Instead, we focus on:
-
-1. **Single JAR simplicity** — One file, one command, it works
-2. **Smart defaults** — Everything is pre-configured sensibly
-3. **Console-first** — No mandatory web UI, no browser required
-4. **Built-in essentials** — Permissions, scaling, load balancing, metrics out of the box
-5. **Extensible** — Module system for everything else
+Items move between sections as priorities shift. The [Changelog](/docs/project/changelog) tracks what actually shipped. If you want to influence what comes next, [open an issue](https://github.com/NimbusPowered/Nimbus/issues) or join the discussion.
