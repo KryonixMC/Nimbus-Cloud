@@ -13,6 +13,35 @@ All notable changes to this project are documented in this file. The format is b
 
 ---
 
+## [0.8.2] - 2026-04-13
+
+Hardening release: 14 cross-verified audit findings resolved across resilience, security, and operational safety. All fixes are backwards-compatible — existing configs work without changes.
+
+### Added
+
+- **Service health monitor** — Background job detects stuck READY services that stop reporting health. Configurable via `controller.service_stale_timeout` (default 300s, `0` to disable)
+- **Configurable metrics retention** — New `[metrics] retention_days` config (default 30). Previously hardcoded
+- **Release checksum verification** — GitHub release workflow now generates and uploads `SHA256SUMS.txt` alongside JAR artifacts, enabling `install.sh` integrity verification
+- **Log archive retention** — `LogRotation` now prunes old `.log.gz` archives, keeping the newest 30 by default
+- **Port cache invalidation** — External port occupancy cache now clears every 10 minutes so freed ports are rediscovered without restart
+
+### Changed
+
+- **EventBus overflow strategy** — Changed from `SUSPEND` (blocks emitter) to `DROP_OLDEST` to prevent cascading backpressure under extreme event load
+- **Group reload is rollback-safe** — `POST /api/reload` now builds new groups in a local map first; if any group fails to construct, the entire reload is aborted and previous configuration preserved
+- **Config parse error summary** — Failed group and dedicated config files now produce a clear WARNING summary (`Loaded X config(s), Y failed: [filenames]`) instead of only per-file ERROR logs
+
+### Fixed
+
+- **HTTP client hangs indefinitely** — All 7 `HttpClient(CIO)` instances (JavaResolver, SoftwareResolver, UpdateChecker, ModpackInstaller, ControllerInfoRoutes) now have explicit connect/request/socket timeouts. Large JDK downloads get 10 min, API calls 30s
+- **Service stuck in limbo after monitor exception** — Exit monitor catch block now cleans up resources (port, process handle, registry, working directory) and transitions service to CRASHED instead of just logging
+- **Hard exitProcess(1) on database failure** — Replaced with `DatabaseInitException` that propagates naturally, allowing shutdown hooks to run and resources to clean up
+- **MySQL migration lock timeout ignored** — `GET_LOCK` return value is now checked; throws `MigrationException` if lock cannot be acquired within 30s
+- **Single bad cluster message kills agent connection** — Per-message exception handling in WebSocket loop. Malformed messages are logged and skipped instead of disconnecting the entire node
+- **Player name injection in network commands** — `/api/players/{name}/send` and `/api/players/{name}/kick` now validate player names against `^[a-zA-Z0-9_]{1,16}$` before passing to Velocity commands
+
+---
+
 ## [0.8.1] - 2026-04-13
 
 Stability fixes: 15 production-critical findings resolved plus a cluster TLS keystore bug that prevented restarts.
