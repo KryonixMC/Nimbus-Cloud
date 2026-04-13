@@ -15,10 +15,12 @@
 
 import type { Icon as PhosphorIconComponent } from "@phosphor-icons/react";
 import {
+  Archive as PhArchive,
   ArrowClockwise,
   ArrowLeft as PhArrowLeft,
   ArrowSquareOut,
   ArrowsClockwise,
+  Bell as PhBell,
   Broadcast,
   CaretDown,
   CircleNotch,
@@ -70,7 +72,10 @@ export type LucideIcon = PhosphorIconComponent;
 // export both pointing at the same Phosphor component.
 
 export const Activity = Pulse;
+export const ActivityIcon = Pulse;
+export const ArchiveIcon = PhArchive;
 export const ArrowLeft = PhArrowLeft;
+export const BellIcon = PhBell;
 export const BoxIcon = Cube;
 export const ChevronDownIcon = CaretDown;
 export const Clock = PhClock;

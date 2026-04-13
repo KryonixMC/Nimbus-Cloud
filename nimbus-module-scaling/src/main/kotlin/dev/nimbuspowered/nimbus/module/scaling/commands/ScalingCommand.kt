@@ -176,9 +176,8 @@ class ScalingCommand(
 
         println(ConsoleFormatter.header("Predictions: $groupName (next 6h)"))
         for (p in predictions) {
-            val confidence = if (p.dataPoints >= 5) "good" else if (p.dataPoints > 0) "low" else "none"
             println("  ${String.format("%02d", p.hour)}:00 ${p.dayOfWeek.name.take(3)}  " +
-                    "~${p.predictedPlayers} players ${ConsoleFormatter.DIM}($confidence, ${p.dataPoints} samples)${ConsoleFormatter.RESET}")
+                    "~${p.predictedPlayers} players ${ConsoleFormatter.DIM}(${p.confidence}, ${p.source}, ${p.dataPoints} samples)${ConsoleFormatter.RESET}")
         }
     }
 
@@ -293,8 +292,7 @@ class ScalingCommand(
         val predictions = manager.getPredictions(args[0], 6)
         out.header("Predictions: ${args[0]} (6h)")
         for (p in predictions) {
-            val conf = if (p.dataPoints >= 5) "good" else if (p.dataPoints > 0) "low" else "none"
-            out.item("${String.format("%02d", p.hour)}:00 ${p.dayOfWeek.name.take(3)} ~${p.predictedPlayers} players ($conf, ${p.dataPoints} samples)")
+            out.item("${String.format("%02d", p.hour)}:00 ${p.dayOfWeek.name.take(3)} ~${p.predictedPlayers} players (${p.confidence}, ${p.source}, ${p.dataPoints} samples)")
         }
     }
 

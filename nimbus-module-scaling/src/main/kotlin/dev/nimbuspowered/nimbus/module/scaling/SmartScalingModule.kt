@@ -160,7 +160,8 @@ class SmartScalingModule : NimbusModule {
         }
         context.registerEventFormatter("SMART_PREDICTION") { data ->
             "${info("~ SMART")} ${BOLD}${data["group"]}${RESET} predicted ${data["predicted"]} players " +
-                    "${DIM}(started ${data["started"]}, ${data["samples"]} samples)${RESET}"
+                    "${DIM}(${data["algorithm"] ?: "wma"}, ${data["confidence"] ?: "normal"}, " +
+                    "started ${data["started"]}, ${data["samples"]} samples)${RESET}"
         }
     }
 

@@ -114,7 +114,9 @@ fun Route.scalingRoutes(manager: SmartScalingManager, configManager: SmartScalin
                             hour = p.hour,
                             dayOfWeek = p.dayOfWeek.name,
                             predictedPlayers = p.predictedPlayers,
-                            dataPoints = p.dataPoints
+                            dataPoints = p.dataPoints,
+                            confidence = p.confidence,
+                            source = p.source
                         )
                     }
                 )
@@ -201,7 +203,9 @@ data class PredictionResponse(
     val hour: Int,
     val dayOfWeek: String,
     val predictedPlayers: Int,
-    val dataPoints: Int
+    val dataPoints: Int,
+    val confidence: String = "normal",
+    val source: String = "wma"
 )
 
 @Serializable

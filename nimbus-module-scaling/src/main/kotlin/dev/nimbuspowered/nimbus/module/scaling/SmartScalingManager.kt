@@ -173,7 +173,7 @@ class SmartScalingManager(
 
     /**
      * Evaluate predictive warmup based on historical data.
-     * Looks at average player counts for the same hour/weekday over the past 7 days.
+     * Uses configurable algorithms: weighted moving average, trend detection, peak scanning.
      */
     suspend fun evaluatePredictions() {
         val sm = serviceManager ?: return
@@ -182,12 +182,20 @@ class SmartScalingManager(
             if (group.isStatic) continue
 
             val config = configManager.getConfig(group.name)
+            val predConfig = config?.prediction ?: PredictionConfig()
+            if (!predConfig.enabled) continue
             if (config != null && !config.schedule.warmup.enabled) continue
 
             val leadMinutes = config?.schedule?.warmup?.leadTimeMinutes ?: 10
             val timezone = config?.schedule?.timezone ?: ZoneId.of("Europe/Berlin")
 
-            val prediction = predictPlayerCount(group.name, leadMinutes, timezone) ?: continue
+            // Get standard prediction and peak prediction, use the higher one
+            val basePrediction = predictPlayerCount(group.name, leadMinutes, timezone, predConfig)
+            val peakPrediction = detectPeak(group.name, timezone, predConfig)
+
+            val prediction = listOfNotNull(basePrediction, peakPrediction)
+                .maxByOrNull { it.predictedPlayers }
+                ?: continue
             if (prediction.predictedPlayers <= 0) continue
 
             val playersPerInstance = group.config.group.scaling.playersPerInstance
@@ -214,7 +222,8 @@ class SmartScalingManager(
             if (toStart <= 0) continue
 
             val reason = "predicted ${prediction.predictedPlayers} players in ${leadMinutes}min " +
-                    "(avg from ${prediction.dataPoints} samples, need $neededInstances instances, have $readyOrStarting)"
+                    "(${prediction.source}, ${prediction.confidence} confidence, " +
+                    "${prediction.dataPoints} samples, need $neededInstances instances, have $readyOrStarting)"
 
             logger.info("Smart scaling prediction: {} — starting {} service(s) for group '{}'", reason, toStart, group.name)
 
@@ -235,7 +244,9 @@ class SmartScalingManager(
                             "group" to group.name,
                             "predicted" to prediction.predictedPlayers.toString(),
                             "started" to started.toString(),
-                            "samples" to prediction.dataPoints.toString()
+                            "samples" to prediction.dataPoints.toString(),
+                            "algorithm" to prediction.source,
+                            "confidence" to prediction.confidence
                         )
                     )
                 )
@@ -246,7 +257,7 @@ class SmartScalingManager(
                         it[groupName] = group.name
                         it[action] = "smart_prediction"
                         it[ScalingDecisions.reason] = reason
-                        it[decisionSource] = "prediction"
+                        it[decisionSource] = prediction.source
                         it[servicesStarted] = started
                     }
                 }
@@ -258,20 +269,46 @@ class SmartScalingManager(
 
     data class Prediction(
         val predictedPlayers: Int,
-        val dataPoints: Int
+        val dataPoints: Int,
+        val confidence: String = "normal",  // "low", "normal", "high"
+        val source: String = "wma"          // "simple_average", "wma", "trend", "peak", "scheduled_event"
+    )
+
+    /** Internal snapshot data for prediction calculations. */
+    private data class SnapshotData(
+        val dayOfWeek: DayOfWeek,
+        val hour: Int,
+        val playerCount: Int,
+        val date: java.time.LocalDate,
+        val instant: Instant
     )
 
     /**
      * Predict player count for [minutesAhead] in the future.
-     * Uses average of same weekday + hour window from the past 7 days.
+     * Supports multiple algorithms: simple average, weighted moving average, and trend-adjusted.
      */
-    suspend fun predictPlayerCount(groupName: String, minutesAhead: Int, timezone: ZoneId): Prediction? {
+    suspend fun predictPlayerCount(
+        groupName: String,
+        minutesAhead: Int,
+        timezone: ZoneId,
+        predConfig: PredictionConfig = PredictionConfig()
+    ): Prediction? {
         val targetTime = ZonedDateTime.now(timezone).plusMinutes(minutesAhead.toLong())
         val targetHour = targetTime.hour
         val targetDay = targetTime.dayOfWeek
 
-        // Load snapshots from the past 7 days
-        val cutoff = Instant.now().minus(7, ChronoUnit.DAYS).toString()
+        // 1. Check for scheduled events first (overrides statistical prediction)
+        for (event in predConfig.scheduledEvents) {
+            if (event.dayOfWeek != targetDay) continue
+            val eventEnd = event.startTime.plusMinutes(event.durationMinutes.toLong())
+            val targetLocal = targetTime.toLocalTime()
+            if (isTimeInRange(targetLocal, event.startTime, eventEnd)) {
+                return Prediction(event.expectedPlayers, 0, "high", "scheduled_event")
+            }
+        }
+
+        // 2. Load snapshots from the past 28 days
+        val cutoff = Instant.now().minus(28, ChronoUnit.DAYS).toString()
 
         val snapshots = db.query {
             ScalingSnapshots.selectAll()
@@ -281,20 +318,128 @@ class SmartScalingManager(
         }.map { row ->
             val ts = Instant.parse(row[ScalingSnapshots.timestamp])
             val zdt = ts.atZone(timezone)
-            Triple(zdt.dayOfWeek, zdt.hour, row[ScalingSnapshots.playerCount])
+            SnapshotData(zdt.dayOfWeek, zdt.hour, row[ScalingSnapshots.playerCount], zdt.toLocalDate(), ts)
         }
 
         if (snapshots.isEmpty()) return null
 
-        // Filter for matching weekday and hour
-        val matching = snapshots.filter { (day, hour, _) ->
-            day == targetDay && hour == targetHour
-        }
+        // 3. Day-of-week clustering: prefer same weekday
+        val dayMatching = snapshots.filter { it.dayOfWeek == targetDay && it.hour == targetHour }
+        val useSameDayOnly = dayMatching.size >= 3
+
+        val matching = if (useSameDayOnly) dayMatching
+        else snapshots.filter { it.hour == targetHour }  // fallback: all days
 
         if (matching.isEmpty()) return null
 
-        val avgPlayers = matching.map { it.third }.average().toInt()
-        return Prediction(avgPlayers, matching.size)
+        val confidence = when {
+            matching.size >= 10 -> "high"
+            matching.size >= 3 -> "normal"
+            else -> "low"
+        }
+
+        // 4. Apply selected algorithm
+        return when (predConfig.algorithm) {
+            PredictionAlgorithm.SIMPLE_AVERAGE -> {
+                val avg = matching.map { it.playerCount }.average().toInt()
+                Prediction(avg, matching.size, confidence, "simple_average")
+            }
+
+            PredictionAlgorithm.WEIGHTED_AVERAGE -> {
+                val wma = computeWeightedAverage(matching, predConfig.weightDecayFactor)
+                Prediction(wma, matching.size, confidence, "wma")
+            }
+
+            PredictionAlgorithm.TREND_ADJUSTED -> {
+                val wma = computeWeightedAverage(matching, predConfig.weightDecayFactor)
+                val trend = computeTrend(snapshots, groupName, predConfig.trendWindowHours, timezone)
+                val adjusted = (wma + trend * minutesAhead).toInt().coerceAtLeast(0)
+                Prediction(adjusted, matching.size, confidence, "trend")
+            }
+        }
+    }
+
+    /**
+     * Compute weighted moving average grouped by date.
+     * Most recent day gets weight 1.0, each older day multiplied by [decayFactor].
+     */
+    private fun computeWeightedAverage(matching: List<SnapshotData>, decayFactor: Double): Int {
+        // Group by date, sorted most-recent first
+        val byDate = matching.groupBy { it.date }.toSortedMap(compareByDescending { it })
+
+        var weightedSum = 0.0
+        var totalWeight = 0.0
+        var dayIndex = 0
+
+        for ((_, samples) in byDate) {
+            val weight = Math.pow(decayFactor, dayIndex.toDouble())
+            val dayAvg = samples.map { it.playerCount }.average()
+            weightedSum += weight * dayAvg
+            totalWeight += weight
+            dayIndex++
+        }
+
+        return if (totalWeight > 0) (weightedSum / totalWeight).toInt() else 0
+    }
+
+    /**
+     * Compute trend (players per minute) from recent snapshots via linear regression.
+     * Returns the slope: positive = growing, negative = declining.
+     */
+    private suspend fun computeTrend(
+        allSnapshots: List<SnapshotData>,
+        groupName: String,
+        windowHours: Int,
+        timezone: ZoneId
+    ): Double {
+        val windowCutoff = Instant.now().minus(windowHours.toLong(), ChronoUnit.HOURS)
+        val recent = allSnapshots.filter { it.instant.isAfter(windowCutoff) }
+
+        if (recent.size < 3) return 0.0
+
+        // Linear regression: x = minutes since first sample, y = player count
+        val firstEpoch = recent.minOf { it.instant.epochSecond }
+        val points = recent.map { s ->
+            val x = (s.instant.epochSecond - firstEpoch) / 60.0  // minutes
+            val y = s.playerCount.toDouble()
+            x to y
+        }
+
+        val n = points.size.toDouble()
+        val sumX = points.sumOf { it.first }
+        val sumY = points.sumOf { it.second }
+        val sumXY = points.sumOf { it.first * it.second }
+        val sumX2 = points.sumOf { it.first * it.first }
+
+        val denominator = n * sumX2 - sumX * sumX
+        if (denominator == 0.0) return 0.0
+
+        return (n * sumXY - sumX * sumY) / denominator  // slope = players per minute
+    }
+
+    /**
+     * Scan ahead for upcoming peaks within the configured lead window.
+     * Returns the peak prediction if one is found that exceeds current prediction.
+     */
+    suspend fun detectPeak(
+        groupName: String,
+        timezone: ZoneId,
+        predConfig: PredictionConfig
+    ): Prediction? {
+        if (!predConfig.peakDetectionEnabled) return null
+
+        var peakPrediction: Prediction? = null
+        val scanRange = predConfig.peakLeadMinutes * 2
+
+        for (minutesAhead in 5..scanRange step 5) {
+            val pred = predictPlayerCount(groupName, minutesAhead, timezone, predConfig.copy(peakDetectionEnabled = false))
+                ?: continue
+            if (peakPrediction == null || pred.predictedPlayers > peakPrediction.predictedPlayers) {
+                peakPrediction = pred.copy(source = "peak")
+            }
+        }
+
+        return peakPrediction
     }
 
     // ── Query Methods (for commands/API) ────────────────
@@ -319,18 +464,21 @@ class SmartScalingManager(
     /** Get prediction for a group for the next N hours. */
     suspend fun getPredictions(groupName: String, hours: Int = 6): List<HourlyPrediction> {
         val config = configManager.getConfig(groupName)
+        val predConfig = config?.prediction ?: PredictionConfig()
         val timezone = config?.schedule?.timezone ?: ZoneId.of("Europe/Berlin")
 
         val predictions = mutableListOf<HourlyPrediction>()
         for (h in 0 until hours) {
-            val prediction = predictPlayerCount(groupName, h * 60, timezone)
+            val prediction = predictPlayerCount(groupName, h * 60, timezone, predConfig)
             val targetTime = ZonedDateTime.now(timezone).plusHours(h.toLong())
             predictions.add(
                 HourlyPrediction(
                     hour = targetTime.hour,
                     dayOfWeek = targetTime.dayOfWeek,
                     predictedPlayers = prediction?.predictedPlayers ?: 0,
-                    dataPoints = prediction?.dataPoints ?: 0
+                    dataPoints = prediction?.dataPoints ?: 0,
+                    confidence = prediction?.confidence ?: "none",
+                    source = prediction?.source ?: "none"
                 )
             )
         }
@@ -341,7 +489,9 @@ class SmartScalingManager(
         val hour: Int,
         val dayOfWeek: DayOfWeek,
         val predictedPlayers: Int,
-        val dataPoints: Int
+        val dataPoints: Int,
+        val confidence: String = "normal",
+        val source: String = "wma"
     )
 
     /** Get recent scaling decisions from the DB. */

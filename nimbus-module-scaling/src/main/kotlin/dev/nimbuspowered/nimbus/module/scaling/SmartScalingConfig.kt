@@ -15,7 +15,8 @@ import kotlin.io.path.writeText
 
 data class GroupScalingConfig(
     val groupName: String,
-    val schedule: ScheduleConfig
+    val schedule: ScheduleConfig,
+    val prediction: PredictionConfig = PredictionConfig()
 )
 
 data class ScheduleConfig(
@@ -37,6 +38,40 @@ data class ScheduleRule(
 data class WarmupConfig(
     val enabled: Boolean = true,
     val leadTimeMinutes: Int = 10
+)
+
+// ── Prediction Config ──────────────────────────────────
+
+enum class PredictionAlgorithm {
+    /** Simple average of matching day+hour over the past 28 days. */
+    SIMPLE_AVERAGE,
+    /** Weighted moving average: recent days weighted more heavily. */
+    WEIGHTED_AVERAGE,
+    /** WMA with linear trend adjustment from recent hours. */
+    TREND_ADJUSTED
+}
+
+data class PredictionConfig(
+    val enabled: Boolean = true,
+    val algorithm: PredictionAlgorithm = PredictionAlgorithm.WEIGHTED_AVERAGE,
+    /** Weight decay factor per day (0.0-1.0). Most recent day = 1.0, day before = decay^1, etc. */
+    val weightDecayFactor: Double = 0.8,
+    /** Hours of recent data used for trend calculation (TREND_ADJUSTED only). */
+    val trendWindowHours: Int = 3,
+    /** Detect upcoming peaks and pre-warm ahead of time. */
+    val peakDetectionEnabled: Boolean = true,
+    /** Minutes ahead to scan for peaks. */
+    val peakLeadMinutes: Int = 20,
+    /** Scheduled events with known player counts (overrides statistical prediction). */
+    val scheduledEvents: List<ScheduledEvent> = emptyList()
+)
+
+data class ScheduledEvent(
+    val name: String,
+    val dayOfWeek: DayOfWeek,
+    val startTime: LocalTime,
+    val durationMinutes: Int,
+    val expectedPlayers: Int
 )
 
 // ── Config Manager ──────────────────────────────────────
@@ -95,6 +130,22 @@ class SmartScalingConfigManager(private val configDir: Path) {
             |[warmup]
             |enabled = true
             |lead_time_minutes = 10
+            |
+            |[prediction]
+            |enabled = true
+            |algorithm = "WEIGHTED_AVERAGE"  # SIMPLE_AVERAGE, WEIGHTED_AVERAGE, TREND_ADJUSTED
+            |weight_decay_factor = 0.8       # Recent days weighted more (0.1-1.0)
+            |trend_window_hours = 3          # Hours of recent data for trend calculation
+            |peak_detection_enabled = true
+            |peak_lead_minutes = 20          # Minutes ahead to scan for peaks
+            |
+            |# Example scheduled event (overrides statistical prediction):
+            |# [[prediction.scheduled_events]]
+            |# name = "friday-tournament"
+            |# day_of_week = "FRI"
+            |# start_time = "19:00"
+            |# duration_minutes = 120
+            |# expected_players = 200
             """.trimMargin() + "\n"
         )
         logger.info("Generated default scaling config for group '{}'", groupName)
@@ -116,6 +167,8 @@ class SmartScalingConfigManager(private val configDir: Path) {
         val warmupEnabled = extractBoolean(content, "enabled", "warmup") ?: true
         val leadTime = extractInt(content, "lead_time_minutes", "warmup") ?: 10
 
+        val prediction = parsePredictionConfig(content)
+
         return GroupScalingConfig(
             groupName = groupName,
             schedule = ScheduleConfig(
@@ -123,8 +176,53 @@ class SmartScalingConfigManager(private val configDir: Path) {
                 timezone = timezone,
                 rules = rules,
                 warmup = WarmupConfig(warmupEnabled, leadTime)
-            )
+            ),
+            prediction = prediction
         )
+    }
+
+    private fun parsePredictionConfig(content: String): PredictionConfig {
+        val predEnabled = extractBoolean(content, "enabled", "prediction") ?: true
+        val algorithmStr = extractString(content, "algorithm", "prediction") ?: "WEIGHTED_AVERAGE"
+        val algorithm = runCatching { PredictionAlgorithm.valueOf(algorithmStr.uppercase()) }
+            .getOrDefault(PredictionAlgorithm.WEIGHTED_AVERAGE)
+        val decay = extractDouble(content, "weight_decay_factor", "prediction") ?: 0.8
+        val trendWindow = extractInt(content, "trend_window_hours", "prediction") ?: 3
+        val peakEnabled = extractBoolean(content, "peak_detection_enabled", "prediction") ?: true
+        val peakLead = extractInt(content, "peak_lead_minutes", "prediction") ?: 20
+        val events = parseScheduledEvents(content)
+
+        return PredictionConfig(
+            enabled = predEnabled,
+            algorithm = algorithm,
+            weightDecayFactor = decay.coerceIn(0.1, 1.0),
+            trendWindowHours = trendWindow.coerceIn(1, 24),
+            peakDetectionEnabled = peakEnabled,
+            peakLeadMinutes = peakLead.coerceIn(5, 60),
+            scheduledEvents = events
+        )
+    }
+
+    private fun parseScheduledEvents(content: String): List<ScheduledEvent> {
+        val events = mutableListOf<ScheduledEvent>()
+        val blockRegex = Regex(
+            """\[\[prediction\.scheduled_events]]\s*\n([\s\S]*?)(?=\n\[\[|\n\[(?!\[)|\z)"""
+        )
+
+        for (match in blockRegex.findAll(content)) {
+            val block = match.groupValues[1]
+            val name = extractStringFromBlock(block, "name") ?: continue
+            val dayStr = extractStringFromBlock(block, "day_of_week") ?: continue
+            val startTimeStr = extractStringFromBlock(block, "start_time") ?: continue
+            val duration = extractIntFromBlock(block, "duration_minutes") ?: continue
+            val expected = extractIntFromBlock(block, "expected_players") ?: continue
+
+            val day = parseDayOfWeek(dayStr) ?: continue
+            val startTime = runCatching { LocalTime.parse(startTimeStr) }.getOrNull() ?: continue
+
+            events.add(ScheduledEvent(name, day, startTime, duration, expected))
+        }
+        return events
     }
 
     private fun parseRules(content: String): List<ScheduleRule> {
@@ -196,6 +294,14 @@ class SmartScalingConfigManager(private val configDir: Path) {
         val sectionRegex = Regex("""\[$escaped]\s*\n([\s\S]*?)(?=\n\[(?!\[)|\z)""")
         val sectionContent = sectionRegex.find(content)?.groupValues?.get(1) ?: return null
         return extractIntFromBlock(sectionContent, key)
+    }
+
+    private fun extractDouble(content: String, key: String, section: String): Double? {
+        val escaped = section.replace(".", "\\.")
+        val sectionRegex = Regex("""\[$escaped]\s*\n([\s\S]*?)(?=\n\[(?!\[)|\z)""")
+        val sectionContent = sectionRegex.find(content)?.groupValues?.get(1) ?: return null
+        val regex = Regex("""^\s*$key\s*=\s*([0-9]+\.?[0-9]*)\s*$""", RegexOption.MULTILINE)
+        return regex.find(sectionContent)?.groupValues?.get(1)?.toDoubleOrNull()
     }
 
     private fun extractStringFromBlock(block: String, key: String): String? {
