@@ -263,7 +263,7 @@ fun nimbusMain() = runBlocking {
     databaseManager.runMigrations(moduleContext.migrations)
 
     // Start collectors AFTER migrations have created required tables (C8 fix)
-    val metricsCollector = MetricsCollector(databaseManager, eventBus, scope)
+    val metricsCollector = MetricsCollector(databaseManager, eventBus, scope, config.metrics.retentionDays)
     val metricsJobs = metricsCollector.start()
     metricsCollector.startRetentionCleanup(scope)
 
@@ -568,6 +568,17 @@ fun nimbusMain() = runBlocking {
     // racing the phased startup (e.g. starting backends before the proxy is ready).
     scalingJob = scalingEngine.start()
     logger.info("Scaling engine started")
+
+    // Start service health monitor (marks stale READY services as CRASHED)
+    serviceManager.startHealthMonitor()
+
+    // Periodically invalidate external port occupancy cache so freed ports are rediscovered
+    scope.launch {
+        while (isActive) {
+            delay(600_000) // every 10 minutes
+            portAllocator.invalidateExternalCache()
+        }
+    }
 
     // Start warm pool replenishment after scaling engine
     val warmPoolJob = warmPoolManager.start()

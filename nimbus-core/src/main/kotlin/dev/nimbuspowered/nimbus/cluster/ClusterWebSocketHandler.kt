@@ -102,8 +102,14 @@ class ClusterWebSocketHandler(
                 // Message loop
                 for (frame in incoming) {
                     if (frame is Frame.Text) {
-                        val msg = clusterJson.decodeFromString(ClusterMessage.serializer(), frame.readText())
-                        handleAgentMessage(nodeId, msg)
+                        try {
+                            val msg = clusterJson.decodeFromString(ClusterMessage.serializer(), frame.readText())
+                            handleAgentMessage(nodeId, msg)
+                        } catch (e: kotlinx.serialization.SerializationException) {
+                            logger.warn("Malformed message from node '{}': {}", nodeId, e.message)
+                        } catch (e: Exception) {
+                            logger.error("Error handling message from node '{}': {}", nodeId, e.message, e)
+                        }
                     }
                 }
 

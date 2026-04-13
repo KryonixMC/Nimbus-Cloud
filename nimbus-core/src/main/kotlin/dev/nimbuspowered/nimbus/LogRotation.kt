@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter
 import java.util.zip.GZIPOutputStream
 import kotlin.io.path.exists
 import kotlin.io.path.fileSize
+import org.slf4j.LoggerFactory
 
 /**
  * Minecraft-style log rotation: on startup, compress the previous
@@ -17,8 +18,9 @@ import kotlin.io.path.fileSize
 object LogRotation {
 
     private val DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    private val logger = LoggerFactory.getLogger(LogRotation::class.java)
 
-    fun rotate(logsDir: Path) {
+    fun rotate(logsDir: Path, maxArchives: Int = 30) {
         val latestLog = logsDir.resolve("latest.log")
         if (!latestLog.exists() || latestLog.fileSize() == 0L) return
 
@@ -37,6 +39,30 @@ object LogRotation {
 
         // Truncate latest.log so logback starts fresh
         Files.newOutputStream(latestLog, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING).close()
+
+        // Enforce retention: keep only the newest maxArchives .log.gz files
+        if (maxArchives > 0) {
+            pruneOldArchives(logsDir, maxArchives)
+        }
+    }
+
+    private fun pruneOldArchives(logsDir: Path, maxArchives: Int) {
+        try {
+            val archives = Files.list(logsDir).use { stream ->
+                stream.filter { it.toString().endsWith(".log.gz") }
+                    .sorted(Comparator.comparing<Path, java.nio.file.attribute.FileTime> { Files.getLastModifiedTime(it) }.reversed())
+                    .toList()
+            }
+            if (archives.size > maxArchives) {
+                val toDelete = archives.drop(maxArchives)
+                for (file in toDelete) {
+                    Files.deleteIfExists(file)
+                }
+                logger.info("Log retention: deleted {} old archive(s)", toDelete.size)
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to prune old log archives: {}", e.message)
+        }
     }
 
     private fun nextAvailableName(logsDir: Path, date: String): String {

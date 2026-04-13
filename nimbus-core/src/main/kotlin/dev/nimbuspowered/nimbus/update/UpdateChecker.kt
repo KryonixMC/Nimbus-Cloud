@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.update
 import dev.nimbuspowered.nimbus.NimbusVersion
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -36,7 +37,13 @@ class UpdateChecker(
     private val repoName: String = "Nimbus"
 ) {
     private val logger = LoggerFactory.getLogger(UpdateChecker::class.java)
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 300_000  // 5 min for JAR downloads
+            socketTimeoutMillis = 30_000
+        }
+    }
     private val json = Json { ignoreUnknownKeys = true }
 
     data class VersionInfo(

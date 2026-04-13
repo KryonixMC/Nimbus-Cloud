@@ -25,12 +25,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 class MetricsCollector(
     private val db: DatabaseManager,
     private val eventBus: EventBus,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val retentionDays: Long = 30L
 ) {
     private val logger = LoggerFactory.getLogger(MetricsCollector::class.java)
-
-    /** Retention period for metrics data (30 days). */
-    private val retentionDays = 30L
 
     /** Flush interval for batched writes (3 seconds). */
     private val flushIntervalMs = 3000L

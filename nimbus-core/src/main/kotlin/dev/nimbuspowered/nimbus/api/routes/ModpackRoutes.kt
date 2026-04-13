@@ -13,6 +13,7 @@ import dev.nimbuspowered.nimbus.template.ModpackSource
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -102,7 +103,13 @@ fun Route.modpackRoutes(
     templatesDir: Path,
     curseForgeConfig: CurseForgeConfig = CurseForgeConfig()
 ) {
-    val installer = ModpackInstaller(HttpClient(CIO), curseForgeConfig.apiKey)
+    val installer = ModpackInstaller(HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 300_000
+            socketTimeoutMillis = 30_000
+        }
+    }, curseForgeConfig.apiKey)
     val maxUploadBytes = 2L * 1024 * 1024 * 1024 // 2 GB for modpack ZIPs
 
     route("/api/modpacks") {

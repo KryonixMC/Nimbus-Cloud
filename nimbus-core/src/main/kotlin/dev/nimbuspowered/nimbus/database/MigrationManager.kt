@@ -142,7 +142,15 @@ class MigrationManager(private val database: Database) {
             if (isPostgres) {
                 exec("SELECT pg_advisory_lock(hashtext('nimbus_migration'))")
             } else {
-                exec("SELECT GET_LOCK('nimbus_migration', 30)")
+                var acquired = false
+                exec("SELECT GET_LOCK('nimbus_migration', 30)") { rs ->
+                    if (rs.next()) {
+                        acquired = rs.getInt(1) == 1
+                    }
+                }
+                if (!acquired) {
+                    throw MigrationException("Could not acquire migration lock within 30s. Another controller may be running migrations.")
+                }
             }
         }
         logger.debug("Acquired migration advisory lock ({})", vendor)

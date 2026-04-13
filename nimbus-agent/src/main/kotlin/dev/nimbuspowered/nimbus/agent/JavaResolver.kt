@@ -2,6 +2,7 @@ package dev.nimbuspowered.nimbus.agent
 
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -29,7 +30,13 @@ class JavaResolver(
 ) {
 
     private val logger = LoggerFactory.getLogger(JavaResolver::class.java)
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 600_000  // 10 min for large JDK downloads
+            socketTimeoutMillis = 30_000
+        }
+    }
     private val jdkCacheDir: Path = baseDir.resolve("jdks")
 
     private val detected: MutableMap<Int, String> by lazy { detectInstalledJavas().toMutableMap() }

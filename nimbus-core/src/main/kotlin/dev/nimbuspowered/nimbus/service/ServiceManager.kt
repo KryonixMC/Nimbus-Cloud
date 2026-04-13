@@ -21,6 +21,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -614,6 +615,19 @@ class ServiceManager(
                 monitorProcess(service, handle, service.groupName, restartOnCrash, maxRestarts)
             } catch (e: Exception) {
                 logger.error("Error monitoring service '{}'", serviceName, e)
+                // Clean up to prevent resource leaks when monitoring itself fails
+                handle.destroy()
+                processHandles.remove(serviceName)
+                stateStore?.removeService(serviceName)
+                portAllocator.release(service.port)
+                service.bedrockPort?.let { portAllocator.releaseBedrockPort(it) }
+                registry.unregister(serviceName)
+                if (!service.isStatic) {
+                    cleanupWorkingDirectory(service.workingDirectory)
+                }
+                if (service.transitionTo(ServiceState.CRASHED)) {
+                    eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
+                }
             }
         }
     }
@@ -624,6 +638,33 @@ class ServiceManager(
         portAllocator.release(service.port)
         service.bedrockPort?.let { portAllocator.releaseBedrockPort(it) }
         registry.unregister(service.name)
+    }
+
+    /**
+     * Periodically checks READY services for stale health reports.
+     * If a service has not reported player counts for [serviceStaleTimeout] seconds,
+     * it is marked as CRASHED. Only affects services that have ever reported health
+     * (i.e., services running the SDK or on agent nodes pushing heartbeats).
+     */
+    fun startHealthMonitor() = scope.launch {
+        val timeoutSeconds = config.controller.serviceStaleTimeout
+        if (timeoutSeconds <= 0) return@launch  // disabled
+        while (isActive) {
+            delay(60_000) // check every 60 seconds
+            val threshold = Instant.now().minusSeconds(timeoutSeconds)
+            for (service in registry.getAll()) {
+                if (service.state != ServiceState.READY) continue
+                // Only check services that have ever reported health
+                val lastReport = service.lastPlayerCountUpdate ?: continue
+                if (lastReport.isBefore(threshold)) {
+                    val staleSecs = java.time.Duration.between(lastReport, Instant.now()).seconds
+                    logger.warn("Service '{}' has not reported health for {}s — marking as CRASHED", service.name, staleSecs)
+                    if (service.transitionTo(ServiceState.CRASHED)) {
+                        eventBus.emit(NimbusEvent.ServiceCrashed(service.name, -1, service.restartCount))
+                    }
+                }
+            }
+        }
     }
 
     private fun computeTemplateHash(templateDir: Path, software: ServerSoftware, templateStack: List<String> = emptyList()): String {

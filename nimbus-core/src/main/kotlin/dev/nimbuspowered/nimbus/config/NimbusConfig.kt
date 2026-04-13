@@ -18,6 +18,7 @@ data class NimbusConfig(
     val bedrock: BedrockConfig = BedrockConfig(),
     val cluster: ClusterConfig = ClusterConfig(),
     val audit: AuditConfig = AuditConfig(),
+    val metrics: MetricsConfig = MetricsConfig(),
     val curseforge: CurseForgeConfig = CurseForgeConfig()
 )
 
@@ -36,7 +37,9 @@ data class ControllerConfig(
     @SerialName("heartbeat_interval")
     val heartbeatInterval: Long = 5000,
     @SerialName("scaling_tick_interval")
-    val scalingTickInterval: Long = 10
+    val scalingTickInterval: Long = 10,
+    @SerialName("service_stale_timeout")
+    val serviceStaleTimeout: Long = 300  // seconds, 0 = disabled
 )
 
 @Serializable
@@ -142,6 +145,12 @@ data class AuditConfig(
     val enabled: Boolean = true,
     @SerialName("retention_days")
     val retentionDays: Long = 90
+)
+
+@Serializable
+data class MetricsConfig(
+    @SerialName("retention_days")
+    val retentionDays: Long = 30
 )
 
 @Serializable

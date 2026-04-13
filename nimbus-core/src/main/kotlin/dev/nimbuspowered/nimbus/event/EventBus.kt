@@ -2,6 +2,7 @@ package dev.nimbuspowered.nimbus.event
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -15,7 +16,7 @@ class EventBus(@PublishedApi internal val scope: CoroutineScope) {
     internal val logger = LoggerFactory.getLogger(EventBus::class.java)
 
     @PublishedApi
-    internal val _events = MutableSharedFlow<NimbusEvent>(extraBufferCapacity = 512)
+    internal val _events = MutableSharedFlow<NimbusEvent>(extraBufferCapacity = 512, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     suspend fun emit(event: NimbusEvent) {
         logger.debug("Event emitted: {}", event)

@@ -128,6 +128,16 @@ class PortAllocator(
     }
 
     /**
+     * Clears the external port occupancy cache so ports are re-probed on next allocation.
+     * Call periodically to discover ports freed by external processes.
+     */
+    fun invalidateExternalCache() {
+        externallyOccupied.clear()
+        externallyOccupiedUdp.clear()
+        logger.debug("External port occupancy cache cleared")
+    }
+
+    /**
      * Checks if a TCP port is occupied by an external process (not tracked by us).
      * Result is cached so the socket probe only happens once per port.
      */

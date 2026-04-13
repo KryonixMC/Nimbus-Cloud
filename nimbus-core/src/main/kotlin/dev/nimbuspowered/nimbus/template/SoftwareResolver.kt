@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.template
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -108,7 +109,13 @@ class SoftwareResolver {
 
     private val logger = LoggerFactory.getLogger(SoftwareResolver::class.java)
 
-    val client = HttpClient(CIO)
+    val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 300_000  // 5 min for server JAR downloads
+            socketTimeoutMillis = 30_000
+        }
+    }
     private val json = Json { ignoreUnknownKeys = true }
 
     // ── Version fetching ────────────────────────────────────────

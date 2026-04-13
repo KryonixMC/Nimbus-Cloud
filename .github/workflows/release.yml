@@ -49,6 +49,15 @@ jobs:
       - name: Build project
         run: ./gradlew shadowJar
 
+      - name: Generate checksums
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sha256sum nimbus-core/build/libs/nimbus-core-${VERSION}.jar > SHA256SUMS.txt
+          sha256sum nimbus-agent/build/libs/nimbus-agent-${VERSION}.jar >> SHA256SUMS.txt
+          sha256sum nimbus-cli/build/libs/nimbus-cli-${VERSION}.jar >> SHA256SUMS.txt
+          echo "Generated checksums:"
+          cat SHA256SUMS.txt
+
       - name: Verify release assets
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -68,6 +77,7 @@ jobs:
             nimbus-core/build/libs/nimbus-core-${{ steps.version.outputs.version }}.jar
             nimbus-agent/build/libs/nimbus-agent-${{ steps.version.outputs.version }}.jar
             nimbus-cli/build/libs/nimbus-cli-${{ steps.version.outputs.version }}.jar
+            SHA256SUMS.txt
           body: |
             ## Nimbus ${{ steps.version.outputs.tag }}
 

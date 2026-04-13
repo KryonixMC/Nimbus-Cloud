@@ -39,6 +39,7 @@ object ConfigLoader {
             return emptyList()
         }
         val configs = mutableListOf<GroupConfig>()
+        val failedFiles = mutableListOf<String>()
         val files = groupsDir.listDirectoryEntries("*.toml")
         if (files.isEmpty()) {
             logger.info("No group config files found in {}", groupsDir)
@@ -53,9 +54,14 @@ object ConfigLoader {
                 logger.info("Loaded group config '{}' from {}", config.group.name, file.fileName)
             } catch (e: ConfigException) {
                 logger.error("Validation failed for group config {}: {}", file.fileName, e.message)
+                failedFiles.add(file.fileName.toString())
             } catch (e: Exception) {
                 logger.error("Failed to parse group config {}: {}", file.fileName, e.message, e)
+                failedFiles.add(file.fileName.toString())
             }
+        }
+        if (failedFiles.isNotEmpty()) {
+            logger.warn("Loaded {} group config(s), {} failed: {}", configs.size, failedFiles.size, failedFiles.joinToString(", "))
         }
         return configs
     }
@@ -66,6 +72,7 @@ object ConfigLoader {
             return emptyList()
         }
         val configs = mutableListOf<DedicatedServiceConfig>()
+        val failedFiles = mutableListOf<String>()
         val files = dedicatedDir.listDirectoryEntries("*.toml")
         if (files.isEmpty()) {
             logger.info("No dedicated config files found in {}", dedicatedDir)
@@ -80,9 +87,14 @@ object ConfigLoader {
                 logger.info("Loaded dedicated config '{}' from {}", config.dedicated.name, file.fileName)
             } catch (e: ConfigException) {
                 logger.error("Validation failed for dedicated config {}: {}", file.fileName, e.message)
+                failedFiles.add(file.fileName.toString())
             } catch (e: Exception) {
                 logger.error("Failed to parse dedicated config {}: {}", file.fileName, e.message, e)
+                failedFiles.add(file.fileName.toString())
             }
+        }
+        if (failedFiles.isNotEmpty()) {
+            logger.warn("Loaded {} dedicated config(s), {} failed: {}", configs.size, failedFiles.size, failedFiles.joinToString(", "))
         }
         return configs
     }

@@ -20,6 +20,8 @@ import kotlinx.coroutines.coroutineScope
 import java.time.Duration
 import java.time.Instant
 
+private val MINECRAFT_NAME = Regex("^[a-zA-Z0-9_]{1,16}$")
+
 fun Route.networkRoutes(
     config: NimbusConfig,
     registry: ServiceRegistry,
@@ -94,6 +96,9 @@ fun Route.networkRoutes(
     // POST /api/players/{name}/send — Transfer player to another service
     post("/api/players/{name}/send") {
         val playerName = call.parameters["name"]!!
+        if (!MINECRAFT_NAME.matches(playerName)) {
+            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiErrors.INVALID_INPUT))
+        }
         val request = call.receive<SendPlayerRequest>()
 
         // Find the Velocity proxy to execute the send command
@@ -118,6 +123,9 @@ fun Route.networkRoutes(
     // POST /api/players/{name}/kick — Kick player from the network
     post("/api/players/{name}/kick") {
         val playerName = call.parameters["name"]!!
+        if (!MINECRAFT_NAME.matches(playerName)) {
+            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiErrors.INVALID_INPUT))
+        }
         val request = call.receive<KickPlayerRequest>()
 
         val proxyService = registry.getAll().firstOrNull { service ->

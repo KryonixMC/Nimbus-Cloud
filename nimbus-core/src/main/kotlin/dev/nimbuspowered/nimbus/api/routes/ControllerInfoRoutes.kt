@@ -18,6 +18,7 @@ import dev.nimbuspowered.nimbus.service.ServiceState
 import dev.nimbuspowered.nimbus.update.UpdateChecker
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -48,7 +49,13 @@ fun Route.controllerInfoRoutes(
     groupManager: GroupManager,
     dedicatedServiceManager: DedicatedServiceManager?
 ) {
-    val httpClient = HttpClient(CIO)
+    val httpClient = HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 30_000
+            socketTimeoutMillis = 15_000
+        }
+    }
 
     route("/api/controller") {
 

@@ -49,23 +49,28 @@ class GroupManager(private val templatesDir: Path? = null) {
     fun reloadGroups(configs: List<GroupConfig>) {
         val incoming = configs.associateBy { it.group.name }
 
-        // Warn about removed groups
+        // Build new groups in a local map first — if anything fails, keep previous state
+        val newGroups = mutableMapOf<String, ServerGroup>()
+        try {
+            for ((name, config) in incoming) {
+                val group = ServerGroup(config)
+                scanModIds(group)
+                newGroups[name] = group
+            }
+        } catch (e: Exception) {
+            logger.error("Group reload aborted, keeping previous configuration: {}", e.message, e)
+            return
+        }
+
+        // Success — apply changes
         val removed = groups.keys - incoming.keys
         for (name in removed) {
             logger.warn("Group '{}' was removed from configuration — still tracked until restart", name)
         }
-
-        // Update existing and add new groups
-        for ((name, config) in incoming) {
-            val group = ServerGroup(config)
-            scanModIds(group)
-            if (groups.containsKey(name)) {
-                groups[name] = group
-                logger.info("Reloaded group '{}'", name)
-            } else {
-                groups[name] = group
-                logger.info("Added new group '{}'", name)
-            }
+        for ((name, group) in newGroups) {
+            val verb = if (groups.containsKey(name)) "Reloaded" else "Added new"
+            groups[name] = group
+            logger.info("{} group '{}'", verb, name)
         }
     }
 

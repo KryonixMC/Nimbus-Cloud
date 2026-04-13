@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.system.exitProcess
+class DatabaseInitException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 class DatabaseManager(private val baseDir: Path, private val config: DatabaseConfig) {
 
@@ -56,7 +56,7 @@ class DatabaseManager(private val baseDir: Path, private val config: DatabaseCon
         } catch (e: Exception) {
             logger.error("Failed to connect to database: {}", e.message)
             logger.error("Check your database configuration in config/nimbus.toml under [database]")
-            exitProcess(1)
+            throw DatabaseInitException("Failed to connect to database: ${e.message}", e)
         }
 
         // Initialize migration tracking table

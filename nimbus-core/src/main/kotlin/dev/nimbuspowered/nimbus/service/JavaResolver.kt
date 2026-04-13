@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.service
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -28,7 +29,13 @@ class JavaResolver(
 ) {
 
     private val logger = LoggerFactory.getLogger(JavaResolver::class.java)
-    private val client = HttpClient(CIO)
+    private val client = HttpClient(CIO) {
+        install(HttpTimeout) {
+            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = 600_000  // 10 min for large JDK downloads
+            socketTimeoutMillis = 30_000
+        }
+    }
 
     // Directory where Nimbus stores auto-downloaded JDKs
     private val jdkCacheDir: Path = nimbusDir.resolve("jdks")
