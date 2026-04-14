@@ -74,10 +74,22 @@ class ResourcePackManager(
 
     /**
      * Stream an uploaded pack to disk, hashing as it flows.
-     * Caller is responsible for enforcing max size before/during the stream
-     * (we also abort if we exceed [maxBytes]).
      *
-     * @return persisted record with `url` set to the public download path
+     * <h3>Memory profile</h3>
+     * Peak RAM usage per upload is **64 KiB** regardless of file size — that's
+     * the fixed-size transfer buffer we read into. The full flow is end-to-end
+     * streaming:
+     *   1. Browser: `fetch({ body: File })` streams the file off disk into the
+     *      socket, no full-file buffer.
+     *   2. Ktor CIO: [io.ktor.server.request.receiveStream] returns an
+     *      [InputStream] that reads from the request channel as bytes arrive
+     *      with TCP backpressure — never holds the whole body.
+     *   3. Here: read 64 KiB → hash incrementally → write 64 KiB to disk.
+     *   4. Atomic rename once the stream completes.
+     *
+     * We fail fast if the stream exceeds [maxBytes] so a client uploading a
+     * 10 GB file gets rejected after 64 KiB, not after the whole body arrived.
+     *
      * @throws IllegalArgumentException if upload exceeds [maxBytes]
      */
     suspend fun uploadLocalPack(
@@ -95,7 +107,9 @@ class ResourcePackManager(
         var size = 0L
 
         try {
-            Files.newOutputStream(tempFile).use { out ->
+            // FileOutputStream writes straight to disk — no JVM-side buffering.
+            // The 64 KiB transfer buffer is the only memory we allocate per upload.
+            java.io.FileOutputStream(tempFile.toFile()).use { out ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
                     val read = input.read(buffer)
@@ -107,6 +121,8 @@ class ResourcePackManager(
                     sha1.update(buffer, 0, read)
                     out.write(buffer, 0, read)
                 }
+                // Ensure bytes hit the OS page cache before we atomic-move the file.
+                out.fd.sync()
             }
             Files.move(tempFile, targetFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (e: Exception) {

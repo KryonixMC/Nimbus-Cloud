@@ -74,11 +74,16 @@ fun Route.resourcePackAuthedRoutes(
         /*
          * POST /api/resourcepacks/upload?name=...&force=true&prompt=...
          *
-         * File is sent as raw request body (application/octet-stream) — no multipart
-         * wrapping. That lets the dashboard's {@code apiUpload} helper reuse its
-         * existing streaming + HTTPS-proxy plumbing, and keeps the server from
-         * buffering a 250 MB pack into memory. Name / force / prompt arrive as
-         * query params.
+         * Raw-body upload (application/octet-stream). Matches the ModpackRoutes
+         * pattern — call.receiveStream() returns a java.io.InputStream backed by
+         * the Ktor request channel, which reads from the socket as bytes arrive
+         * with TCP backpressure. No body buffering on Ktor's side, no multipart
+         * parsing, no 250 MB memory spike. The manager downstream uses a fixed
+         * 64 KiB transfer buffer so the whole upload path stays streaming from
+         * socket → disk.
+         *
+         * Name / force / prompt arrive as query params to keep the body pure
+         * bytes (no Content-Type disposition overhead).
          */
         post("upload") {
             val name = call.request.queryParameters["name"]
@@ -203,8 +208,12 @@ fun Route.resourcePackPublicRoutes(manager: ResourcePackManager) {
         call.response.header(HttpHeaders.ContentType, "application/zip")
         call.response.header(HttpHeaders.ContentLength, Files.size(file).toString())
         call.response.header(HttpHeaders.CacheControl, "public, max-age=3600")
+        // Streaming download: respondOutputStream wraps Ktor's ByteWriteChannel so
+        // bytes flow with backpressure, never buffering the whole file. copyTo()
+        // uses a 64 KiB transfer buffer — matches the upload path, keeps the
+        // per-request memory footprint tiny regardless of pack size.
         call.respondOutputStream(ContentType.parse("application/zip")) {
-            Files.newInputStream(file).use { input -> input.copyTo(this) }
+            Files.newInputStream(file).use { input -> input.copyTo(this, 64 * 1024) }
         }
     }
 }
