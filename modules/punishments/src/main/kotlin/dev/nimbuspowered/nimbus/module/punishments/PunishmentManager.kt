@@ -14,64 +14,101 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Persistence + business logic for punishments.
  *
- * Hot path (login check) is served from an in-memory cache that mirrors
- * active bans keyed by uuid & ip. The cache is invalidated on every mutation
- * and reloaded from DB.
+ * Hot paths (login / connect / chat checks) are served from in-memory indexes
+ * that mirror active bans/mutes. They're invalidated on every mutation and
+ * reloaded from DB during [init]. Scope filtering happens in memory against
+ * these indexes so scoped bans don't need an extra DB hop on the hot path.
  */
 class PunishmentManager(private val db: DatabaseManager) {
 
     private val logger = LoggerFactory.getLogger(PunishmentManager::class.java)
 
-    // uuid -> most severe active login-blocking punishment
-    private val activeBansByUuid = ConcurrentHashMap<String, PunishmentRecord>()
-    // ip -> most severe active login-blocking ipban
-    private val activeBansByIp = ConcurrentHashMap<String, PunishmentRecord>()
-    // uuid -> most recent active mute
-    private val activeMutesByUuid = ConcurrentHashMap<String, PunishmentRecord>()
+    // Indexed by target UUID — all active login-blocking records (NETWORK + scoped).
+    // Callers filter by scope at read time.
+    private val activeBans = ConcurrentHashMap<String, MutableList<PunishmentRecord>>()
+    private val activeBansByIp = ConcurrentHashMap<String, MutableList<PunishmentRecord>>()
+    private val activeMutes = ConcurrentHashMap<String, MutableList<PunishmentRecord>>()
 
     /** Load active punishments into the in-memory cache. Call after migrations have run. */
     suspend fun init() {
         newSuspendedTransaction(Dispatchers.IO, db.database) {
-            activeBansByUuid.clear()
+            activeBans.clear()
             activeBansByIp.clear()
-            activeMutesByUuid.clear()
+            activeMutes.clear()
             Punishments.selectAll().where { Punishments.active eq true }
                 .forEach { row ->
                     val record = row.toRecord()
-                    when {
-                        record.type == PunishmentType.IPBAN && record.targetIp != null ->
-                            activeBansByIp[record.targetIp] = record
-                        record.type.blocksLogin() ->
-                            activeBansByUuid[record.targetUuid] = record
-                        record.type.blocksChat() ->
-                            activeMutesByUuid[record.targetUuid] = record
-                        else -> {}
-                    }
+                    indexCache(record)
                 }
             logger.info(
-                "Loaded {} active bans, {} ipbans, {} mutes",
-                activeBansByUuid.size, activeBansByIp.size, activeMutesByUuid.size
+                "Loaded active punishments: {} login-blocking, {} IP, {} mutes (across all scopes)",
+                activeBans.values.sumOf { it.size },
+                activeBansByIp.values.sumOf { it.size },
+                activeMutes.values.sumOf { it.size }
             )
         }
     }
 
-    // ── Read ─────────────────────────────────────────────────────
+    private fun indexCache(record: PunishmentRecord) {
+        when {
+            record.type == PunishmentType.IPBAN && record.targetIp != null ->
+                activeBansByIp.computeIfAbsent(record.targetIp) { mutableListOf() }.add(record)
+            record.type.blocksLogin() ->
+                activeBans.computeIfAbsent(record.targetUuid) { mutableListOf() }.add(record)
+            record.type.blocksChat() ->
+                activeMutes.computeIfAbsent(record.targetUuid) { mutableListOf() }.add(record)
+            else -> {}
+        }
+    }
 
-    /** Fast in-memory check — never hits DB. */
+    private fun unindexCache(record: PunishmentRecord) {
+        fun <T> remove(map: ConcurrentHashMap<T, MutableList<PunishmentRecord>>, key: T) {
+            map[key]?.let { list ->
+                list.removeAll { it.id == record.id }
+                if (list.isEmpty()) map.remove(key)
+            }
+        }
+        when {
+            record.type == PunishmentType.IPBAN && record.targetIp != null -> remove(activeBansByIp, record.targetIp)
+            record.type.blocksLogin() -> remove(activeBans, record.targetUuid)
+            record.type.blocksChat() -> remove(activeMutes, record.targetUuid)
+        }
+    }
+
+    // ── Hot-path reads ────────────────────────────────────────────
+
+    /**
+     * Login-time check: does the player have a NETWORK-scoped ban that should
+     * deny proxy login entirely? Group/service-scoped bans do NOT fire here —
+     * those are handled per-connection by [checkConnectCached].
+     */
     fun checkLoginCached(uuid: String, ip: String?): PunishmentRecord? {
-        val byUuid = activeBansByUuid[uuid]
-        if (byUuid != null && !byUuid.isExpired()) return byUuid
+        activeBans[uuid]?.firstOrNull { it.scope == PunishmentScope.NETWORK && !it.isExpired() }?.let { return it }
         if (ip != null) {
-            val byIp = activeBansByIp[ip]
-            if (byIp != null && !byIp.isExpired()) return byIp
+            activeBansByIp[ip]?.firstOrNull { it.scope == PunishmentScope.NETWORK && !it.isExpired() }?.let { return it }
         }
         return null
     }
 
-    /** Fast in-memory mute check — never hits DB. */
-    fun checkMuteCached(uuid: String): PunishmentRecord? {
-        val record = activeMutesByUuid[uuid]
-        return if (record != null && !record.isExpired()) record else null
+    /**
+     * Per-connection check: returns any active ban that applies when the player
+     * tries to enter a specific `group`/`service`. Covers NETWORK + GROUP-matching
+     * + SERVICE-matching bans. Used by ServerPreConnectEvent on the proxy.
+     */
+    fun checkConnectCached(uuid: String, ip: String?, group: String?, service: String?): PunishmentRecord? {
+        val matches = buildList {
+            activeBans[uuid]?.let { addAll(it) }
+            if (ip != null) activeBansByIp[ip]?.let { addAll(it) }
+        }
+        return matches.firstOrNull { !it.isExpired() && it.appliesIn(group, service) }
+    }
+
+    /**
+     * Chat-time check: returns any active mute that applies for the given context.
+     * Pass the player's current `group` + `service` so scoped mutes only fire there.
+     */
+    fun checkMuteCached(uuid: String, group: String?, service: String?): PunishmentRecord? {
+        return activeMutes[uuid]?.firstOrNull { !it.isExpired() && it.appliesIn(group, service) }
     }
 
     suspend fun getById(id: Int): PunishmentRecord? = newSuspendedTransaction(Dispatchers.IO, db.database) {
@@ -104,11 +141,10 @@ class PunishmentManager(private val db: DatabaseManager) {
     // ── Write ────────────────────────────────────────────────────
 
     /**
-     * Issue a new punishment. Returns the persisted record.
-     *
-     * For [PunishmentType.BAN] / [PunishmentType.MUTE] / [PunishmentType.IPBAN] any
-     * currently-active punishment of the same type against the same target is
-     * automatically revoked (superseded) to keep only one active record per type+target.
+     * Issue a new punishment. Supersedes any prior active record of the same
+     * *class* (login-blocking vs chat-blocking) against the same target and
+     * scope — keeps only one active ban/mute per target+scope so revoking
+     * one record doesn't leave a hidden second one in place.
      */
     suspend fun issue(
         type: PunishmentType,
@@ -118,29 +154,30 @@ class PunishmentManager(private val db: DatabaseManager) {
         duration: Duration?,
         reason: String,
         issuer: String,
-        issuerName: String
+        issuerName: String,
+        scope: PunishmentScope = PunishmentScope.NETWORK,
+        scopeTarget: String? = null
     ): PunishmentRecord {
         val now = Instant.now()
         val expiresAt = duration?.let { now.plus(it) }
 
         val record = newSuspendedTransaction(Dispatchers.IO, db.database) {
-            // Supersede existing active records of overlapping type
-            if (type.blocksLogin()) {
-                Punishments.update({
-                    (Punishments.targetUuid eq targetUuid) and
-                    (Punishments.active eq true) and
-                    (Punishments.type.inList(listOf(PunishmentType.BAN.name, PunishmentType.TEMPBAN.name, PunishmentType.IPBAN.name)))
-                }) {
-                    it[active] = false
-                    it[revokedBy] = issuer
-                    it[revokedAt] = now.toString()
-                    it[revokeReason] = "Superseded by new punishment"
+            val superTypes = when {
+                type.blocksLogin() -> listOf(PunishmentType.BAN.name, PunishmentType.TEMPBAN.name, PunishmentType.IPBAN.name)
+                type.blocksChat() -> listOf(PunishmentType.MUTE.name, PunishmentType.TEMPMUTE.name)
+                else -> emptyList()
+            }
+            if (superTypes.isNotEmpty()) {
+                val scopeMatch: Op<Boolean> = if (scopeTarget == null) {
+                    (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq null as String?)
+                } else {
+                    (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq scopeTarget)
                 }
-            } else if (type.blocksChat()) {
                 Punishments.update({
                     (Punishments.targetUuid eq targetUuid) and
                     (Punishments.active eq true) and
-                    (Punishments.type.inList(listOf(PunishmentType.MUTE.name, PunishmentType.TEMPMUTE.name)))
+                    (Punishments.type.inList(superTypes)) and
+                    scopeMatch
                 }) {
                     it[active] = false
                     it[revokedBy] = issuer
@@ -149,7 +186,6 @@ class PunishmentManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Kicks and warns are historical-only: always active = false after record
             val storeActive = type.isRevocable()
 
             val id = Punishments.insertAndGetId {
@@ -163,6 +199,8 @@ class PunishmentManager(private val db: DatabaseManager) {
                 it[Punishments.issuedAt] = now.toString()
                 it[Punishments.expiresAt] = expiresAt?.toString()
                 it[Punishments.active] = storeActive
+                it[Punishments.scope] = scope.name
+                it[Punishments.scopeTarget] = scopeTarget
             }
 
             PunishmentRecord(
@@ -179,27 +217,22 @@ class PunishmentManager(private val db: DatabaseManager) {
                 active = storeActive,
                 revokedBy = null,
                 revokedAt = null,
-                revokeReason = null
+                revokeReason = null,
+                scope = scope,
+                scopeTarget = scopeTarget
             )
         }
 
-        // Update cache after commit
-        if (record.active) {
-            when {
-                record.type == PunishmentType.IPBAN && record.targetIp != null ->
-                    activeBansByIp[record.targetIp] = record
-                record.type.blocksLogin() ->
-                    activeBansByUuid[record.targetUuid] = record
-                record.type.blocksChat() ->
-                    activeMutesByUuid[record.targetUuid] = record
-            }
-        }
+        // Refresh cache after commit — remove superseded entries + add the new one
+        rebuildIndexForTarget(targetUuid)
+        if (targetIp != null) rebuildIpIndex(targetIp)
 
         return record
     }
 
     /**
-     * Revoke an active punishment (unban/unmute). Returns true if something was changed.
+     * Revoke an active punishment (unban/unmute). Returns the revoked record or null
+     * if there was nothing to revoke.
      */
     suspend fun revoke(id: Int, revokedBy: String, reason: String?): PunishmentRecord? {
         val updated = newSuspendedTransaction(Dispatchers.IO, db.database) {
@@ -216,47 +249,58 @@ class PunishmentManager(private val db: DatabaseManager) {
             Punishments.selectAll().where { Punishments.id eq id }.first().toRecord()
         } ?: return null
 
-        // Invalidate cache
-        when {
-            updated.type == PunishmentType.IPBAN && updated.targetIp != null ->
-                activeBansByIp.remove(updated.targetIp)
-            updated.type.blocksLogin() ->
-                activeBansByUuid.remove(updated.targetUuid)
-            updated.type.blocksChat() ->
-                activeMutesByUuid.remove(updated.targetUuid)
-        }
+        unindexCache(updated)
         return updated
     }
 
     /**
-     * Find the active login-blocking punishment for a target (uuid, optionally by name fallback).
-     * Used by console `unban <player>` when the admin has no punishment id.
+     * Find the most recent active login-blocking punishment for a player (by uuid or name),
+     * limited to a particular scope. `scope` + `scopeTarget` null → only NETWORK matches,
+     * mirroring `punish unban <player>` where no --group/--service flag was given.
      */
-    suspend fun findActiveBan(targetUuidOrName: String): PunishmentRecord? =
-        newSuspendedTransaction(Dispatchers.IO, db.database) {
-            Punishments.selectAll().where {
-                (Punishments.active eq true) and
-                ((Punishments.targetUuid eq targetUuidOrName) or (Punishments.targetName eq targetUuidOrName)) and
-                (Punishments.type.inList(listOf(PunishmentType.BAN.name, PunishmentType.TEMPBAN.name, PunishmentType.IPBAN.name)))
-            }
-                .orderBy(Punishments.issuedAt, SortOrder.DESC)
-                .firstOrNull()?.toRecord()
+    suspend fun findActiveBan(
+        targetUuidOrName: String,
+        scope: PunishmentScope = PunishmentScope.NETWORK,
+        scopeTarget: String? = null
+    ): PunishmentRecord? = newSuspendedTransaction(Dispatchers.IO, db.database) {
+        val scopeMatch = if (scopeTarget == null) {
+            (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq null as String?)
+        } else {
+            (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq scopeTarget)
         }
+        Punishments.selectAll().where {
+            (Punishments.active eq true) and
+            ((Punishments.targetUuid eq targetUuidOrName) or (Punishments.targetName eq targetUuidOrName)) and
+            (Punishments.type.inList(listOf(PunishmentType.BAN.name, PunishmentType.TEMPBAN.name, PunishmentType.IPBAN.name))) and
+            scopeMatch
+        }
+            .orderBy(Punishments.issuedAt, SortOrder.DESC)
+            .firstOrNull()?.toRecord()
+    }
 
-    suspend fun findActiveMute(targetUuidOrName: String): PunishmentRecord? =
-        newSuspendedTransaction(Dispatchers.IO, db.database) {
-            Punishments.selectAll().where {
-                (Punishments.active eq true) and
-                ((Punishments.targetUuid eq targetUuidOrName) or (Punishments.targetName eq targetUuidOrName)) and
-                (Punishments.type.inList(listOf(PunishmentType.MUTE.name, PunishmentType.TEMPMUTE.name)))
-            }
-                .orderBy(Punishments.issuedAt, SortOrder.DESC)
-                .firstOrNull()?.toRecord()
+    suspend fun findActiveMute(
+        targetUuidOrName: String,
+        scope: PunishmentScope = PunishmentScope.NETWORK,
+        scopeTarget: String? = null
+    ): PunishmentRecord? = newSuspendedTransaction(Dispatchers.IO, db.database) {
+        val scopeMatch = if (scopeTarget == null) {
+            (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq null as String?)
+        } else {
+            (Punishments.scope eq scope.name) and (Punishments.scopeTarget eq scopeTarget)
         }
+        Punishments.selectAll().where {
+            (Punishments.active eq true) and
+            ((Punishments.targetUuid eq targetUuidOrName) or (Punishments.targetName eq targetUuidOrName)) and
+            (Punishments.type.inList(listOf(PunishmentType.MUTE.name, PunishmentType.TEMPMUTE.name))) and
+            scopeMatch
+        }
+            .orderBy(Punishments.issuedAt, SortOrder.DESC)
+            .firstOrNull()?.toRecord()
+    }
 
     /**
-     * Deactivate tempbans/tempmutes whose `expires_at` has passed.
-     * Returns the records that were expired. Meant to run periodically.
+     * Deactivate tempbans/tempmutes whose `expires_at` has passed. Returns the
+     * records that were expired so callers can emit events for them.
      */
     suspend fun expireOverdue(): List<PunishmentRecord> {
         val nowIso = Instant.now().toString()
@@ -279,15 +323,32 @@ class PunishmentManager(private val db: DatabaseManager) {
             candidates
         }
 
-        // Invalidate cache entries
-        expired.forEach { r ->
-            when {
-                r.type == PunishmentType.IPBAN && r.targetIp != null -> activeBansByIp.remove(r.targetIp)
-                r.type.blocksLogin() -> activeBansByUuid.remove(r.targetUuid)
-                r.type.blocksChat() -> activeMutesByUuid.remove(r.targetUuid)
-            }
-        }
+        expired.forEach { unindexCache(it) }
         return expired
+    }
+
+    // ── Cache maintenance helpers ────────────────────────────────
+
+    private suspend fun rebuildIndexForTarget(uuid: String) {
+        val fresh = newSuspendedTransaction(Dispatchers.IO, db.database) {
+            Punishments.selectAll().where {
+                (Punishments.targetUuid eq uuid) and (Punishments.active eq true)
+            }.map { it.toRecord() }
+        }
+        activeBans.remove(uuid)
+        activeMutes.remove(uuid)
+        fresh.forEach { indexCache(it) }
+    }
+
+    private suspend fun rebuildIpIndex(ip: String) {
+        val fresh = newSuspendedTransaction(Dispatchers.IO, db.database) {
+            Punishments.selectAll().where {
+                (Punishments.targetIp eq ip) and (Punishments.active eq true) and
+                (Punishments.type eq PunishmentType.IPBAN.name)
+            }.map { it.toRecord() }
+        }
+        activeBansByIp.remove(ip)
+        fresh.forEach { indexCache(it) }
     }
 
     // ── Helpers ──────────────────────────────────────────────────
@@ -306,7 +367,9 @@ class PunishmentManager(private val db: DatabaseManager) {
         active = this[Punishments.active],
         revokedBy = this[Punishments.revokedBy],
         revokedAt = this[Punishments.revokedAt],
-        revokeReason = this[Punishments.revokeReason]
+        revokeReason = this[Punishments.revokeReason],
+        scope = runCatching { PunishmentScope.valueOf(this[Punishments.scope]) }.getOrDefault(PunishmentScope.NETWORK),
+        scopeTarget = this[Punishments.scopeTarget]
     )
 
     private fun PunishmentRecord.isExpired(): Boolean {

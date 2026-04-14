@@ -23,9 +23,15 @@ object Punishments : IntIdTable("punishments") {
     val revokedAt = varchar("revoked_at", 30).nullable()
     val revokeReason = text("revoke_reason").nullable()
 
+    // Scope: NETWORK (default) blocks login/mute everywhere; GROUP and SERVICE restrict
+    // enforcement to a single target so staff can scope out of a specific game/lobby.
+    val scope = varchar("scope", 16).default("NETWORK")
+    val scopeTarget = varchar("scope_target", 128).nullable()
+
     init {
         index(false, targetUuid, type, active)
         index(false, targetIp, type, active)
         index(false, active)
+        index(false, scope, scopeTarget)
     }
 }

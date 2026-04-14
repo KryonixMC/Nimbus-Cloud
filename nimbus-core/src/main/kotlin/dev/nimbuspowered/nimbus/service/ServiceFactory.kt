@@ -598,9 +598,10 @@ class ServiceFactory(
 
     /**
      * Deploys runtime-managed plugins to a service's working directory:
-     *   - Velocity proxies  → `nimbus-bridge.jar` (picks the versioned resource if present)
+     *   - Velocity proxies  → `nimbus-bridge.jar` + every [PluginDeployment] a module
+     *     registered with [PluginTarget.VELOCITY] (e.g. nimbus-punishments-velocity)
      *   - Paper-based backends → `nimbus-sdk.jar` + every [PluginDeployment] a module
-     *     registered via [ModuleContext.registerPluginDeployment]
+     *     registered with [PluginTarget.BACKEND] (the default)
      *   - Forge / Fabric / other software → nothing (no Nimbus runtime support yet)
      *
      * Copies are from the core JAR's classpath, always with REPLACE_EXISTING — deleted or
@@ -610,10 +611,14 @@ class ServiceFactory(
      */
     private suspend fun resolveModulePlugins(software: ServerSoftware, version: String, workDir: Path, serviceName: String) {
         val pluginsDir = workDir.resolve("plugins")
+        val allDeployments = moduleContext?.pluginDeployments.orEmpty()
 
         if (software == ServerSoftware.VELOCITY) {
             if (!pluginsDir.exists()) pluginsDir.createDirectories()
             deployBridgePlugin(pluginsDir)
+            for (deployment in allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.VELOCITY }) {
+                deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
+            }
             return
         }
 
@@ -625,13 +630,13 @@ class ServiceFactory(
         // Always deploy the SDK — it's the base layer for every Nimbus-aware plugin
         deployResourcePlugin(pluginsDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
 
-        val deployments = moduleContext?.pluginDeployments
-        if (deployments.isNullOrEmpty()) return
+        val backendDeployments = allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.BACKEND }
+        if (backendDeployments.isEmpty()) return
 
         val minor = version.split(".").getOrNull(1)?.toIntOrNull() ?: 0
         var needsPacketEvents = false
 
-        for (deployment in deployments) {
+        for (deployment in backendDeployments) {
             // Skip plugins that require a newer Minecraft version
             val minVersion = deployment.minMinecraftVersion
             if (minVersion != null && minor < minVersion) {

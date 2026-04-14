@@ -48,6 +48,8 @@ interface Punishment {
   revokedBy: string | null;
   revokedAt: string | null;
   revokeReason: string | null;
+  scope: string;                 // "NETWORK" | "GROUP" | "SERVICE"
+  scopeTarget: string | null;    // group or service name for scoped bans
 }
 
 interface ListResponse {
@@ -289,6 +291,7 @@ function PunishmentTable({
               <TableHead className="pl-6 w-14" />
               <TableHead>Player</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Scope</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead>Issuer</TableHead>
               <TableHead>Issued</TableHead>
@@ -321,6 +324,25 @@ function PunishmentTable({
                   <Badge variant="outline" className={typeClass(p.type)}>
                     {p.type}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {p.scope === "NETWORK" ? (
+                    <Badge variant="secondary" className="text-xs">
+                      network
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400"
+                    >
+                      {p.scope.toLowerCase()}
+                      {p.scopeTarget && (
+                        <span className="ml-1 opacity-70">
+                          : {p.scopeTarget}
+                        </span>
+                      )}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell className="max-w-xs truncate text-sm">
                   {p.reason || <span className="text-muted-foreground">—</span>}

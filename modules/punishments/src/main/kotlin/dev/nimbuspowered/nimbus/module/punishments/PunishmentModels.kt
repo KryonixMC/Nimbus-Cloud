@@ -19,8 +19,17 @@ data class PunishmentRecord(
     val active: Boolean,
     val revokedBy: String?,
     val revokedAt: String?,
-    val revokeReason: String?
-)
+    val revokeReason: String?,
+    val scope: PunishmentScope,
+    val scopeTarget: String?
+) {
+    /** True if this record applies in the given (group, service) context. */
+    fun appliesIn(group: String?, service: String?): Boolean = when (scope) {
+        PunishmentScope.NETWORK -> true
+        PunishmentScope.GROUP -> group != null && group == scopeTarget
+        PunishmentScope.SERVICE -> service != null && service == scopeTarget
+    }
+}
 
 // ── REST API DTOs ───────────────────────────────────────────
 
@@ -39,7 +48,9 @@ data class PunishmentResponse(
     val active: Boolean,
     val revokedBy: String?,
     val revokedAt: String?,
-    val revokeReason: String?
+    val revokeReason: String?,
+    val scope: String,
+    val scopeTarget: String?
 )
 
 @Serializable
@@ -57,7 +68,9 @@ data class IssuePunishmentRequest(
     val duration: String? = null,   // "30m", "7d", "perm", null
     val reason: String = "",
     val issuer: String = "api",
-    val issuerName: String = "API"
+    val issuerName: String = "API",
+    val scope: String = "NETWORK",  // "NETWORK" | "GROUP" | "SERVICE"
+    val scopeTarget: String? = null
 )
 
 @Serializable
@@ -67,8 +80,8 @@ data class RevokePunishmentRequest(
 )
 
 /**
- * Compact response used by Bridge on PreLogin.
- * Only includes fields the kick screen needs.
+ * Compact response used by Bridge on PreLogin / ServerPreConnect / PlayerChat.
+ * Only includes fields the kick / block screen needs.
  */
 @Serializable
 data class PunishmentCheckResponse(
@@ -78,7 +91,9 @@ data class PunishmentCheckResponse(
     val issuerName: String? = null,
     val issuedAt: String? = null,
     val expiresAt: String? = null,
-    val remainingSeconds: Long? = null
+    val remainingSeconds: Long? = null,
+    val scope: String? = null,
+    val scopeTarget: String? = null
 )
 
 fun PunishmentRecord.toResponse() = PunishmentResponse(
@@ -95,5 +110,7 @@ fun PunishmentRecord.toResponse() = PunishmentResponse(
     active = active,
     revokedBy = revokedBy,
     revokedAt = revokedAt,
-    revokeReason = revokeReason
+    revokeReason = revokeReason,
+    scope = scope.name,
+    scopeTarget = scopeTarget
 )

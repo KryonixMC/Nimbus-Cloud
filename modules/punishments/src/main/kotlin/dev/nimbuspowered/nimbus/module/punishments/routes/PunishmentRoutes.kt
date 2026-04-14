@@ -9,6 +9,8 @@ import dev.nimbuspowered.nimbus.module.punishments.IssuePunishmentRequest
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentCheckResponse
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentListResponse
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentManager
+import dev.nimbuspowered.nimbus.module.punishments.PunishmentRecord
+import dev.nimbuspowered.nimbus.module.punishments.PunishmentScope
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentType
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentsEvents
 import dev.nimbuspowered.nimbus.module.punishments.RevokePunishmentRequest
@@ -47,7 +49,7 @@ fun Route.punishmentRoutes(
             call.respond(record.toResponse())
         }
 
-        // GET /api/punishments/player/{uuid} — full history
+        // GET /api/punishments/player/{uuid}
         get("player/{uuid}") {
             val uuid = call.parameters["uuid"]!!
             val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 100).coerceIn(1, 500)
@@ -55,53 +57,36 @@ fun Route.punishmentRoutes(
             call.respond(PunishmentListResponse(history.map { it.toResponse() }, history.size))
         }
 
-        // GET /api/punishments/check/{uuid}?ip=x.x.x.x — fast login check for Bridge
+        /*
+         * GET /api/punishments/check/{uuid}?ip=x.x.x.x[&group=Lobby][&service=Lobby-1]
+         *
+         * Without `group`/`service`: returns only NETWORK-scoped active bans — used by
+         *   the proxy on LoginEvent to deny proxy login entirely.
+         * With `group`/`service`:    returns NETWORK + matching GROUP/SERVICE bans —
+         *   used by the proxy on ServerPreConnectEvent to block access to a specific
+         *   backend while letting the player stay on the network.
+         */
         get("check/{uuid}") {
             val uuid = call.parameters["uuid"]!!
             val ip = call.request.queryParameters["ip"]
-            val record = manager.checkLoginCached(uuid, ip)
-            if (record == null) {
-                call.respond(PunishmentCheckResponse(punished = false))
+            val group = call.request.queryParameters["group"]
+            val service = call.request.queryParameters["service"]
+
+            val record = if (group == null && service == null) {
+                manager.checkLoginCached(uuid, ip)
             } else {
-                val remaining = record.expiresAt?.let {
-                    try {
-                        Duration.between(Instant.now(), Instant.parse(it)).seconds.coerceAtLeast(0)
-                    } catch (_: Exception) { null }
-                }
-                call.respond(PunishmentCheckResponse(
-                    punished = true,
-                    type = record.type.name,
-                    reason = record.reason,
-                    issuerName = record.issuerName,
-                    issuedAt = record.issuedAt,
-                    expiresAt = record.expiresAt,
-                    remainingSeconds = remaining
-                ))
+                manager.checkConnectCached(uuid, ip, group, service)
             }
+            call.respond(record.toCheckResponse())
         }
 
-        // GET /api/punishments/mute/{uuid} — mute check for backend plugin
+        // GET /api/punishments/mute/{uuid}?group=&service= — scoped mute check
         get("mute/{uuid}") {
             val uuid = call.parameters["uuid"]!!
-            val record = manager.checkMuteCached(uuid)
-            if (record == null) {
-                call.respond(PunishmentCheckResponse(punished = false))
-            } else {
-                val remaining = record.expiresAt?.let {
-                    try {
-                        Duration.between(Instant.now(), Instant.parse(it)).seconds.coerceAtLeast(0)
-                    } catch (_: Exception) { null }
-                }
-                call.respond(PunishmentCheckResponse(
-                    punished = true,
-                    type = record.type.name,
-                    reason = record.reason,
-                    issuerName = record.issuerName,
-                    issuedAt = record.issuedAt,
-                    expiresAt = record.expiresAt,
-                    remainingSeconds = remaining
-                ))
-            }
+            val group = call.request.queryParameters["group"]
+            val service = call.request.queryParameters["service"]
+            val record = manager.checkMuteCached(uuid, group, service)
+            call.respond(record.toCheckResponse())
         }
 
         // POST /api/punishments — issue a new punishment
@@ -116,6 +101,12 @@ fun Route.punishmentRoutes(
             val uuid = req.targetUuid ?: "00000000-0000-0000-0000-000000000000"
             if (type == PunishmentType.IPBAN && req.targetIp.isNullOrBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest, apiError("IPBAN requires targetIp", ApiErrors.PUNISHMENT_TARGET_INVALID))
+            }
+
+            val scope = PunishmentScope.parse(req.scope)
+            if (scope != PunishmentScope.NETWORK && req.scopeTarget.isNullOrBlank()) {
+                return@post call.respond(HttpStatusCode.BadRequest,
+                    apiError("$scope scope requires a scopeTarget (group or service name)", ApiErrors.VALIDATION_FAILED))
             }
 
             val duration = try {
@@ -145,7 +136,9 @@ fun Route.punishmentRoutes(
                 duration = duration,
                 reason = req.reason,
                 issuer = req.issuer,
-                issuerName = req.issuerName
+                issuerName = req.issuerName,
+                scope = scope,
+                scopeTarget = if (scope == PunishmentScope.NETWORK) null else req.scopeTarget
             )
             eventBus.emit(PunishmentsEvents.issued(record))
             call.respond(HttpStatusCode.Created, record.toResponse())
@@ -167,4 +160,23 @@ fun Route.punishmentRoutes(
             call.respond(ApiMessage(true, "Punishment ${revoked.id} revoked"))
         }
     }
+}
+
+/** Turn a matched record (or null) into the compact check response the Bridge expects. */
+private fun PunishmentRecord?.toCheckResponse(): PunishmentCheckResponse {
+    if (this == null) return PunishmentCheckResponse(punished = false)
+    val remaining = expiresAt?.let {
+        try { Duration.between(Instant.now(), Instant.parse(it)).seconds.coerceAtLeast(0) } catch (_: Exception) { null }
+    }
+    return PunishmentCheckResponse(
+        punished = true,
+        type = type.name,
+        reason = reason,
+        issuerName = issuerName,
+        issuedAt = issuedAt,
+        expiresAt = expiresAt,
+        remainingSeconds = remaining,
+        scope = scope.name,
+        scopeTarget = scopeTarget
+    )
 }

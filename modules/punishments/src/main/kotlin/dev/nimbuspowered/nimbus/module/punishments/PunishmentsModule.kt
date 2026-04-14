@@ -15,9 +15,11 @@ import dev.nimbuspowered.nimbus.module.DashboardSection
 import dev.nimbuspowered.nimbus.module.ModuleContext
 import dev.nimbuspowered.nimbus.module.NimbusModule
 import dev.nimbuspowered.nimbus.module.PluginDeployment
+import dev.nimbuspowered.nimbus.module.PluginTarget
 import dev.nimbuspowered.nimbus.module.punishments.commands.PlayerResolver
 import dev.nimbuspowered.nimbus.module.punishments.commands.PunishCommand
 import dev.nimbuspowered.nimbus.module.punishments.migrations.PunishmentsV1_Baseline
+import dev.nimbuspowered.nimbus.module.punishments.migrations.PunishmentsV2_Scope
 import dev.nimbuspowered.nimbus.module.punishments.routes.punishmentRoutes
 import dev.nimbuspowered.nimbus.module.service
 import kotlinx.coroutines.delay
@@ -49,16 +51,19 @@ class PunishmentsModule : NimbusModule {
         val eventBus = context.service<EventBus>()!!
         val config = context.service<NimbusConfig>()
 
-        context.registerMigrations(listOf(PunishmentsV1_Baseline))
+        context.registerMigrations(listOf(PunishmentsV1_Baseline, PunishmentsV2_Scope))
         manager = PunishmentManager(db)
 
         messages = PunishmentsMessagesLoader.loadOrCreate(context.moduleConfigDir(id))
 
         if (config?.punishments?.deployPlugin != false) {
+            // Enforcement runs on Velocity (proxy-wide), not on each backend.
+            // The JAR is deployed to every proxy service on prepare via resolveModulePlugins.
             context.registerPluginDeployment(PluginDeployment(
                 resourcePath = "plugins/nimbus-punishments.jar",
                 fileName = "nimbus-punishments.jar",
-                displayName = "NimbusPunishments"
+                displayName = "NimbusPunishments",
+                target = PluginTarget.VELOCITY
             ))
         }
 
@@ -82,20 +87,22 @@ class PunishmentsModule : NimbusModule {
     }
 
     /**
-     * Build a [PlayerResolver] backed by the core's player cache if available.
+     * Build a [PlayerResolver] used by the console `punish` command to map
+     * `<player>` arguments to a (uuid, name) pair.
      *
-     * Priority:
-     *   1. An online player registry (ServiceRegistry / PlayerTracker) — fastest
-     *   2. Direct lookup of the input as a UUID — for admins who type UUIDs
-     *   3. Fallback: treat the input as a name and store a zero-uuid marker
-     *      (still creates an audit trail, but won't block logins until the real UUID arrives)
+     * Priority order:
+     *   1. UUID input (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`) — used as-is.
+     *   2. Mojang profile API lookup for the name — returns the canonical UUID
+     *      and name even if the player has never joined the network. This is
+     *      the common case for staff who want to pre-ban known cheaters.
+     *
+     * The Mojang call blocks on HTTP, so the resolver is meant to run off the
+     * main thread. Console commands already execute in a coroutine context.
      */
     private fun buildPlayerResolver(context: ModuleContext): PlayerResolver {
         return PlayerResolver { input ->
-            // UUID input — standard length + hyphens
             if (isUuid(input)) return@PlayerResolver input to input.take(16)
-            // TODO: query core's player registry via reflection-safe service lookup once available.
-            null
+            MojangUuidLookup.resolve(input)
         }
     }
 

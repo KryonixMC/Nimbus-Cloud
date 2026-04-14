@@ -10,6 +10,7 @@ import dev.nimbuspowered.nimbus.module.SubcommandMeta
 import dev.nimbuspowered.nimbus.module.punishments.DurationParser
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentManager
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentRecord
+import dev.nimbuspowered.nimbus.module.punishments.PunishmentScope
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentType
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentsEvents
 import java.time.Duration
@@ -36,28 +37,72 @@ class PunishCommand(
     override val permission = "nimbus.cloud.punish"
 
     override val subcommandMeta: List<SubcommandMeta> get() = listOf(
-        SubcommandMeta("ban", "Permanently ban a player", "punish ban <player> <reason>",
+        SubcommandMeta("ban", "Permanently ban a player", "punish ban <player> [--group <g>|--service <s>] <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
-        SubcommandMeta("tempban", "Ban for a duration", "punish tempban <player> <duration> <reason>",
+        SubcommandMeta("tempban", "Ban for a duration", "punish tempban <player> <duration> [--group <g>|--service <s>] <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
         SubcommandMeta("ipban", "Ban an IP address", "punish ipban <player> <ip> <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
-        SubcommandMeta("mute", "Permanently mute a player", "punish mute <player> <reason>",
+        SubcommandMeta("mute", "Permanently mute a player", "punish mute <player> [--group <g>|--service <s>] <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
-        SubcommandMeta("tempmute", "Mute for a duration", "punish tempmute <player> <duration> <reason>",
+        SubcommandMeta("tempmute", "Mute for a duration", "punish tempmute <player> <duration> [--group <g>|--service <s>] <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
         SubcommandMeta("kick", "Kick a player once", "punish kick <player> <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
         SubcommandMeta("warn", "Record a warning", "punish warn <player> <reason>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
-        SubcommandMeta("unban", "Revoke active ban", "punish unban <player>",
+        SubcommandMeta("unban", "Revoke active ban", "punish unban <player> [--group <g>|--service <s>]",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
-        SubcommandMeta("unmute", "Revoke active mute", "punish unmute <player>",
+        SubcommandMeta("unmute", "Revoke active mute", "punish unmute <player> [--group <g>|--service <s>]",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
         SubcommandMeta("history", "Show player history", "punish history <player>",
             listOf(CompletionMeta(0, CompletionType.PLAYER))),
         SubcommandMeta("list", "List active punishments", "punish list [type]")
     )
+
+    /**
+     * Pulls `--group <name>` / `--service <name>` out of a token list and returns
+     * the resulting scope + the leftover tokens (for reason parsing).
+     *
+     * Only one of the two flags is honored — if both appear, `--service` wins.
+     * Unknown flags are left in place; the caller's reason joiner will include them,
+     * which is fine for free-form reason text that happens to start with `--`.
+     */
+    private data class ParsedScope(
+        val scope: PunishmentScope,
+        val target: String?,
+        val rest: List<String>,
+        val error: String? = null
+    )
+
+    private fun parseScopeFlags(tokens: List<String>): ParsedScope {
+        var scope = PunishmentScope.NETWORK
+        var target: String? = null
+        val rest = mutableListOf<String>()
+        var i = 0
+        while (i < tokens.size) {
+            val t = tokens[i]
+            when (t) {
+                "--group", "-g" -> {
+                    if (i + 1 >= tokens.size) return ParsedScope(scope, target, rest, "Missing group name after $t")
+                    scope = PunishmentScope.GROUP
+                    target = tokens[i + 1]
+                    i += 2
+                }
+                "--service", "-s" -> {
+                    if (i + 1 >= tokens.size) return ParsedScope(scope, target, rest, "Missing service name after $t")
+                    scope = PunishmentScope.SERVICE
+                    target = tokens[i + 1]
+                    i += 2
+                }
+                else -> {
+                    rest.add(t)
+                    i += 1
+                }
+            }
+        }
+        return ParsedScope(scope, target, rest)
+    }
 
     override suspend fun execute(args: List<String>) {
         val out = object : CommandOutput {
@@ -101,8 +146,8 @@ class PunishCommand(
     ) {
         val required = if (needsDuration) 3 else 2
         if (args.size < required) {
-            output.error(if (needsDuration) "Usage: punish ${type.name.lowercase()} <player> <duration> <reason>"
-                         else "Usage: punish ${type.name.lowercase()} <player> <reason>")
+            output.error(if (needsDuration) "Usage: punish ${type.name.lowercase()} <player> <duration> [--group <g>|--service <s>] <reason>"
+                         else "Usage: punish ${type.name.lowercase()} <player> [--group <g>|--service <s>] <reason>")
             return
         }
 
@@ -124,8 +169,10 @@ class PunishCommand(
             return
         }
 
-        val reasonArgs = if (needsDuration) args.drop(2) else args.drop(1)
-        val reason = reasonArgs.joinToString(" ").ifBlank { "No reason given" }
+        val rawAfterFixed = if (needsDuration) args.drop(2) else args.drop(1)
+        val parsed = parseScopeFlags(rawAfterFixed)
+        if (parsed.error != null) { output.error(parsed.error); return }
+        val reason = parsed.rest.joinToString(" ").ifBlank { "No reason given" }
 
         val record = manager.issue(
             type = type,
@@ -135,13 +182,19 @@ class PunishCommand(
             duration = duration,
             reason = reason,
             issuer = "console",
-            issuerName = "Console"
+            issuerName = "Console",
+            scope = parsed.scope,
+            scopeTarget = parsed.target
         )
         eventBus.emit(PunishmentsEvents.issued(record))
 
         val durationStr = DurationParser.format(duration)
+        val scopeStr = when (parsed.scope) {
+            PunishmentScope.NETWORK -> ""
+            else -> " ${ConsoleFormatter.DIM}[${parsed.scope}:${parsed.target}]${ConsoleFormatter.RESET}"
+        }
         output.success("${type.name} issued against ${ConsoleFormatter.BOLD}$name${ConsoleFormatter.RESET} " +
-                "(#${record.id}, $durationStr) — $reason")
+                "(#${record.id}, $durationStr)$scopeStr — $reason")
     }
 
     private suspend fun handleIpban(args: List<String>, output: CommandOutput) {
@@ -172,41 +225,49 @@ class PunishCommand(
     }
 
     private suspend fun handleRevokeBan(args: List<String>, output: CommandOutput) {
-        if (args.isEmpty()) { output.error("Usage: punish unban <player>"); return }
+        if (args.isEmpty()) { output.error("Usage: punish unban <player> [--group <g>|--service <s>]"); return }
         val resolved = resolver.resolve(args[0])
         val key = resolved?.first ?: args[0]
-        val record = manager.findActiveBan(key)
+        val parsed = parseScopeFlags(args.drop(1))
+        if (parsed.error != null) { output.error(parsed.error); return }
+        val record = manager.findActiveBan(key, parsed.scope, parsed.target)
         if (record == null) {
-            output.error("No active ban found for '${args[0]}'")
+            val scopeStr = if (parsed.scope == PunishmentScope.NETWORK) "network-wide"
+                           else "${parsed.scope}:${parsed.target}"
+            output.error("No active $scopeStr ban found for '${args[0]}'")
             return
         }
-        val reason = args.drop(1).joinToString(" ").ifBlank { null }
+        val reason = parsed.rest.joinToString(" ").ifBlank { null }
         val revoked = manager.revoke(record.id, "console", reason)
         if (revoked == null) {
             output.error("Could not revoke punishment #${record.id}")
             return
         }
         eventBus.emit(PunishmentsEvents.revoked(revoked))
-        output.success("Unbanned ${revoked.targetName} (#${revoked.id})")
+        output.success("Unbanned ${revoked.targetName} (#${revoked.id}, ${revoked.scope}${revoked.scopeTarget?.let { ":$it" } ?: ""})")
     }
 
     private suspend fun handleRevokeMute(args: List<String>, output: CommandOutput) {
-        if (args.isEmpty()) { output.error("Usage: punish unmute <player>"); return }
+        if (args.isEmpty()) { output.error("Usage: punish unmute <player> [--group <g>|--service <s>]"); return }
         val resolved = resolver.resolve(args[0])
         val key = resolved?.first ?: args[0]
-        val record = manager.findActiveMute(key)
+        val parsed = parseScopeFlags(args.drop(1))
+        if (parsed.error != null) { output.error(parsed.error); return }
+        val record = manager.findActiveMute(key, parsed.scope, parsed.target)
         if (record == null) {
-            output.error("No active mute found for '${args[0]}'")
+            val scopeStr = if (parsed.scope == PunishmentScope.NETWORK) "network-wide"
+                           else "${parsed.scope}:${parsed.target}"
+            output.error("No active $scopeStr mute found for '${args[0]}'")
             return
         }
-        val reason = args.drop(1).joinToString(" ").ifBlank { null }
+        val reason = parsed.rest.joinToString(" ").ifBlank { null }
         val revoked = manager.revoke(record.id, "console", reason)
         if (revoked == null) {
             output.error("Could not revoke punishment #${record.id}")
             return
         }
         eventBus.emit(PunishmentsEvents.revoked(revoked))
-        output.success("Unmuted ${revoked.targetName} (#${revoked.id})")
+        output.success("Unmuted ${revoked.targetName} (#${revoked.id}, ${revoked.scope}${revoked.scopeTarget?.let { ":$it" } ?: ""})")
     }
 
     private suspend fun handleHistory(args: List<String>, output: CommandOutput) {
@@ -244,7 +305,11 @@ class PunishCommand(
         } ?: "permanent"
         val status = if (r.active) ConsoleFormatter.success(r.type.name)
                      else "${ConsoleFormatter.DIM}${r.type.name}${ConsoleFormatter.RESET}"
-        return "#${r.id} $status ${ConsoleFormatter.BOLD}${r.targetName}${ConsoleFormatter.RESET} " +
+        val scopeStr = when (r.scope) {
+            PunishmentScope.NETWORK -> ""
+            else -> " ${ConsoleFormatter.YELLOW}[${r.scope}:${r.scopeTarget ?: "?"}]${ConsoleFormatter.RESET}"
+        }
+        return "#${r.id} $status ${ConsoleFormatter.BOLD}${r.targetName}${ConsoleFormatter.RESET}$scopeStr " +
                "${ConsoleFormatter.DIM}by ${r.issuerName} • $remaining${ConsoleFormatter.RESET} — ${r.reason}"
     }
 }

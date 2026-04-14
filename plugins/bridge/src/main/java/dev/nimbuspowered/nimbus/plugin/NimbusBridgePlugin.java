@@ -319,9 +319,6 @@ public class NimbusBridgePlugin {
                 commandManager.register(meta, cloudCommand);
             }
 
-            // Register punishment enforcement on PreLogin (network-wide bans)
-            server.getEventManager().register(this, new PunishmentLoginListener(sharedApiClient, logger));
-
             logger.info("Nimbus Bridge loaded — /cloud, /nimbus registered (API: {})", config.getApiUrl());
         } catch (Exception e) {
             logger.warn("Failed to load bridge config: {}", e.getMessage());
