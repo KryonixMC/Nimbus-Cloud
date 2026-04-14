@@ -13,11 +13,9 @@ import dev.nimbuspowered.nimbus.module.resourcepacks.ResourcePacksEvents
 import dev.nimbuspowered.nimbus.module.resourcepacks.StatusReportRequest
 import dev.nimbuspowered.nimbus.module.resourcepacks.toResponse
 import io.ktor.http.*
-import io.ktor.http.content.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.utils.io.jvm.javaio.*
 import java.nio.file.Files
 
 /**
@@ -73,45 +71,42 @@ fun Route.resourcePackAuthedRoutes(
             call.respond(HttpStatusCode.Created, pack.toResponse())
         }
 
-        // POST /api/resourcepacks/upload?name=...&force=true&prompt=... — streaming multipart upload
+        /*
+         * POST /api/resourcepacks/upload?name=...&force=true&prompt=...
+         *
+         * File is sent as raw request body (application/octet-stream) — no multipart
+         * wrapping. That lets the dashboard's {@code apiUpload} helper reuse its
+         * existing streaming + HTTPS-proxy plumbing, and keeps the server from
+         * buffering a 250 MB pack into memory. Name / force / prompt arrive as
+         * query params.
+         */
         post("upload") {
             val name = call.request.queryParameters["name"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("name query param is required", ApiErrors.VALIDATION_FAILED))
             val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() ?: false
             val prompt = call.request.queryParameters["prompt"] ?: ""
 
-            val multipart = call.receiveMultipart()
-            var created: dev.nimbuspowered.nimbus.module.resourcepacks.ResourcePackRecord? = null
-            var error: String? = null
-
-            multipart.forEachPart { part ->
-                if (part is PartData.FileItem && created == null && error == null) {
-                    try {
-                        val stream = part.streamProvider()
-                        created = manager.uploadLocalPack(
-                            name = name,
-                            input = stream,
-                            maxBytes = maxUploadBytes,
-                            promptMessage = prompt,
-                            force = force,
-                            uploadedBy = "api"
-                        )
-                    } catch (e: IllegalArgumentException) {
-                        error = e.message
-                    } catch (e: Exception) {
-                        error = "Upload failed: ${e.message}"
-                    }
+            val created = try {
+                call.receiveStream().use { input ->
+                    manager.uploadLocalPack(
+                        name = name,
+                        input = input,
+                        maxBytes = maxUploadBytes,
+                        promptMessage = prompt,
+                        force = force,
+                        uploadedBy = "api"
+                    )
                 }
-                part.dispose()
+            } catch (e: IllegalArgumentException) {
+                return@post call.respond(HttpStatusCode.PayloadTooLarge,
+                    apiError(e.message ?: "Upload rejected", ApiErrors.PAYLOAD_TOO_LARGE))
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.InternalServerError,
+                    apiError("Upload failed: ${e.message}", ApiErrors.RESOURCE_PACK_UPLOAD_FAILED))
             }
 
-            val pack = created
-            if (error != null || pack == null) {
-                return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError(error ?: "Missing file part", ApiErrors.RESOURCE_PACK_UPLOAD_FAILED))
-            }
-            eventBus.emit(ResourcePacksEvents.created(pack))
-            call.respond(HttpStatusCode.Created, pack.toResponse())
+            eventBus.emit(ResourcePacksEvents.created(created))
+            call.respond(HttpStatusCode.Created, created.toResponse())
         }
 
         // DELETE /api/resourcepacks/{id}

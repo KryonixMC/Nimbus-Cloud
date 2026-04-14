@@ -13,8 +13,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
@@ -31,7 +40,7 @@ interface ResourcePack {
   id: number;
   packUuid: string;
   name: string;
-  source: string;            // "URL" | "LOCAL"
+  source: string; // "URL" | "LOCAL"
   url: string;
   sha1Hash: string;
   promptMessage: string;
@@ -44,7 +53,7 @@ interface ResourcePack {
 interface Assignment {
   id: number;
   packId: number;
-  scope: string;             // "GLOBAL" | "GROUP" | "SERVICE"
+  scope: string; // "GLOBAL" | "GROUP" | "SERVICE"
   target: string;
   priority: number;
 }
@@ -61,19 +70,53 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// ── URL dialog state ──────────────────────────────────────────
+type UrlForm = {
+  name: string;
+  url: string;
+  sha1: string;
+  prompt: string;
+  force: boolean;
+};
+const EMPTY_URL_FORM: UrlForm = {
+  name: "",
+  url: "",
+  sha1: "",
+  prompt: "",
+  force: false,
+};
+
+// ── Upload dialog state ───────────────────────────────────────
+type UploadForm = {
+  file: File | null;
+  name: string;
+  prompt: string;
+  force: boolean;
+};
+const EMPTY_UPLOAD_FORM: UploadForm = {
+  file: null,
+  name: "",
+  prompt: "",
+  force: false,
+};
+
 export default function ResourcePacksModulePage() {
   const [packs, setPacks] = useState<ResourcePack[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddUrl, setShowAddUrl] = useState(false);
   const [showAssign, setShowAssign] = useState<number | null>(null);
 
-  // Add-URL form state
-  const [urlName, setUrlName] = useState("");
-  const [urlValue, setUrlValue] = useState("");
-  const [urlSha1, setUrlSha1] = useState("");
-  const [urlPrompt, setUrlPrompt] = useState("");
-  const [urlForce, setUrlForce] = useState(false);
+  // Dialog state
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [urlForm, setUrlForm] = useState<UrlForm>(EMPTY_URL_FORM);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlSubmitting, setUrlSubmitting] = useState(false);
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadForm, setUploadForm] = useState<UploadForm>(EMPTY_UPLOAD_FORM);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  const uploadFileRef = useRef<HTMLInputElement>(null);
 
   // Assign form state
   const [assignScope, setAssignScope] = useState<"GLOBAL" | "GROUP" | "SERVICE">(
@@ -84,8 +127,6 @@ export default function ResourcePacksModulePage() {
 
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -107,66 +148,90 @@ export default function ResourcePacksModulePage() {
     load();
   }, [load]);
 
+  // ── Add URL pack ────────────────────────────────────────────
+
   const submitUrlPack = async () => {
-    if (!urlName.trim() || !urlValue.trim() || urlSha1.length !== 40) return;
-    setWorking(true);
-    setError(null);
+    if (
+      !urlForm.name.trim() ||
+      !urlForm.url.trim() ||
+      urlForm.sha1.trim().length !== 40
+    ) {
+      setUrlError(
+        "Name, URL and a 40-character SHA-1 hash are required."
+      );
+      return;
+    }
+    setUrlSubmitting(true);
+    setUrlError(null);
     try {
       await apiFetch<ResourcePack>("/api/resourcepacks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: urlName.trim(),
-          url: urlValue.trim(),
-          sha1Hash: urlSha1.toLowerCase(),
-          promptMessage: urlPrompt,
-          force: urlForce,
+          name: urlForm.name.trim(),
+          url: urlForm.url.trim(),
+          sha1Hash: urlForm.sha1.toLowerCase().trim(),
+          promptMessage: urlForm.prompt,
+          force: urlForm.force,
         }),
       });
-      setShowAddUrl(false);
-      setUrlName("");
-      setUrlValue("");
-      setUrlSha1("");
-      setUrlPrompt("");
-      setUrlForce(false);
+      setUrlOpen(false);
+      setUrlForm(EMPTY_URL_FORM);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add pack");
+      setUrlError(e instanceof Error ? e.message : "Failed to add pack");
     } finally {
-      setWorking(false);
+      setUrlSubmitting(false);
     }
   };
 
-  const uploadFile = async (file: File) => {
-    const name = prompt("Pack name:", file.name.replace(/\.zip$/i, ""));
-    if (!name) return;
-    setWorking(true);
-    setError(null);
+  // ── Upload .zip ────────────────────────────────────────────
+
+  const handleFileSelected = (file: File | null) => {
+    setUploadForm((prev) => ({
+      ...prev,
+      file,
+      // auto-populate name from filename if the user hasn't edited it yet
+      name: prev.name.trim() === "" && file
+        ? file.name.replace(/\.zip$/i, "")
+        : prev.name,
+    }));
+  };
+
+  const submitUpload = async () => {
+    if (!uploadForm.file) {
+      setUploadError("Pick a .zip file first.");
+      return;
+    }
+    if (!uploadForm.name.trim()) {
+      setUploadError("Give the pack a name.");
+      return;
+    }
+    setUploadSubmitting(true);
+    setUploadError(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      // apiFetch doesn't handle multipart — call fetch directly with auth header
-      const token = localStorage.getItem("nimbus_token");
-      const apiUrl = localStorage.getItem("nimbus_api_url") || "";
-      const res = await fetch(
-        `${apiUrl}/api/resourcepacks/upload?name=${encodeURIComponent(name)}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: form,
-        }
+      const qp = new URLSearchParams({
+        name: uploadForm.name.trim(),
+        force: String(uploadForm.force),
+      });
+      if (uploadForm.prompt.trim()) qp.set("prompt", uploadForm.prompt.trim());
+      // apiUpload handles: bearer token, HTTPS→HTTP proxying (chunked), errors.
+      // Controller accepts raw body (application/octet-stream).
+      await apiUpload<ResourcePack>(
+        `/api/resourcepacks/upload?${qp.toString()}`,
+        uploadForm.file
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `Upload failed: ${res.status}`);
-      }
+      setUploadOpen(false);
+      setUploadForm(EMPTY_UPLOAD_FORM);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      setUploadError(e instanceof Error ? e.message : "Upload failed");
     } finally {
-      setWorking(false);
+      setUploadSubmitting(false);
     }
   };
+
+  // ── Pack row actions ────────────────────────────────────────
 
   const deletePack = async (id: number) => {
     if (!confirm("Delete this pack and all its assignments?")) return;
@@ -231,38 +296,257 @@ export default function ResourcePacksModulePage() {
     .filter((p) => p.source === "LOCAL")
     .reduce((sum, p) => sum + p.fileSize, 0);
 
-  const actions = (
-    <div className="flex gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setShowAddUrl(true)}
-        disabled={working}
-      >
-        <Plus className="size-4 mr-1" />
-        Add URL
-      </Button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".zip"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) uploadFile(file);
-          e.target.value = "";
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {/* ── Add URL dialog ── */}
+      <Dialog
+        open={urlOpen}
+        onOpenChange={(v) => {
+          setUrlOpen(v);
+          if (!v) {
+            setUrlForm(EMPTY_URL_FORM);
+            setUrlError(null);
+          }
         }}
-        disabled={working}
-      />
-      <Button
-        variant="default"
-        size="sm"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={working}
       >
-        <Upload className="size-4 mr-1" />
-        Upload .zip
-      </Button>
+        <DialogTrigger
+          render={
+            <Button variant="outline">
+              <Plus className="size-4 mr-1" />
+              Add URL
+            </Button>
+          }
+        />
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add URL pack</DialogTitle>
+            <DialogDescription>
+              Register a pack hosted elsewhere (CDN, GitHub release, …). The
+              SHA-1 hash is required so the Minecraft client can verify the
+              file on download.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium block mb-1">Name</label>
+              <Input
+                value={urlForm.name}
+                onChange={(e) =>
+                  setUrlForm({ ...urlForm, name: e.target.value })
+                }
+                placeholder="Vanilla+ HD"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">URL</label>
+              <Input
+                value={urlForm.url}
+                onChange={(e) =>
+                  setUrlForm({ ...urlForm, url: e.target.value })
+                }
+                placeholder="https://cdn.example.com/pack.zip"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">
+                SHA-1 hash
+                <span className="text-muted-foreground font-normal ml-1">
+                  (40 hex chars)
+                </span>
+              </label>
+              <Input
+                value={urlForm.sha1}
+                onChange={(e) =>
+                  setUrlForm({ ...urlForm, sha1: e.target.value })
+                }
+                placeholder="a1b2c3d4…"
+                maxLength={40}
+                className="font-mono text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">
+                Prompt message
+                <span className="text-muted-foreground font-normal ml-1">
+                  (optional)
+                </span>
+              </label>
+              <Input
+                value={urlForm.prompt}
+                onChange={(e) =>
+                  setUrlForm({ ...urlForm, prompt: e.target.value })
+                }
+                placeholder="Shown to the player before download"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={urlForm.force}
+                onChange={(e) =>
+                  setUrlForm({ ...urlForm, force: e.target.checked })
+                }
+              />
+              Force — kick players who decline
+            </label>
+
+            {urlError && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">
+                {urlError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUrlOpen(false)}
+              disabled={urlSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitUrlPack}
+              disabled={
+                urlSubmitting ||
+                !urlForm.name.trim() ||
+                !urlForm.url.trim() ||
+                urlForm.sha1.trim().length !== 40
+              }
+            >
+              {urlSubmitting ? "Adding…" : "Add pack"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Upload .zip dialog ── */}
+      <Dialog
+        open={uploadOpen}
+        onOpenChange={(v) => {
+          setUploadOpen(v);
+          if (!v) {
+            setUploadForm(EMPTY_UPLOAD_FORM);
+            setUploadError(null);
+          }
+        }}
+      >
+        <DialogTrigger
+          render={
+            <Button>
+              <Upload className="size-4 mr-1" />
+              Upload .zip
+            </Button>
+          }
+        />
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload resource pack</DialogTitle>
+            <DialogDescription>
+              The file is streamed to the controller and the SHA-1 is computed
+              server-side. Players fetch it from the controller at
+              <code className="mx-1 text-xs">
+                /api/resourcepacks/files/&lt;uuid&gt;.zip
+              </code>
+              with no auth (hash protects against tampering).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium block mb-1">File</label>
+              <input
+                ref={uploadFileRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) =>
+                  handleFileSelected(e.target.files?.[0] ?? null)
+                }
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => uploadFileRef.current?.click()}
+                  disabled={uploadSubmitting}
+                >
+                  Choose .zip…
+                </Button>
+                <span className="text-xs text-muted-foreground truncate">
+                  {uploadForm.file
+                    ? `${uploadForm.file.name} — ${formatSize(
+                        uploadForm.file.size
+                      )}`
+                    : "No file selected"}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Name</label>
+              <Input
+                value={uploadForm.name}
+                onChange={(e) =>
+                  setUploadForm({ ...uploadForm, name: e.target.value })
+                }
+                placeholder="Vanilla+ HD"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">
+                Prompt message
+                <span className="text-muted-foreground font-normal ml-1">
+                  (optional)
+                </span>
+              </label>
+              <Input
+                value={uploadForm.prompt}
+                onChange={(e) =>
+                  setUploadForm({ ...uploadForm, prompt: e.target.value })
+                }
+                placeholder="Shown to the player before download"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={uploadForm.force}
+                onChange={(e) =>
+                  setUploadForm({ ...uploadForm, force: e.target.checked })
+                }
+              />
+              Force — kick players who decline
+            </label>
+
+            {uploadError && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">
+                {uploadError}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUploadOpen(false)}
+              disabled={uploadSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={submitUpload}
+              disabled={
+                uploadSubmitting || !uploadForm.file || !uploadForm.name.trim()
+              }
+            >
+              {uploadSubmitting ? "Uploading…" : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
@@ -271,7 +555,7 @@ export default function ResourcePacksModulePage() {
       <PageHeader
         title="Resource Packs"
         description="Network-wide pack registry with GLOBAL / GROUP / SERVICE assignments."
-        actions={actions}
+        actions={headerActions}
       />
 
       {error && (
@@ -311,66 +595,6 @@ export default function ResourcePacksModulePage() {
               hint="hosted files"
             />
           </div>
-
-          {showAddUrl && (
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <h3 className="font-medium">Add URL pack</h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    placeholder="Display name"
-                    value={urlName}
-                    onChange={(e) => setUrlName(e.target.value)}
-                  />
-                  <Input
-                    placeholder="https://…/pack.zip"
-                    value={urlValue}
-                    onChange={(e) => setUrlValue(e.target.value)}
-                  />
-                  <Input
-                    placeholder="SHA-1 hash (40 hex chars)"
-                    value={urlSha1}
-                    onChange={(e) => setUrlSha1(e.target.value)}
-                    maxLength={40}
-                  />
-                  <Input
-                    placeholder="Prompt message (optional)"
-                    value={urlPrompt}
-                    onChange={(e) => setUrlPrompt(e.target.value)}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={urlForce}
-                    onChange={(e) => setUrlForce(e.target.checked)}
-                  />
-                  Force (kick on decline)
-                </label>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={submitUrlPack}
-                    disabled={
-                      working ||
-                      !urlName.trim() ||
-                      !urlValue.trim() ||
-                      urlSha1.length !== 40
-                    }
-                  >
-                    Create
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowAddUrl(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {packs.length === 0 ? (
             <EmptyState
@@ -474,9 +698,7 @@ export default function ResourcePacksModulePage() {
           {showAssign !== null && (
             <Card>
               <CardContent className="p-4 space-y-3">
-                <h3 className="font-medium">
-                  Assign pack #{showAssign}
-                </h3>
+                <h3 className="font-medium">Assign pack #{showAssign}</h3>
                 <div className="flex flex-wrap gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">
