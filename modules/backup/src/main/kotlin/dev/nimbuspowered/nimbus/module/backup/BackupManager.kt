@@ -266,7 +266,7 @@ class BackupManager(
             PlannedSource.DatabaseDump -> {
                 val cfg = nimbusConfig?.database ?: return null
                 val staging = baseDir.resolve("data").resolve("backups").resolve("_staging-db-${System.currentTimeMillis()}")
-                val helper = DatabaseBackupHelper(database, cfg)
+                val helper = DatabaseBackupHelper(database, cfg, baseDir)
                 when (val r = helper.dump(staging)) {
                     is DatabaseBackupHelper.Result.Success -> staging to {
                         runCatching {

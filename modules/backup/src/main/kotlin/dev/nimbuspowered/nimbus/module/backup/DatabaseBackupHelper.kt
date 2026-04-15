@@ -4,11 +4,11 @@ import dev.nimbuspowered.nimbus.config.DatabaseConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.sql.DriverManager
 
 /**
  * Per-database-type dump helpers. SQLite uses `VACUUM INTO` — atomic, in-process,
@@ -19,7 +19,8 @@ import java.nio.file.StandardCopyOption
  */
 class DatabaseBackupHelper(
     private val db: Database,
-    private val config: DatabaseConfig
+    private val config: DatabaseConfig,
+    private val baseDir: Path
 ) {
 
     private val logger = LoggerFactory.getLogger(DatabaseBackupHelper::class.java)
@@ -48,12 +49,25 @@ class DatabaseBackupHelper(
     private fun dumpSqlite(stagingDir: Path): Result {
         val dest = stagingDir.resolve("nimbus.sqlite")
         val tmp = stagingDir.resolve("nimbus.sqlite.tmp")
+        // VACUUM INTO cannot run inside a transaction — SQLite rejects it with
+        // "cannot VACUUM from within a transaction". Exposed's transaction {}
+        // wraps every statement in a BEGIN/COMMIT, so we open a dedicated JDBC
+        // connection with autoCommit=true instead. SQLite's WAL mode allows
+        // this second reader to take a consistent snapshot while the primary
+        // Exposed connection keeps serving the controller.
+        val dbPath = baseDir.resolve("data").resolve("nimbus.db").toAbsolutePath()
+        val url = "jdbc:sqlite:$dbPath"
         return try {
             Files.deleteIfExists(tmp)
-            // VACUUM INTO writes a consistent copy without locking the source for
-            // the duration of the backup. SQLite handles this atomically.
-            transaction(db) {
-                exec("VACUUM INTO '${tmp.toAbsolutePath().toString().replace("'", "''")}'")
+            DriverManager.getConnection(url).use { conn ->
+                conn.autoCommit = true
+                conn.createStatement().use { stmt ->
+                    // Busy timeout matches DatabaseManager's setup so a concurrent
+                    // write in WAL mode doesn't instantly abort the dump.
+                    stmt.execute("PRAGMA busy_timeout=30000")
+                    val escaped = tmp.toAbsolutePath().toString().replace("'", "''")
+                    stmt.execute("VACUUM INTO '$escaped'")
+                }
             }
             Files.move(tmp, dest, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             Result.Success(dest, Files.size(dest))
