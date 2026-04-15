@@ -49,3 +49,6 @@ project(":nimbus-module-punishments").projectDir = file("modules/punishments")
 
 include("nimbus-module-resourcepacks")
 project(":nimbus-module-resourcepacks").projectDir = file("modules/resourcepacks")
+
+include("nimbus-module-backup")
+project(":nimbus-module-backup").projectDir = file("modules/backup")

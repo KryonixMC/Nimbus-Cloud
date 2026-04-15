@@ -14,6 +14,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import {
+  Archive,
   LayoutDashboardIcon,
   ServerIcon,
   FolderTreeIcon,
@@ -29,6 +30,7 @@ import {
   RadioIcon,
   BoxIcon,
   GavelIcon,
+  HardDrive,
   PackageIcon,
   type LucideIcon,
 } from "@/lib/icons"
@@ -70,6 +72,8 @@ const iconMap: Record<string, LucideIcon> = {
   Radio: RadioIcon,
   Gavel: GavelIcon,
   Package: PackageIcon,
+  Archive: Archive,
+  HardDrive: HardDrive,
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

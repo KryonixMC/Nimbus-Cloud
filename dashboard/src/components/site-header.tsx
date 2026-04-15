@@ -36,6 +36,12 @@ const routeLabels: Record<string, string> = {
   perms: "Permissions",
   players: "Players",
   display: "Display",
+  punishments: "Punishments",
+  resourcepacks: "Resource Packs",
+  backup: "Backup",
+  doctor: "Doctor",
+  stats: "Stats",
+  login: "Login",
 }
 
 export function SiteHeader() {
