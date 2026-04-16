@@ -49,7 +49,8 @@ data class GroupDefinition(
     val lifecycle: LifecycleConfig = LifecycleConfig(),
     val jvm: JvmConfig = JvmConfig(),
     val placement: PlacementConfig = PlacementConfig(),
-    val sync: SyncConfig = SyncConfig()
+    val sync: SyncConfig = SyncConfig(),
+    val docker: DockerServiceConfig = DockerServiceConfig()
 ) {
     /**
      * Returns the effective list of templates. If [templates] is set, it is used directly.

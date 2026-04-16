@@ -320,16 +320,39 @@ class ServiceManager(
     }
 
     private suspend fun startLocalService(service: Service, prepared: ServiceFactory.PreparedService): Service? {
-        val (_, workDir, command, readyPattern, isModded, readyTimeout, env) = prepared
+        val workDir = prepared.workDir
+        val command = prepared.command
+        val readyPattern = prepared.readyPattern
+        val readyTimeout = prepared.readyTimeout
+        val env = prepared.env
         val serviceName = service.name
 
-        val processHandle = ProcessHandle()
-        if (readyPattern != null) {
-            processHandle.setReadyPattern(readyPattern)
-        }
+        // If the group/dedicated config opted into Docker AND a LocalServiceHandleFactory
+        // is registered and available, start the service as a container. Otherwise fall
+        // back to a bare process — the default.
+        val dockerFactory = if (prepared.dockerConfig != null) {
+            moduleContext?.getService(LocalServiceHandleFactory::class.java)?.takeIf { it.isAvailable() }
+        } else null
 
+        var processHandle: ServiceHandle? = null
         return try {
-            processHandle.start(workDir, command, env)
+            processHandle = if (dockerFactory != null && prepared.dockerConfig != null) {
+                try {
+                    dockerFactory.create(service, workDir, command, env, prepared.dockerConfig, readyPattern)
+                } catch (e: Exception) {
+                    logger.error("Docker-backed start failed for '{}' — falling back to process: {}", serviceName, e.message, e)
+                    val fallback = ProcessHandle()
+                    if (readyPattern != null) fallback.setReadyPattern(readyPattern)
+                    fallback.start(workDir, command, env)
+                    fallback
+                }
+            } else {
+                val plain = ProcessHandle()
+                if (readyPattern != null) plain.setReadyPattern(readyPattern)
+                plain.start(workDir, command, env)
+                plain
+            }
+
             // Store handle immediately after start so cleanupFailedStart can find it
             processHandles[serviceName] = processHandle
 
@@ -371,7 +394,7 @@ class ServiceManager(
         } catch (e: Exception) {
             logger.error("Failed to start service '{}'", serviceName, e)
             // Ensure the process is destroyed even if it wasn't stored in the map yet
-            processHandles[serviceName] = processHandle
+            processHandle?.let { processHandles[serviceName] = it }
             cleanupFailedStart(service)
             null
         }

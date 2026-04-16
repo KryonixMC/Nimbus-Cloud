@@ -29,5 +29,6 @@ data class DedicatedDefinition(
     val maxRestarts: Int = 5,
     val jvm: JvmConfig = JvmConfig(),
     val placement: PlacementConfig = PlacementConfig(),
-    val sync: SyncConfig = SyncConfig()
+    val sync: SyncConfig = SyncConfig(),
+    val docker: DockerServiceConfig = DockerServiceConfig()
 )

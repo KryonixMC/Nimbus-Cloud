@@ -52,3 +52,6 @@ project(":nimbus-module-resourcepacks").projectDir = file("modules/resourcepacks
 
 include("nimbus-module-backup")
 project(":nimbus-module-backup").projectDir = file("modules/backup")
+
+include("nimbus-module-docker")
+project(":nimbus-module-docker").projectDir = file("modules/docker")

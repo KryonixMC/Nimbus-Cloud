@@ -79,8 +79,23 @@ class ServiceFactory(
         val readyPattern: Regex?,
         val isModded: Boolean,
         val readyTimeout: kotlin.time.Duration,
-        val env: Map<String, String> = emptyMap()
+        val env: Map<String, String> = emptyMap(),
+        /**
+         * Non-null when the service should be started via the Docker module's
+         * [LocalServiceHandleFactory] instead of a bare [ProcessHandle].
+         * Populated by [resolveDockerConfig] based on the group/dedicated TOML.
+         */
+        val dockerConfig: dev.nimbuspowered.nimbus.config.DockerServiceConfig? = null
     )
+
+    /**
+     * Returns the Docker config to use for this service, or null if Docker isn't
+     * enabled for it. A null return means "use a plain process" — the default for
+     * every group that never set `[docker] enabled = true`.
+     */
+    private fun resolveDockerConfig(cfg: dev.nimbuspowered.nimbus.config.DockerServiceConfig): dev.nimbuspowered.nimbus.config.DockerServiceConfig? {
+        return if (cfg.enabled) cfg else null
+    }
 
     suspend fun prepare(groupName: String): PreparedService? {
         val group = groupManager.getGroup(groupName)
@@ -386,7 +401,8 @@ class ServiceFactory(
                 readyPattern = readyPattern,
                 isModded = isModded,
                 readyTimeout = readyTimeout,
-                env = processEnv
+                env = processEnv,
+                dockerConfig = resolveDockerConfig(group.config.group.docker)
             )
         } catch (e: Exception) {
             logger.error("Failed to prepare service '{}'", serviceName, e)
@@ -586,7 +602,8 @@ class ServiceFactory(
                 readyPattern = readyPattern,
                 isModded = isModded,
                 readyTimeout = readyTimeout,
-                env = processEnv
+                env = processEnv,
+                dockerConfig = resolveDockerConfig(config.docker)
             )
         } catch (e: Exception) {
             logger.error("Failed to prepare dedicated service '{}'", serviceName, e)
