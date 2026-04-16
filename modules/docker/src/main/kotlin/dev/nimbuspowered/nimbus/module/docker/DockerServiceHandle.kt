@@ -1,6 +1,5 @@
 package dev.nimbuspowered.nimbus.module.docker
 
-import dev.nimbuspowered.nimbus.service.Service
 import dev.nimbuspowered.nimbus.service.ServiceHandle
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
@@ -30,11 +29,11 @@ import kotlin.time.Duration
  *   - reads from stdin of the container go through [stdinWriter]
  *   - writes to stdout of the container are split on `\n` and emitted to [_stdoutLines]
  */
-internal class DockerServiceHandle(
+class DockerServiceHandle(
     private val client: DockerClient,
-    private val service: Service,
-    private val containerId: String,
-    private val containerName: String
+    private val serviceName: String,
+    val containerId: String,
+    val containerName: String
 ) : ServiceHandle {
 
     private val logger = LoggerFactory.getLogger(DockerServiceHandle::class.java)
@@ -57,18 +56,37 @@ internal class DockerServiceHandle(
     }
 
     /**
-     * Wires the attach connection and starts the container. Called exactly once
-     * by the factory, before the handle is returned to [ServiceManager].
+     * Wires the attach connection and starts the container. Called by the factory
+     * when creating a brand-new container — attaches first so early stdout isn't
+     * lost, then issues `startContainer`.
      */
     fun startAndAttach() {
-        // Attach BEFORE start so we don't miss early stdout lines.
+        attach()
+        client.startContainer(containerId)
+        logger.info("Started Docker container '{}' ({}) for service '{}'",
+            containerName, containerId.take(12), serviceName)
+        launchExitWatcher()
+    }
+
+    /**
+     * Reattaches to an already-running container (used during crash recovery on
+     * controller restart). Opens a fresh stdio stream and resumes the exit
+     * watcher — the container itself is left untouched.
+     */
+    fun reattach() {
+        attach()
+        logger.info("Reattached to Docker container '{}' ({}) for service '{}'",
+            containerName, containerId.take(12), serviceName)
+        launchExitWatcher()
+    }
+
+    private fun attach() {
         val stream = client.attach(containerId)
         attachStream = stream
         stdinWriter = BufferedWriter(OutputStreamWriter(stream.output, Charsets.UTF_8))
 
         scope.launch {
             try {
-                // TTY=true means no framing — raw bytes out of the container.
                 val reader = stream.input.bufferedReader(Charsets.UTF_8)
                 reader.useLines { lines ->
                     for (line in lines) {
@@ -76,16 +94,16 @@ internal class DockerServiceHandle(
                     }
                 }
             } catch (e: Exception) {
-                logger.debug("Attach stream for '{}' ended: {}", service.name, e.message)
+                logger.debug("Attach stream for '{}' ended: {}", serviceName, e.message)
             }
         }
+    }
 
-        client.startContainer(containerId)
-        logger.info("Started Docker container '{}' ({}) for service '{}'",
-            containerName, containerId.take(12), service.name)
-
-        // Launch a watchdog that waits for the container to exit, then resolves
-        // exitDeferred. Poll-based — lightweight and decoupled from the attach stream.
+    /**
+     * Polls the container state until it exits, then resolves [exitDeferred].
+     * Lightweight and decoupled from the attach stream — survives stream drops.
+     */
+    private fun launchExitWatcher() {
         scope.launch {
             try {
                 while (isActive) {
@@ -97,17 +115,20 @@ internal class DockerServiceHandle(
                     delay(1_000)
                 }
             } catch (e: Exception) {
-                logger.debug("Exit watcher for '{}' ended: {}", service.name, e.message)
+                logger.debug("Exit watcher for '{}' ended: {}", serviceName, e.message)
                 if (!exitDeferred.isCompleted) exitDeferred.complete(null)
             }
         }
     }
 
+    /** Live memory stats (bytes) and CPU% from the Docker daemon. Null if unavailable. */
+    fun liveStats(): DockerStats? = runCatching { client.stats(containerId) }.getOrNull()
+
     override suspend fun sendCommand(command: String) {
         withContext(Dispatchers.IO) {
             val w = stdinWriter
             if (w == null) {
-                logger.warn("Cannot send command to '{}': attach stdin is not available", service.name)
+                logger.warn("Cannot send command to '{}': attach stdin is not available", serviceName)
                 return@withContext
             }
             try {
@@ -116,7 +137,7 @@ internal class DockerServiceHandle(
                 w.flush()
                 logger.debug("Sent command '{}' to container '{}'", command, containerName)
             } catch (e: Exception) {
-                logger.warn("Failed to write to container stdin for '{}': {}", service.name, e.message)
+                logger.warn("Failed to write to container stdin for '{}': {}", serviceName, e.message)
             }
         }
     }

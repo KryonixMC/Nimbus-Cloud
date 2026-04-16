@@ -6,8 +6,11 @@ import dev.nimbuspowered.nimbus.service.Service
 import dev.nimbuspowered.nimbus.service.ServiceHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Bridge between [ServiceManager] and the Docker module. When the module is
@@ -27,6 +30,22 @@ class DockerServiceHandleFactory(
 ) : LocalServiceHandleFactory {
 
     private val logger = LoggerFactory.getLogger(DockerServiceHandleFactory::class.java)
+
+    /**
+     * Live DockerServiceHandles keyed by service name. Populated on create +
+     * recover, consulted by [DockerMemorySource]. Entries may become stale after
+     * a handle is destroyed — callers must tolerate `isAlive() == false`.
+     */
+    private val liveHandles = ConcurrentHashMap<String, DockerServiceHandle>()
+
+    fun lookupHandle(serviceName: String): DockerServiceHandle? {
+        val h = liveHandles[serviceName] ?: return null
+        if (!h.isAlive()) {
+            liveHandles.remove(serviceName, h)
+            return null
+        }
+        return h
+    }
 
     override fun isAvailable(): Boolean {
         if (!configManager.config.docker.enabled) return false
@@ -85,10 +104,55 @@ class DockerServiceHandleFactory(
             containerName, id.take(12), effective.javaImage,
             effective.memoryBytes / 1024 / 1024, effective.cpuLimit, service.name)
 
-        val handle = DockerServiceHandle(client, service, id, containerName)
+        val handle = DockerServiceHandle(client, service.name, id, containerName)
         if (readyPattern != null) handle.setReadyPattern(readyPattern)
         handle.startAndAttach()
+        liveHandles[service.name] = handle
         handle
+    }
+
+    /**
+     * Enumerates every running `nimbus.managed` container and re-attaches. Called
+     * by [ServiceManager.recoverLocalServices] on controller startup so services
+     * that were running when the controller died keep going without a restart.
+     *
+     * Containers with no surviving service record (their workdir has been removed,
+     * or the group they belonged to was deleted) should be cleaned up by `docker
+     * prune` or the subsequent state-store sync — we don't delete anything here,
+     * the ownership decision belongs to the operator.
+     */
+    override fun recover(): Map<String, ServiceHandle> {
+        if (!isAvailable()) return emptyMap()
+        val out = mutableMapOf<String, ServiceHandle>()
+        val containers = runCatching { client.listContainers(labels = mapOf("nimbus.managed" to "true"), all = false) }
+            .getOrElse {
+                logger.warn("Docker recovery: listContainers failed: {}", it.message)
+                return emptyMap()
+            }
+
+        for (c in containers) {
+            val id = c["Id"]?.jsonPrimitive?.content ?: continue
+            val state = c["State"]?.jsonPrimitive?.content ?: ""
+            if (state != "running") continue
+
+            val labels = c["Labels"]?.jsonObject ?: continue
+            val serviceName = labels["nimbus.service"]?.jsonPrimitive?.content ?: continue
+            val names = c["Names"]?.let {
+                (it as? kotlinx.serialization.json.JsonArray)?.firstOrNull()?.jsonPrimitive?.content
+            } ?: "nimbus-${serviceName.lowercase()}"
+            val containerName = names.removePrefix("/")
+
+            try {
+                val handle = DockerServiceHandle(client, serviceName, id, containerName)
+                handle.reattach()
+                out[serviceName] = handle
+                liveHandles[serviceName] = handle
+                logger.info("Docker recovery: reattached to '{}' (container {})", serviceName, id.take(12))
+            } catch (e: Exception) {
+                logger.warn("Docker recovery: failed to reattach '{}': {}", serviceName, e.message)
+            }
+        }
+        return out
     }
 
     /**

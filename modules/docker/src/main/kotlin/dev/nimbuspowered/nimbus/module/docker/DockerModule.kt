@@ -1,10 +1,15 @@
 package dev.nimbuspowered.nimbus.module.docker
 
 import dev.nimbuspowered.nimbus.NimbusVersion
+import dev.nimbuspowered.nimbus.module.AuthLevel
+import dev.nimbuspowered.nimbus.module.DashboardConfig
+import dev.nimbuspowered.nimbus.module.DashboardSection
 import dev.nimbuspowered.nimbus.module.ModuleContext
 import dev.nimbuspowered.nimbus.module.NimbusModule
 import dev.nimbuspowered.nimbus.module.docker.commands.DockerCommand
+import dev.nimbuspowered.nimbus.module.docker.routes.dockerRoutes
 import dev.nimbuspowered.nimbus.service.LocalServiceHandleFactory
+import dev.nimbuspowered.nimbus.service.ServiceMemoryResolver
 import org.slf4j.LoggerFactory
 
 /**
@@ -20,6 +25,15 @@ class DockerModule : NimbusModule {
     override val name = "Docker"
     override val version: String get() = NimbusVersion.version
     override val description = "Run services in Docker containers (hard memory/CPU limits, isolation, clean cleanup)"
+
+    override val dashboardConfig = DashboardConfig(
+        icon = "Container",
+        apiPrefix = "/api/docker",
+        sections = listOf(
+            DashboardSection("Status", "stats", "/status"),
+            DashboardSection("Containers", "table", "/containers")
+        )
+    )
 
     private val logger = LoggerFactory.getLogger(DockerModule::class.java)
 
@@ -60,6 +74,11 @@ class DockerModule : NimbusModule {
         // at every service start, so a daemon going up/down is transparent.
         context.registerService(LocalServiceHandleFactory::class.java, f)
 
+        // Docker stats give us true cgroup memory — prefer it over reading
+        // /proc for the java PID (which misses any sidecar processes and is
+        // blocked on non-Linux hosts that run containers inside a VM).
+        ServiceMemoryResolver.registerSource(DockerMemorySource(f::lookupHandle))
+
         context.registerCommand(DockerCommand(c, configManager))
         context.registerCompleter("docker") { args, prefix ->
             when (args.size) {
@@ -68,6 +87,9 @@ class DockerModule : NimbusModule {
                 else -> emptyList()
             }
         }
+
+        context.registerRoutes({ dockerRoutes(c, configManager) }, auth = AuthLevel.ADMIN)
+        context.registerDoctorCheck(DockerDoctorCheck(c, configManager))
     }
 
     override suspend fun enable() {}

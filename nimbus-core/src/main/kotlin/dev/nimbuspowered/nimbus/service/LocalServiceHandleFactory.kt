@@ -45,4 +45,15 @@ interface LocalServiceHandleFactory {
         dockerConfig: DockerServiceConfig,
         readyPattern: Regex?
     ): ServiceHandle
+
+    /**
+     * On controller restart, enumerates containers this factory owns and reattaches
+     * to the ones still running. Returns a map from service name → live [ServiceHandle]
+     * so [ServiceManager.recoverLocalServices] can wire them into the registry without
+     * trying to re-`ProcessHandle.adopt()` (which would fail for container-backed
+     * services — the host PID doesn't match our old records).
+     *
+     * Default: empty — factories that don't survive restarts get the old behaviour.
+     */
+    fun recover(): Map<String, ServiceHandle> = emptyMap()
 }

@@ -31,6 +31,17 @@ object ServiceMemoryResolver {
     /** Minimum JVM process overhead in MB (regardless of heap size). */
     private const val MIN_OVERHEAD_MB = 384L
 
+    /**
+     * Alternative readers registered by modules (e.g. the Docker module, whose
+     * `docker stats` values account for cgroup memory rather than the raw JVM PID).
+     * Queried in registration order before falling back to `/proc/<pid>/status`.
+     */
+    private val extraSources = mutableListOf<ServiceMemorySource>()
+
+    fun registerSource(source: ServiceMemorySource) {
+        extraSources += source
+    }
+
     fun resolve(
         service: Service,
         groupManager: GroupManager,
@@ -44,8 +55,9 @@ object ServiceMemoryResolver {
         val used = when {
             terminal -> 0L
             service.nodeId == "local" -> {
-                // Local service — read /proc directly and refresh the cache
-                val rss = service.pid?.let { ProcessMemoryReader.readRssMb(it) } ?: 0L
+                // Extra sources first — Docker cgroup stats beat /proc for containers.
+                val fromSource = extraSources.firstNotNullOfOrNull { it.readRssMb(service) }
+                val rss = fromSource ?: service.pid?.let { ProcessMemoryReader.readRssMb(it) } ?: 0L
                 if (rss > 0) service.memoryUsedMb = rss
                 rss
             }
