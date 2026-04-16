@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.api.routes
 import dev.nimbuspowered.nimbus.api.*
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.apiError
+import dev.nimbuspowered.nimbus.config.DockerServiceConfig
 import dev.nimbuspowered.nimbus.config.GroupConfig
 import dev.nimbuspowered.nimbus.config.GroupDefinition
 import dev.nimbuspowered.nimbus.config.GroupType
@@ -212,6 +213,21 @@ internal fun buildGroupToml(request: CreateGroupRequest, groupType: GroupType, s
         appendLine()
         appendLine("[group.jvm]")
         appendLine("args = [${request.jvmArgs.joinToString(", ") { tomlString(it) }}]")
+
+        // Only emit [group.docker] if anything's set — keeps TOML files clean for
+        // the majority of groups that run as bare processes.
+        val d = request.docker
+        val dockerSet = d.enabled || d.memoryLimit.isNotBlank() || d.cpuLimit > 0.0 ||
+            d.javaImage.isNotBlank() || d.network.isNotBlank()
+        if (dockerSet) {
+            appendLine()
+            appendLine("[group.docker]")
+            appendLine("enabled = ${d.enabled}")
+            if (d.memoryLimit.isNotBlank()) appendLine("memory_limit = ${tomlString(d.memoryLimit)}")
+            if (d.cpuLimit > 0.0) appendLine("cpu_limit = ${d.cpuLimit}")
+            if (d.javaImage.isNotBlank()) appendLine("java_image = ${tomlString(d.javaImage)}")
+            if (d.network.isNotBlank()) appendLine("network = ${tomlString(d.network)}")
+        }
     }
 }
 
@@ -242,7 +258,14 @@ internal fun buildGroupConfig(request: CreateGroupRequest, groupType: GroupType,
             resources = ResourcesConfig(request.memory, request.maxPlayers),
             scaling = ScalingConfig(request.minInstances, request.maxInstances, request.playersPerInstance, request.scaleThreshold, request.idleTimeout),
             lifecycle = LifecycleConfig(request.stopOnEmpty, request.restartOnCrash, request.maxRestarts),
-            jvm = JvmConfig(request.jvmArgs, request.jvmOptimize)
+            jvm = JvmConfig(request.jvmArgs, request.jvmOptimize),
+            docker = DockerServiceConfig(
+                enabled = request.docker.enabled,
+                memoryLimit = request.docker.memoryLimit,
+                cpuLimit = request.docker.cpuLimit,
+                javaImage = request.docker.javaImage,
+                network = request.docker.network
+            )
         )
     )
 }
@@ -264,6 +287,13 @@ private fun ServerGroup.toResponse(registry: ServiceRegistry): GroupResponse {
         jvmArgs = def.jvm.args,
         jvmOptimize = def.jvm.optimize,
         activeInstances = registry.countByGroup(name),
-        modIds = modIds.sorted()
+        modIds = modIds.sorted(),
+        docker = GroupDockerResponse(
+            enabled = def.docker.enabled,
+            memoryLimit = def.docker.memoryLimit,
+            cpuLimit = def.docker.cpuLimit,
+            javaImage = def.docker.javaImage,
+            network = def.docker.network
+        )
     )
 }

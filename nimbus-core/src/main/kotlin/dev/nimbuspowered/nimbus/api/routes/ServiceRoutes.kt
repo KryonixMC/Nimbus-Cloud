@@ -69,7 +69,7 @@ fun Route.serviceRoutes(
                 services = services.filter { it.customState.equals(customStateParam, ignoreCase = true) }
             }
 
-            val responses = services.map { it.toResponse(groupManager, dedicatedServiceManager, stateSyncManager) }
+            val responses = services.map { it.toResponse(groupManager, dedicatedServiceManager, stateSyncManager, serviceManager) }
             call.respond(ServiceListResponse(responses, responses.size))
         }
 
@@ -126,7 +126,7 @@ fun Route.serviceRoutes(
             val name = call.parameters["name"]!!
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
-            call.respond(service.toResponse(groupManager, dedicatedServiceManager, stateSyncManager))
+            call.respond(service.toResponse(groupManager, dedicatedServiceManager, stateSyncManager, serviceManager))
         }
 
         // GET /api/services/{name}/metrics/history — Historical memory + player samples.
@@ -386,7 +386,8 @@ private fun tailFile(file: java.io.File, lines: Int): List<String> {
 private fun dev.nimbuspowered.nimbus.service.Service.toResponse(
     groupManager: GroupManager,
     dedicatedServiceManager: DedicatedServiceManager?,
-    stateSyncManager: dev.nimbuspowered.nimbus.service.StateSyncManager? = null
+    stateSyncManager: dev.nimbuspowered.nimbus.service.StateSyncManager? = null,
+    serviceManager: dev.nimbuspowered.nimbus.service.ServiceManager? = null
 ): ServiceResponse {
     val uptime = if (startedAt != null) {
         val duration = Duration.between(startedAt, Instant.now())
@@ -437,6 +438,7 @@ private fun dev.nimbuspowered.nimbus.service.Service.toResponse(
         memoryUsedMb = mem.usedMb,
         memoryMaxMb = mem.maxMb,
         healthy = healthy,
-        sync = syncHealth
+        sync = syncHealth,
+        backedBy = serviceManager?.getProcessHandle(name)?.kind ?: "process"
     )
 }

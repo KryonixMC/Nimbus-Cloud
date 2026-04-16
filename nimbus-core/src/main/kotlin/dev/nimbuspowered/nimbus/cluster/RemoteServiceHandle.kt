@@ -19,6 +19,8 @@ class RemoteServiceHandle(
 
     private val logger = LoggerFactory.getLogger(RemoteServiceHandle::class.java)
 
+    override val kind: String = "remote"
+
     private val _stdoutLines = MutableSharedFlow<String>(
         replay = 0,
         extraBufferCapacity = 4096,

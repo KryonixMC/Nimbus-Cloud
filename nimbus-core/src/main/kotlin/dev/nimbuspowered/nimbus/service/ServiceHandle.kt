@@ -18,4 +18,14 @@ interface ServiceHandle {
     suspend fun stopGracefully(timeout: Duration)
     suspend fun awaitExit(): Int?
     fun destroy()
+
+    /**
+     * Tag describing how the service is running. Used by dashboards + APIs to
+     * surface (e.g.) a Docker badge without importing module-specific types.
+     *
+     * Values: `"process"` (bare Java process, default), `"docker"` (containerized),
+     * `"remote"` (proxied to an agent node). Callers should treat unknown values
+     * as `"process"`.
+     */
+    val kind: String get() = "process"
 }

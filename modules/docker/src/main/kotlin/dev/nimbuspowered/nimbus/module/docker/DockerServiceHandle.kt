@@ -39,6 +39,8 @@ class DockerServiceHandle(
     private val logger = LoggerFactory.getLogger(DockerServiceHandle::class.java)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    override val kind: String = "docker"
+
     private val _stdoutLines = MutableSharedFlow<String>(
         replay = 0, extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST
     )

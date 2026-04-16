@@ -74,6 +74,7 @@ interface Service {
   proxyEnabled?: boolean;
   nodeId?: string;
   sync?: SyncHealth | null;
+  backedBy?: string;
 }
 
 interface ServiceListResponse {
@@ -235,6 +236,15 @@ export default function ServicesPage() {
                         </Link>
                         {s.isDedicated && (
                           <Badge variant="outline">Dedicated</Badge>
+                        )}
+                        {s.backedBy === "docker" && (
+                          <Badge
+                            variant="outline"
+                            className="border-sky-500/50 text-sky-600 dark:text-sky-400"
+                            title="Running as a Docker container"
+                          >
+                            Docker
+                          </Badge>
                         )}
                         {s.sync && (
                           <Badge

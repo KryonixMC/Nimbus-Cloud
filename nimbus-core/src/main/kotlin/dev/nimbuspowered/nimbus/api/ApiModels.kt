@@ -27,7 +27,12 @@ data class ServiceResponse(
     val memoryMaxMb: Long = 0,
     val healthy: Boolean = true,
     /** Sync health: null if this service has sync disabled or never synced. */
-    val sync: SyncHealth? = null
+    val sync: SyncHealth? = null,
+    /**
+     * How the service is running: `"process"` (default, bare Java),
+     * `"docker"` (containerized), `"remote"` (on an agent node).
+     */
+    val backedBy: String = "process"
 )
 
 @Serializable
@@ -65,7 +70,17 @@ data class GroupResponse(
     val jvmArgs: List<String>,
     val jvmOptimize: Boolean,
     val activeInstances: Int,
-    val modIds: List<String> = emptyList()
+    val modIds: List<String> = emptyList(),
+    val docker: GroupDockerResponse = GroupDockerResponse()
+)
+
+@Serializable
+data class GroupDockerResponse(
+    val enabled: Boolean = false,
+    val memoryLimit: String = "",
+    val cpuLimit: Double = 0.0,
+    val javaImage: String = "",
+    val network: String = ""
 )
 
 @Serializable
@@ -117,7 +132,17 @@ data class CreateGroupRequest(
     val restartOnCrash: Boolean = true,
     val maxRestarts: Int = 5,
     val jvmArgs: List<String> = emptyList(),
-    val jvmOptimize: Boolean = true
+    val jvmOptimize: Boolean = true,
+    val docker: GroupDockerRequest = GroupDockerRequest()
+)
+
+@Serializable
+data class GroupDockerRequest(
+    val enabled: Boolean = false,
+    val memoryLimit: String = "",
+    val cpuLimit: Double = 0.0,
+    val javaImage: String = "",
+    val network: String = ""
 )
 
 // ── Dedicated Service DTOs ─────────────────────────────────────────

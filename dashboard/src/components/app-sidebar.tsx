@@ -30,6 +30,7 @@ import {
   MonitorIcon,
   RadioIcon,
   BoxIcon,
+  ContainerIcon,
   GavelIcon,
   HardDrive,
   PackageIcon,
@@ -78,6 +79,7 @@ const iconMap: Record<string, LucideIcon> = {
   Package: PackageIcon,
   Archive: Archive,
   HardDrive: HardDrive,
+  Container: ContainerIcon,
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

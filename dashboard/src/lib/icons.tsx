@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Box,
   CalendarClock,
+  Container,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
@@ -98,6 +99,7 @@ export {
   CircleDashed,
   CircleX,
   Clock,
+  Container,
   Cpu,
   Download,
   File,
@@ -139,6 +141,7 @@ export {
 
 // Aliases for names used at call sites.
 export const BoxIcon = Box;
+export const ContainerIcon = Container;
 export const ChevronDownIcon = ChevronDown;
 export const EllipsisVerticalIcon = EllipsisVertical;
 export const ExternalLinkIcon = ExternalLink;

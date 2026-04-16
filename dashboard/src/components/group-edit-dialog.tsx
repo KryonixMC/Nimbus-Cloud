@@ -61,6 +61,14 @@ interface GroupLifecycle {
   maxRestarts: number;
 }
 
+interface GroupDocker {
+  enabled: boolean;
+  memoryLimit: string;
+  cpuLimit: number;
+  javaImage: string;
+  network: string;
+}
+
 interface GroupDetails {
   name: string;
   type: string;
@@ -72,6 +80,7 @@ interface GroupDetails {
   lifecycle: GroupLifecycle;
   jvmArgs: string[];
   jvmOptimize: boolean;
+  docker?: GroupDocker;
 }
 
 interface GroupEditDialogProps {
@@ -108,6 +117,10 @@ export function GroupEditDialog({
   const [maxRestarts, setMaxRestarts] = useState(5);
   const [jvmOptimize, setJvmOptimize] = useState(true);
   const [jvmArgsRaw, setJvmArgsRaw] = useState("");
+  const [dockerEnabled, setDockerEnabled] = useState(false);
+  const [dockerMemoryLimit, setDockerMemoryLimit] = useState("");
+  const [dockerCpuLimit, setDockerCpuLimit] = useState(0);
+  const [dockerJavaImage, setDockerJavaImage] = useState("");
 
   useEffect(() => {
     if (!open || !groupName) return;
@@ -132,6 +145,10 @@ export function GroupEditDialog({
         setMaxRestarts(data.lifecycle.maxRestarts);
         setJvmOptimize(data.jvmOptimize);
         setJvmArgsRaw(data.jvmArgs.join("\n"));
+        setDockerEnabled(data.docker?.enabled ?? false);
+        setDockerMemoryLimit(data.docker?.memoryLimit ?? "");
+        setDockerCpuLimit(data.docker?.cpuLimit ?? 0);
+        setDockerJavaImage(data.docker?.javaImage ?? "");
       })
       .catch(() => {
         // toast already shown by apiFetch
@@ -157,6 +174,9 @@ export function GroupEditDialog({
       return "Scale threshold must be between 0.0 and 1.0";
     if (idleTimeout < 0) return "Idle timeout must be >= 0";
     if (maxRestarts < 0) return "Max restarts must be >= 0";
+    if (dockerMemoryLimit && !/^\d+[KkMmGgTt]?$/.test(dockerMemoryLimit))
+      return "Docker memory limit must look like '2G', '512M', or empty (inherit default)";
+    if (dockerCpuLimit < 0) return "Docker CPU limit must be >= 0";
     return null;
   }
 
@@ -193,6 +213,13 @@ export function GroupEditDialog({
           maxRestarts,
           jvmArgs,
           jvmOptimize,
+          docker: {
+            enabled: dockerEnabled,
+            memoryLimit: dockerMemoryLimit,
+            cpuLimit: dockerCpuLimit,
+            javaImage: dockerJavaImage,
+            network: "",
+          },
         }),
       });
       toast.success(`Group '${groupName}' updated`);
@@ -397,6 +424,64 @@ export function GroupEditDialog({
                   onChange={(e) => setMaxRestarts(Number(e.target.value))}
                 />
               </Field>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Docker</div>
+                  <div className="text-xs text-muted-foreground">
+                    Run services in a container instead of a bare process.
+                    Requires the Docker module + a reachable daemon.
+                  </div>
+                </div>
+                <Switch
+                  checked={dockerEnabled}
+                  onCheckedChange={setDockerEnabled}
+                />
+              </div>
+              {dockerEnabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field>
+                      <FieldLabel>Memory Limit</FieldLabel>
+                      <Input
+                        value={dockerMemoryLimit}
+                        onChange={(e) => setDockerMemoryLimit(e.target.value)}
+                        placeholder="inherit (e.g. 4G)"
+                      />
+                      <FieldDescription>
+                        Hard container limit. Leave empty to inherit the module default.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel>CPU Limit (cores)</FieldLabel>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min={0}
+                        value={dockerCpuLimit}
+                        onChange={(e) => setDockerCpuLimit(Number(e.target.value))}
+                        placeholder="0 = inherit"
+                      />
+                      <FieldDescription>
+                        0 = inherit the module default.
+                      </FieldDescription>
+                    </Field>
+                  </div>
+                  <Field>
+                    <FieldLabel>Java Image</FieldLabel>
+                    <Input
+                      value={dockerJavaImage}
+                      onChange={(e) => setDockerJavaImage(e.target.value)}
+                      placeholder="eclipse-temurin:21-jre (inherit)"
+                    />
+                    <FieldDescription>
+                      Leave empty to auto-pick based on the server&apos;s required Java version.
+                    </FieldDescription>
+                  </Field>
+                </>
+              )}
             </div>
 
             <div className="rounded-md border p-3 space-y-3">
