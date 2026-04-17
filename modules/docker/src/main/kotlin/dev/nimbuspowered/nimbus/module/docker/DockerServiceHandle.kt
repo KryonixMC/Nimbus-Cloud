@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 import java.io.BufferedWriter
 import java.io.OutputStreamWriter
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 
 /**
@@ -133,17 +134,19 @@ class DockerServiceHandle(
     // handlers. Caching for a few seconds keeps list endpoints snappy under
     // N-service deployments without losing any real freshness (dashboard polls
     // every 5s anyway).
-    @Volatile private var statsCachedAt: Long = 0L
-    @Volatile private var statsCached: DockerStats? = null
+    // Single AtomicReference so a reader can't observe a fresh timestamp
+    // paired with a stale value (the two fields were separately @Volatile
+    // before, which allowed that tear).
+    private val statsCache = AtomicReference<Pair<Long, DockerStats?>>(0L to null)
     private val statsCacheTtlMs: Long = 3_000L
 
     /** Live memory stats (bytes) and CPU% from the Docker daemon. Null if unavailable. */
     fun liveStats(): DockerStats? {
         val now = System.currentTimeMillis()
-        if (now - statsCachedAt < statsCacheTtlMs) return statsCached
+        val (cachedAt, cached) = statsCache.get()
+        if (now - cachedAt < statsCacheTtlMs) return cached
         val fresh = runCatching { client.stats(containerId) }.getOrNull()
-        statsCached = fresh
-        statsCachedAt = now
+        statsCache.set(now to fresh)
         return fresh
     }
 

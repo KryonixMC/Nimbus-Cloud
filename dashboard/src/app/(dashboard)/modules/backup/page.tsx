@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch, getApiUrl, getToken } from "@/lib/api";
-import { PageHeader } from "@/components/page-header";
+import { PageShell } from "@/components/page-shell";
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
+import { POLL, useApiResource } from "@/hooks/use-api-resource";
 import {
   Archive,
   CalendarClock,
@@ -79,6 +81,12 @@ interface Schedule {
   lastRunAt: string | null;
   nextRunAt: string | null;
   lastStatus: string | null;
+}
+
+interface BackupStatusResponse {
+  activeJobs: number;
+  localDestination: string;
+  schedules: Schedule[];
 }
 
 interface VerifyResponse {
@@ -180,51 +188,43 @@ function formatDuration(startIso: string, endIso: string | null): string {
   }
 }
 
-function statusBadge(status: string) {
+function statusTone(status: string): "ok" | "warn" | "err" | "info" {
   switch (status) {
     case "SUCCESS":
-      return (
-        <Badge
-          variant="outline"
-          className="gap-1 border-green-500/40 text-green-600 dark:text-green-400"
-        >
-          <CheckCircle2 className="size-3" />
-          {status}
-        </Badge>
-      );
+      return "ok";
     case "FAILED":
-      return (
-        <Badge
-          variant="outline"
-          className="gap-1 border-red-500/40 text-red-600 dark:text-red-400"
-        >
-          <CircleX className="size-3" />
-          {status}
-        </Badge>
-      );
+      return "err";
     case "PARTIAL":
-      return (
-        <Badge
-          variant="outline"
-          className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-400"
-        >
-          <CircleAlert className="size-3" />
-          {status}
-        </Badge>
-      );
+      return "warn";
     case "RUNNING":
-      return (
-        <Badge
-          variant="outline"
-          className="gap-1 border-blue-500/40 text-blue-600 dark:text-blue-400"
-        >
-          <CircleDashed className="size-3 animate-spin" />
-          {status}
-        </Badge>
-      );
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return "info";
   }
+}
+
+function statusBadge(status: string) {
+  const tone = statusTone(status);
+  const color = `var(--severity-${tone})`;
+  const Icon =
+    status === "SUCCESS"
+      ? CheckCircle2
+      : status === "FAILED"
+        ? CircleX
+        : status === "PARTIAL"
+          ? CircleAlert
+          : CircleDashed;
+  return (
+    <Badge
+      variant="outline"
+      style={{ borderColor: color, color }}
+      className="gap-1 font-medium"
+    >
+      <Icon
+        className={"size-3" + (status === "RUNNING" ? " animate-spin" : "")}
+      />
+      {status}
+    </Badge>
+  );
 }
 
 // ── Trigger dialog state ────────────────────────────────────────
@@ -248,13 +248,28 @@ const EMPTY_TRIGGER_FORM: TriggerForm = {
 };
 
 export default function BackupModulePage() {
-  const [backups, setBackups] = useState<BackupRecord[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [activeJobs, setActiveJobs] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Two live resources — the list and the status summary. useApiResource
+  // handles polling (paused while tab hidden), cancellation, and error
+  // toasts for us. silent: true on the poll so transient API blips don't
+  // spam the user every 5 seconds.
+  const listRes = useApiResource<BackupListResponse>(
+    "/api/backups?limit=100",
+    { poll: POLL.normal, silent: true },
+  );
+  const statusRes = useApiResource<BackupStatusResponse>(
+    "/api/backups/status",
+    { poll: POLL.normal, silent: true },
+  );
+
+  const backups = listRes.data?.backups ?? [];
+  const schedules = statusRes.data?.schedules ?? [];
+  const activeJobs = statusRes.data?.activeJobs ?? 0;
+
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+
+  const refetchAll = useCallback(async () => {
+    await Promise.all([listRes.refetch(), statusRes.refetch()]);
+  }, [listRes, statusRes]);
 
   // Trigger dialog
   const [triggerOpen, setTriggerOpen] = useState(false);
@@ -264,73 +279,10 @@ export default function BackupModulePage() {
   // Active tab — controllable so empty-state CTAs can jump between tabs
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const load = useCallback(async () => {
-    try {
-      const [listRes, statusRes] = await Promise.all([
-        apiFetch<BackupListResponse>("/api/backups?limit=100").catch(() => ({
-          backups: [],
-          total: 0,
-        })),
-        apiFetch<{
-          activeJobs: number;
-          localDestination: string;
-          schedules: Schedule[];
-        }>("/api/backups/status").catch(() => ({
-          activeJobs: 0,
-          localDestination: "",
-          schedules: [],
-        })),
-      ]);
-      setBackups(listRes.backups);
-      setSchedules(statusRes.schedules);
-      setActiveJobs(statusRes.activeJobs);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Keep a live ref to the "is anything running" flag so the polling
-  // effect below doesn't need `backups`/`activeJobs` in its dep array
-  // (which caused a busy-loop: every load() updated state, which
-  // re-ran the effect, which kicked off another load() immediately →
-  // 429 rate limiting).
-  const runningRef = useRef(false);
-  useEffect(() => {
-    runningRef.current =
-      activeJobs > 0 || backups.some((b) => b.status === "RUNNING");
-  }, [activeJobs, backups]);
-
-  useEffect(() => {
-    load();
-    // Slow poll while idle, fast poll while something is actively running.
-    // Only the page being visible counts — avoid hitting the rate limit
-    // when the user has the tab in the background.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const tick = () => {
-      const visible =
-        typeof document === "undefined" || !document.hidden;
-      if (visible) {
-        if (runningRef.current) {
-          load();
-          timer = setTimeout(tick, 5000);
-          return;
-        }
-        // idle refresh: once per 30s keeps new schedule runs visible
-        // without hammering the controller
-      }
-      timer = setTimeout(tick, 30000);
-    };
-    timer = setTimeout(tick, runningRef.current ? 5000 : 30000);
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [load]);
-
   // ── Actions ────────────────────────────────────────────────────
 
   const submitTrigger = async () => {
     setTriggerSubmitting(true);
-    setError(null);
     try {
       const body: {
         targets: string[];
@@ -349,10 +301,8 @@ export default function BackupModulePage() {
       });
       setTriggerOpen(false);
       setTriggerForm(EMPTY_TRIGGER_FORM);
-      setNotice("Backup triggered");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Trigger failed");
+      toast.success("Backup triggered");
+      await refetchAll();
     } finally {
       setTriggerSubmitting(false);
     }
@@ -363,9 +313,7 @@ export default function BackupModulePage() {
     setWorking(true);
     try {
       await apiFetch(`/api/backups/${id}`, { method: "DELETE" });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      await refetchAll();
     } finally {
       setWorking(false);
     }
@@ -373,22 +321,19 @@ export default function BackupModulePage() {
 
   const verifyBackup = async (id: number) => {
     setWorking(true);
-    setError(null);
     try {
       const r = await apiFetch<VerifyResponse>(`/api/backups/${id}/verify`, {
         method: "POST",
       });
       if (r.valid) {
-        setNotice(`Backup #${id} verified — manifest OK`);
+        toast.success(`Backup #${id} verified — manifest OK`);
       } else {
-        setError(
+        toast.error(
           `Backup #${id} failed verification (${r.errors.length} problem${
             r.errors.length === 1 ? "" : "s"
-          }): ${r.errors.slice(0, 3).join("; ")}`
+          }): ${r.errors.slice(0, 3).join("; ")}`,
         );
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Verify failed");
     } finally {
       setWorking(false);
     }
@@ -400,19 +345,16 @@ export default function BackupModulePage() {
 The target must be STOPPED first — pass force only if you know what you're doing.`;
     if (!confirm(msg)) return;
     const force = confirm(
-      "Force the restore even if the target service is running? (Dangerous — players may see corrupted state.)"
+      "Force the restore even if the target service is running? (Dangerous — players may see corrupted state.)",
     );
     setWorking(true);
-    setError(null);
     try {
       await apiFetch(`/api/backups/${record.id}/restore`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun: false, force }),
       });
-      setNotice(`Restored backup #${record.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Restore failed");
+      toast.success(`Restored backup #${record.id}`);
     } finally {
       setWorking(false);
     }
@@ -421,22 +363,19 @@ The target must be STOPPED first — pass force only if you know what you're doi
   const prune = async () => {
     if (
       !confirm(
-        "Apply retention rules now? Backups beyond the configured keep counts will be deleted."
+        "Apply retention rules now? Backups beyond the configured keep counts will be deleted.",
       )
     )
       return;
     setWorking(true);
-    setError(null);
     try {
       const r = await apiFetch<PruneResponse>("/api/backups/prune", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun: false }),
       });
-      setNotice(`Pruned ${r.deleted} backup(s), freed ${formatSize(r.freedBytes)}`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Prune failed");
+      toast.success(`Pruned ${r.deleted} backup(s), freed ${formatSize(r.freedBytes)}`);
+      await refetchAll();
     } finally {
       setWorking(false);
     }
@@ -448,7 +387,6 @@ The target must be STOPPED first — pass force only if you know what you're doi
   // because it always tries to parse JSON.
   const downloadArchive = async (record: BackupRecord) => {
     setWorking(true);
-    setError(null);
     try {
       const res = await fetch(`${getApiUrl()}/api/backups/${record.id}/download`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -461,14 +399,13 @@ The target must be STOPPED first — pass force only if you know what you're doi
       const a = document.createElement("a");
       a.href = url;
       a.download =
-        record.archivePath.split("/").pop() ||
-        `backup-${record.id}.tar.zst`;
+        record.archivePath.split("/").pop() || `backup-${record.id}.tar.zst`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Download failed");
+      toast.error(e instanceof Error ? e.message : "Download failed");
     } finally {
       setWorking(false);
     }
@@ -492,9 +429,22 @@ The target must be STOPPED first — pass force only if you know what you're doi
     });
   };
 
+  // Loading for the page shell — only the first load blocks. Polling
+  // updates in place without re-rendering the shell.
+  const firstLoadPending =
+    (listRes.loading && !listRes.data) || (statusRes.loading && !statusRes.data);
+  const firstLoadError =
+    !listRes.data && !statusRes.data ? (listRes.error ?? statusRes.error) : null;
+
+  const pageStatus: "loading" | "error" | "ready" = firstLoadPending
+    ? "loading"
+    : firstLoadError
+      ? "error"
+      : "ready";
+
   const headerActions = (
     <div className="flex items-center gap-2">
-      <Button variant="outline" onClick={load} disabled={loading}>
+      <Button variant="outline" onClick={refetchAll} disabled={firstLoadPending}>
         <RefreshCw className="size-4 mr-1" />
         Refresh
       </Button>
@@ -522,7 +472,7 @@ The target must be STOPPED first — pass force only if you know what you're doi
           <DialogHeader>
             <DialogTitle>Run a backup now</DialogTitle>
             <DialogDescription>
-              Scheduled as <code className="text-xs">manual</code> so it's
+              Scheduled as <code className="text-xs">manual</code> so it&apos;s
               excluded from automatic retention pruning. Leave every target
               unchecked to back up every scope enabled in{" "}
               <code className="text-xs">backup.toml</code>.
@@ -590,47 +540,21 @@ The target must be STOPPED first — pass force only if you know what you're doi
   );
 
   return (
-    <>
-      <PageHeader
-        title="Backups"
-        description="Scheduled tar+zstd snapshots of services, templates, config, and the database. Restore, verify, and manage retention."
-        actions={headerActions}
-      />
-
-      {error && (
-        <div className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
-          {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-2 underline"
-            type="button"
-          >
-            dismiss
-          </button>
-        </div>
-      )}
-      {notice && (
-        <div className="mb-4 rounded-md border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-600 dark:text-green-400">
-          {notice}
-          <button
-            onClick={() => setNotice(null)}
-            className="ml-2 underline"
-            type="button"
-          >
-            dismiss
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <Skeleton className="h-96 rounded-xl" />
-      ) : (
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
-          <TabsContent value="overview" className="mt-4 space-y-6">
+    <PageShell
+      title="Backups"
+      description="Scheduled tar+zstd snapshots of services, templates, config, and the database. Restore, verify, and manage retention."
+      actions={headerActions}
+      status={pageStatus}
+      skeleton="table"
+      error={firstLoadError}
+      onRetry={refetchAll}
+    >
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as string)}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview" className="mt-4 space-y-6">
           <div className="grid gap-4 md:grid-cols-4">
             <StatCard
               label="Backups total"
@@ -674,10 +598,7 @@ The target must be STOPPED first — pass force only if you know what you're doi
                 title="No automatic backups yet"
                 description="Add a schedule to back up your services on a recurring cron (hourly, daily, weekly). Without one, backups only run when triggered manually."
                 action={
-                  <Button
-                    size="sm"
-                    onClick={() => setActiveTab("settings")}
-                  >
+                  <Button size="sm" onClick={() => setActiveTab("settings")}>
                     <Plus className="size-3.5 mr-1" />
                     Configure schedules
                   </Button>
@@ -807,7 +728,8 @@ The target must be STOPPED first — pass force only if you know what you're doi
                             </div>
                             {b.errorMessage && (
                               <div
-                                className="text-xs text-red-500 truncate max-w-xs"
+                                className="text-xs truncate max-w-xs"
+                                style={{ color: "var(--severity-err)" }}
                                 title={b.errorMessage}
                               >
                                 {b.errorMessage}
@@ -880,20 +802,13 @@ The target must be STOPPED first — pass force only if you know what you're doi
               </Card>
             )}
           </div>
-          </TabsContent>
+        </TabsContent>
 
-          <TabsContent value="settings" className="mt-4">
-            <BackupSettingsTab
-              onSaved={(msg) => {
-                setNotice(msg);
-                load();
-              }}
-              onError={setError}
-            />
-          </TabsContent>
-        </Tabs>
-      )}
-    </>
+        <TabsContent value="settings" className="mt-4">
+          <BackupSettingsTab onSaved={refetchAll} />
+        </TabsContent>
+      </Tabs>
+    </PageShell>
   );
 }
 
@@ -902,36 +817,27 @@ The target must be STOPPED first — pass force only if you know what you're doi
 // ────────────────────────────────────────────────────────────────
 
 interface BackupSettingsTabProps {
-  onSaved: (message: string) => void;
-  onError: (message: string) => void;
+  onSaved: () => void;
 }
 
-function BackupSettingsTab({ onSaved, onError }: BackupSettingsTabProps) {
+function BackupSettingsTab({ onSaved }: BackupSettingsTabProps) {
+  const configRes = useApiResource<BackupModuleConfig>("/api/backups/config");
   const [config, setConfig] = useState<BackupModuleConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [excludesText, setExcludesText] = useState("");
+  const [saving, setSaving] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<{
     index: number;
     draft: ScheduleDef;
   } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const cfg = await apiFetch<BackupModuleConfig>("/api/backups/config");
-      setConfig(cfg);
-      setExcludesText(cfg.excludes.join("\n"));
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Failed to load config");
-    } finally {
-      setLoading(false);
-    }
-  }, [onError]);
-
+  // Hydrate local draft state when the server payload arrives. Keeping a
+  // local copy lets the user edit without every keystroke racing a refetch.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (configRes.data) {
+      setConfig(configRes.data);
+      setExcludesText(configRes.data.excludes.join("\n"));
+    }
+  }, [configRes.data]);
 
   const save = async () => {
     if (!config) return;
@@ -951,9 +857,8 @@ function BackupSettingsTab({ onSaved, onError }: BackupSettingsTabProps) {
       });
       setConfig(next);
       setExcludesText(next.excludes.join("\n"));
-      onSaved("Settings saved — schedule reloaded");
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Save failed");
+      toast.success("Settings saved — schedule reloaded");
+      onSaved();
     } finally {
       setSaving(false);
     }
@@ -1007,7 +912,7 @@ function BackupSettingsTab({ onSaved, onError }: BackupSettingsTabProps) {
     });
   };
 
-  if (loading || !config) {
+  if (configRes.loading || !config) {
     return <Skeleton className="h-96 rounded-xl" />;
   }
 
@@ -1293,7 +1198,7 @@ function BackupSettingsTab({ onSaved, onError }: BackupSettingsTabProps) {
 
       {/* ── Actions ──────────────────────────── */}
       <div className="flex items-center justify-end gap-2 sticky bottom-0 pb-2">
-        <Button variant="outline" onClick={load} disabled={saving}>
+        <Button variant="outline" onClick={configRes.refetch} disabled={saving}>
           <RefreshCw className="size-4 mr-1" />
           Reset
         </Button>

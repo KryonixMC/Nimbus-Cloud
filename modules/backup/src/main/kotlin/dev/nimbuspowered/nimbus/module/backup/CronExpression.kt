@@ -82,9 +82,24 @@ class CronExpression(private val expression: String) {
                     if (stepStr != null) v to max else v to v
                 }
             }
+            // Fail loudly on out-of-range fields — silently producing an
+            // empty set means the schedule never fires, with no error to
+            // point the operator at the bad expression.
+            require(lo in min..max) {
+                "Cron field value $lo out of range [$min, $max] in token '$token'"
+            }
+            require(hi in min..max) {
+                "Cron field value $hi out of range [$min, $max] in token '$token'"
+            }
+            require(lo <= hi) {
+                "Cron range start $lo must be <= end $hi in token '$token'"
+            }
+            require(step >= 1) {
+                "Cron step must be >= 1 in token '$token'"
+            }
             var i = lo
             while (i <= hi) {
-                if (i in min..max) result.add(i)
+                result.add(i)
                 i += step
             }
         }

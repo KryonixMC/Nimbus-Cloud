@@ -7,6 +7,8 @@ import java.net.Socket
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
+import java.nio.channels.SelectionKey
+import java.nio.channels.Selector
 import java.nio.channels.SocketChannel
 import java.util.Locale
 
@@ -143,7 +145,28 @@ internal class DockerTransport(private val endpoint: String) {
         return when (kind) {
             EndpointKind.UNIX -> {
                 val ch = SocketChannel.open(StandardProtocolFamily.UNIX)
-                ch.connect(UnixDomainSocketAddress.of(unixPath!!))
+                // Non-blocking connect + Selector gives us the same 5s timeout
+                // behaviour as the TCP path. Without it, a hung daemon (socket
+                // file present, daemon unresponsive) would block isAvailable()
+                // forever on every service start.
+                ch.configureBlocking(false)
+                val selector = Selector.open()
+                try {
+                    ch.register(selector, SelectionKey.OP_CONNECT)
+                    ch.connect(UnixDomainSocketAddress.of(unixPath!!))
+                    val deadline = System.currentTimeMillis() + 5_000L
+                    while (!ch.finishConnect()) {
+                        val remaining = deadline - System.currentTimeMillis()
+                        if (remaining <= 0 || selector.select(remaining) == 0) {
+                            runCatching { ch.close() }
+                            throw DockerException("Timed out connecting to Unix socket $unixPath after 5s")
+                        }
+                        selector.selectedKeys().clear()
+                    }
+                } finally {
+                    runCatching { selector.close() }
+                }
+                ch.configureBlocking(true)
                 Connection(
                     input = Channels.newInputStream(ch),
                     output = Channels.newOutputStream(ch),

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Bridge between [ServiceManager] and the Docker module. When the module is
@@ -41,8 +42,9 @@ class DockerServiceHandleFactory(
     // Short TTL cache for ping() — [isAvailable] is called on every service
     // start, so during bursty scaling (10+ services in a second) we'd otherwise
     // open 10 sequential Unix-socket connections just to probe the daemon.
-    @Volatile private var pingCachedAt: Long = 0L
-    @Volatile private var pingCachedResult: Boolean = false
+    // Single AtomicReference to avoid a torn read where the timestamp
+    // appears fresh but the boolean still reflects the previous probe.
+    private val pingCache = AtomicReference<Pair<Long, Boolean>>(0L to false)
     private val pingCacheTtlMs: Long = 5_000L
 
     fun lookupHandle(serviceName: String): DockerServiceHandle? {
@@ -57,10 +59,10 @@ class DockerServiceHandleFactory(
     override fun isAvailable(): Boolean {
         if (!configManager.config.docker.enabled) return false
         val now = System.currentTimeMillis()
-        if (now - pingCachedAt < pingCacheTtlMs) return pingCachedResult
+        val (cachedAt, cached) = pingCache.get()
+        if (now - cachedAt < pingCacheTtlMs) return cached
         val result = client.ping()
-        pingCachedResult = result
-        pingCachedAt = now
+        pingCache.set(now to result)
         return result
     }
 
