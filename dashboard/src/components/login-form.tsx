@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { buildControllerUrl, controllerFetch } from "@/lib/controller-url";
 import { ArrowLeft, CircleCheck, Loader2 } from "@/lib/icons";
+import { OtpInput } from "@/components/otp-input";
 
 type Screen =
   | "connect"
@@ -106,6 +107,7 @@ export function LoginForm({
   const [totpCode, setTotpCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [lastMcMethod, setLastMcMethod] = useState<McMethod>("code");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -328,11 +330,13 @@ export function LoginForm({
   // Screen-swap animation. Direction-aware: forward slides in from the right,
   // back from the left. Keyed by `screen` so React re-mounts and re-runs the
   // CSS animation on every transition.
+  // Shorter travel (1 instead of 2) + a slightly longer duration reads as
+  // calmer motion — reduces the snap that felt "busy" on the previous pass.
   const animated = cn(
-    "animate-in fade-in-0 duration-200",
+    "animate-in fade-in-0 duration-300 ease-out",
     direction === "forward"
-      ? "slide-in-from-right-2"
-      : "slide-in-from-left-2"
+      ? "slide-in-from-right-1"
+      : "slide-in-from-left-1"
   );
 
   const errorAnim =
@@ -417,15 +421,21 @@ export function LoginForm({
           {subheading && (
             <CardDescription className="mt-1">{subheading}</CardDescription>
           )}
-          {screen !== "connect" && resolvedUrl && (
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              Connected to{" "}
-              <span className="font-mono">{resolvedUrl}</span>
-            </p>
-          )}
+          {/* Always-rendered placeholder keeps the header height stable across
+             screens so the card doesn't jump when we first learn the URL. */}
+          <p
+            className={cn(
+              "mt-1 truncate text-xs text-muted-foreground transition-opacity",
+              screen !== "connect" && resolvedUrl ? "opacity-100" : "opacity-0"
+            )}
+            aria-hidden={!(screen !== "connect" && resolvedUrl)}
+          >
+            Connected to{" "}
+            <span className="font-mono">{resolvedUrl || "—"}</span>
+          </p>
         </CardHeader>
 
-        <CardContent className="px-6 pb-7">
+        <CardContent className="min-h-[260px] px-6 pb-7">
           {screen === "connect" && (
             <form
               key="s-connect"
@@ -461,17 +471,16 @@ export function LoginForm({
                     Port defaults to 8080 if not specified
                   </p>
                 </Field>
-                {error && (
-                  <p
-                    role="alert"
-                    className={cn(
-                      "text-sm text-[color:var(--severity-err)]",
-                      errorAnim
-                    )}
-                  >
-                    {error}
-                  </p>
-                )}
+                <div className={cn("min-h-5", error && errorAnim)}>
+                  {error && (
+                    <p
+                      role="alert"
+                      className="text-sm text-[color:var(--severity-err)]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                </div>
                 <Field>
                   <SubmitButton
                     loading={loading}
@@ -556,38 +565,44 @@ export function LoginForm({
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="mc-code">Login code</FieldLabel>
-                  <Input
+                  <OtpInput
                     id="mc-code"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="123456"
+                    aria-label="Login code"
                     value={mcCode}
-                    onChange={(e) => setMcCode(e.target.value)}
-                    required
-                    autoComplete="one-time-code"
+                    onChange={setMcCode}
+                    invalid={Boolean(error)}
                     autoFocus
-                    className="text-center font-mono text-lg tracking-[0.4em]"
+                    className="justify-center"
+                    onComplete={(v) => {
+                      // Auto-submit once all six digits are filled so the
+                      // user doesn't need to reach for the button.
+                      if (!loading) {
+                        setMcCode(v);
+                        void handleCodeSubmit(
+                          new Event("submit") as unknown as React.FormEvent
+                        );
+                      }
+                    }}
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Code not working? Make sure you typed{" "}
                     <code>/nimbus dashboard login</code> in-game.
                   </p>
                 </Field>
-                {error && (
-                  <p
-                    role="alert"
-                    className={cn(
-                      "text-sm text-[color:var(--severity-err)]",
-                      errorAnim
-                    )}
-                  >
-                    {error}
-                  </p>
-                )}
+                <div className={cn("min-h-5", error && errorAnim)}>
+                  {error && (
+                    <p
+                      role="alert"
+                      className="text-sm text-[color:var(--severity-err)]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                </div>
                 <Field>
                   <SubmitButton
                     loading={loading}
+                    disabled={mcCode.length !== 6}
                     label="Sign in"
                     loadingLabel="Signing in…"
                   />
@@ -695,17 +710,16 @@ export function LoginForm({
                     autoFocus
                   />
                 </Field>
-                {error && (
-                  <p
-                    role="alert"
-                    className={cn(
-                      "text-sm text-[color:var(--severity-err)]",
-                      errorAnim
-                    )}
-                  >
-                    {error}
-                  </p>
-                )}
+                <div className={cn("min-h-5", error && errorAnim)}>
+                  {error && (
+                    <p
+                      role="alert"
+                      className="text-sm text-[color:var(--severity-err)]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                </div>
                 <Field>
                   <SubmitButton
                     loading={loading}
@@ -725,37 +739,73 @@ export function LoginForm({
             >
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="totp">Authenticator code</FieldLabel>
-                  <Input
-                    id="totp"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="6-digit code or recovery code"
-                    value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value)}
-                    required
-                    autoFocus
-                    className="text-center font-mono text-lg tracking-[0.3em]"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Lost your device? Use a recovery code.
-                  </p>
-                </Field>
-                {error && (
-                  <p
-                    role="alert"
-                    className={cn(
-                      "text-sm text-[color:var(--severity-err)]",
-                      errorAnim
-                    )}
+                  <FieldLabel htmlFor="totp">
+                    {useRecoveryCode ? "Recovery code" : "Authenticator code"}
+                  </FieldLabel>
+                  {useRecoveryCode ? (
+                    <Input
+                      id="totp"
+                      type="text"
+                      placeholder="ABCD-1234"
+                      value={totpCode}
+                      onChange={(e) =>
+                        setTotpCode(e.target.value.toUpperCase())
+                      }
+                      required
+                      autoFocus
+                      className="text-center font-mono text-base tracking-[0.2em]"
+                    />
+                  ) : (
+                    <OtpInput
+                      id="totp"
+                      aria-label="Authenticator code"
+                      value={totpCode}
+                      onChange={setTotpCode}
+                      invalid={Boolean(error)}
+                      autoFocus
+                      className="justify-center"
+                      onComplete={(v) => {
+                        if (!loading) {
+                          setTotpCode(v);
+                          void handleTotpSubmit(
+                            new Event("submit") as unknown as React.FormEvent
+                          );
+                        }
+                      }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseRecoveryCode((v) => !v);
+                      setTotpCode("");
+                      setError("");
+                    }}
+                    className="mt-2 text-left text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
                   >
-                    {error}
-                  </p>
-                )}
+                    {useRecoveryCode
+                      ? "Use authenticator code instead"
+                      : "Lost your device? Use a recovery code."}
+                  </button>
+                </Field>
+                <div className={cn("min-h-5", error && errorAnim)}>
+                  {error && (
+                    <p
+                      role="alert"
+                      className="text-sm text-[color:var(--severity-err)]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                </div>
                 <Field>
                   <SubmitButton
                     loading={loading}
+                    disabled={
+                      useRecoveryCode
+                        ? totpCode.trim().length < 8
+                        : totpCode.length !== 6
+                    }
                     label="Verify"
                     loadingLabel="Verifying…"
                   />
