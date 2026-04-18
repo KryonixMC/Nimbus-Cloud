@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -341,9 +342,15 @@ export function LoginForm({
 
         <CardHeader className="text-center">
           <div className="mb-2 flex justify-center">
-            <NimbusLogo className="h-16 w-16" />
+            <Image
+              src="/banner.svg"
+              alt="Nimbus"
+              width={240}
+              height={66}
+              priority
+              className="h-auto w-[240px]"
+            />
           </div>
-          <span className="sr-only">Nimbus</span>
           {description && <CardDescription>{description}</CardDescription>}
           {screen !== "connect" && resolvedUrl && (
             <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -395,13 +402,33 @@ export function LoginForm({
                 title="Minecraft Account"
                 description="Sign in with an in-game code or a magic link."
                 primary
-                icon={<SkinHeadIcon />}
+                icon={
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src="https://mc-heads.net/avatar/MHF_Steve/64"
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="rounded-sm"
+                    loading="lazy"
+                  />
+                }
                 onClick={() => go("mc-method")}
               />
               <MethodCard
                 title="API Token"
                 description="Use a long-lived controller token (admin-only)."
-                icon={<CoinIcon />}
+                icon={
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src="https://mc-heads.net/avatar/MHF_CommandBlock/64"
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="rounded-sm"
+                    loading="lazy"
+                  />
+                }
                 onClick={() => go("api-token")}
               />
             </div>
@@ -644,146 +671,3 @@ function MethodCard({
   );
 }
 
-/**
- * Vector Nimbus mark — stylised cloud with a monospace "N" carved out.
- * Pure SVG so it stays crisp at any size; uses the banner palette
- * (#7aa2f7 → #7dcfff) so it visually matches the ASCII banner used
- * elsewhere in the app. Safe fallback until we ship a hi-res logo asset.
- */
-function NimbusLogo({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-      className={className}
-    >
-      <defs>
-        <linearGradient id="nimbus-logo-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#7aa2f7" />
-          <stop offset="55%" stopColor="#89b4fa" />
-          <stop offset="100%" stopColor="#7dcfff" />
-        </linearGradient>
-      </defs>
-      {/* Cloud silhouette — three overlapping circles + a base */}
-      <g fill="url(#nimbus-logo-grad)">
-        <circle cx="22" cy="30" r="12" />
-        <circle cx="40" cy="26" r="13" />
-        <circle cx="48" cy="34" r="10" />
-        <rect x="16" y="32" width="36" height="14" rx="7" />
-      </g>
-      {/* Carved "N" — uses the card's background colour so it reads as a cutout */}
-      <g fill="var(--card, #ffffff)" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight="700">
-        <text
-          x="32"
-          y="42"
-          textAnchor="middle"
-          fontSize="22"
-          letterSpacing="-1"
-        >
-          N
-        </text>
-      </g>
-    </svg>
-  );
-}
-
-/**
- * Classic 8×8 Steve face — pixel-art Minecraft head. shape-rendering keeps
- * the rects crisp at any zoom so it stays pixel-perfect on HiDPI screens.
- */
-function SkinHeadIcon({ className }: { className?: string }) {
-  // Palette — canonical Steve colours, toned down a touch for light/dark themes.
-  const H = "#2C1A0A"; // hair
-  const S = "#C08D6A"; // skin
-  const SS = "#9B6B4D"; // skin shadow (cheek edge)
-  const W = "#F5F5F5"; // eye white
-  const I = "#3B6CD1"; // iris
-  const M = "#6B3F2F"; // mouth
-  // 8 rows × 8 cols. '.' = skin fill default.
-  const rows: string[] = [
-    "HHHHHHHH",
-    "HHHHHHHH",
-    "HHHHHHHH",
-    "HSSSSSSH",
-    "SWISSWIS",
-    "SSSSSSSS",
-    "sMMMMMMs", // mouth row with shadow edges
-    "sSSSSSSs",
-  ];
-  const color: Record<string, string> = {
-    H, S, s: SS, W, I, M,
-  };
-  return (
-    <svg
-      viewBox="0 0 8 8"
-      width={40}
-      height={40}
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-      className={className}
-    >
-      {rows.flatMap((row, y) =>
-        row.split("").map((ch, x) => (
-          <rect
-            key={`${x}-${y}`}
-            x={x}
-            y={y}
-            width={1}
-            height={1}
-            fill={color[ch] ?? S}
-          />
-        ))
-      )}
-    </svg>
-  );
-}
-
-/**
- * Pixel-art gold coin with a small "N" for Nimbus. 10×10 grid, same crisp
- * edges as the skin head so the two visually rhyme.
- */
-function CoinIcon({ className }: { className?: string }) {
-  const O = "#7A5A10"; // outline
-  const G = "#F0B820"; // gold fill
-  const D = "#B4860F"; // gold shadow
-  const L = "#FFF1A6"; // highlight
-  // 10 rows × 10 cols. '.' = transparent.
-  const rows: string[] = [
-    "...OOOO...",
-    "..OGGGGO..",
-    ".OGLGGDGO.", // top highlight + right-side shadow start
-    ".OGGGDDGO.",
-    "OGGOGGODGO",
-    "OGGGOGGODO",
-    ".OGGOGGGO.",
-    ".OGGGGDGO.",
-    "..OGGDGO..",
-    "...OOOO...",
-  ];
-  const color: Record<string, string> = { O, G, D, L };
-  return (
-    <svg
-      viewBox="0 0 10 10"
-      width={40}
-      height={40}
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-      className={className}
-    >
-      {rows.flatMap((row, y) =>
-        row.split("").map((ch, x) =>
-          ch === "." ? null : (
-            <rect
-              key={`${x}-${y}`}
-              x={x}
-              y={y}
-              width={1}
-              height={1}
-              fill={color[ch] ?? G}
-            />
-          )
-        )
-      )}
-    </svg>
-  );
-}
