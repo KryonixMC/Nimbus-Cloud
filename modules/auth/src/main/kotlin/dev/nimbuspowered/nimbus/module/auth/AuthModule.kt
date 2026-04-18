@@ -16,16 +16,19 @@ import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8000_Sessions
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8001_Challenges
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8002_Totp
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8003_RecoveryCodes
+import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8004_WebAuthnCredentials
 import dev.nimbuspowered.nimbus.module.auth.routes.PlayerLookup
 import dev.nimbuspowered.nimbus.module.auth.routes.authPublicDeliveryRoutes
 import dev.nimbuspowered.nimbus.module.auth.routes.authRoutes
 import dev.nimbuspowered.nimbus.module.auth.routes.authServiceRoutes
+import dev.nimbuspowered.nimbus.module.auth.routes.passkeyRoutes
 import dev.nimbuspowered.nimbus.module.auth.routes.profileRoutes
 import dev.nimbuspowered.nimbus.module.auth.service.LoginChallengeService
 import dev.nimbuspowered.nimbus.module.auth.service.PendingTotpStore
 import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.TotpService
+import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
 import dev.nimbuspowered.nimbus.module.service
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -70,6 +73,7 @@ class AuthModule : NimbusModule {
     private lateinit var permissionResolver: PermissionResolver
     private lateinit var totpService: TotpService
     private lateinit var pendingTotpStore: PendingTotpStore
+    private lateinit var webAuthnService: WebAuthnService
     private lateinit var context: ModuleContext
 
     override suspend fun init(context: ModuleContext) {
@@ -91,7 +95,8 @@ class AuthModule : NimbusModule {
             AuthV8000_Sessions,
             AuthV8001_Challenges,
             AuthV8002_Totp,
-            AuthV8003_RecoveryCodes
+            AuthV8003_RecoveryCodes,
+            AuthV8004_WebAuthnCredentials
         ))
 
         // Auto-deploy the Velocity companion plugin. Every Nimbus network
@@ -112,6 +117,10 @@ class AuthModule : NimbusModule {
         permissionResolver = PermissionResolver(context)
         totpService = TotpService(db, configSupplier, encryptionKey)
         pendingTotpStore = PendingTotpStore()
+        webAuthnService = WebAuthnService(db, configSupplier) {
+            context.service<NimbusConfig>()?.dashboard?.publicUrl?.takeIf { it.isNotBlank() }
+                ?: authConfig.dashboard.publicUrl
+        }
 
         // Prefer the core `[dashboard] public_url` so operators only have to
         // set the URL in one place. Falls back to the module's own config
@@ -163,6 +172,13 @@ class AuthModule : NimbusModule {
         // endpoints require a valid dashboard session (validated inline).
         context.registerRoutes(
             block = { profileRoutes(sessionService, totpService) },
+            auth = AuthLevel.NONE
+        )
+
+        // Passkey / WebAuthn routes — register/finish require bearer session,
+        // login/start+finish are public. All validation is inline.
+        context.registerRoutes(
+            block = { passkeyRoutes(webAuthnService, sessionService, permissionResolver) },
             auth = AuthLevel.NONE
         )
 

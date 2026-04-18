@@ -5,6 +5,7 @@ import dev.nimbuspowered.nimbus.module.auth.db.DashboardLoginChallenges
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardRecoveryCodes
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardSessions
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardTotp
+import dev.nimbuspowered.nimbus.module.auth.db.DashboardWebAuthnCredentials
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Transaction
 
@@ -43,5 +44,14 @@ object AuthV8003_RecoveryCodes : Migration {
     override val baseline = false
     override fun Transaction.migrate() {
         SchemaUtils.createMissingTablesAndColumns(DashboardRecoveryCodes)
+    }
+}
+
+object AuthV8004_WebAuthnCredentials : Migration {
+    override val version = 8004
+    override val description = "WebAuthn / Passkey credentials (COSE public key, sign counter)"
+    override val baseline = false
+    override fun Transaction.migrate() {
+        SchemaUtils.createMissingTablesAndColumns(DashboardWebAuthnCredentials)
     }
 }

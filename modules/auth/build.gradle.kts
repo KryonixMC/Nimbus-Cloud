@@ -19,6 +19,9 @@ dependencies {
     compileOnly("com.akuleshov7:ktoml-core:0.5.2")
     compileOnly("com.akuleshov7:ktoml-file:0.5.2")
     compileOnly("org.slf4j:slf4j-api:2.0.16")
+
+    // WebAuthn / Passkey — shaded into the core fat JAR; here compileOnly only
+    compileOnly("com.yubico:webauthn-server-core:2.6.0")
 }
 
 kotlin {

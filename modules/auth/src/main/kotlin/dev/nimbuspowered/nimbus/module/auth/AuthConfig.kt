@@ -18,7 +18,8 @@ data class AuthConfig(
     val loginChallenge: LoginChallengeConfig = LoginChallengeConfig(),
     val dashboard: DashboardConfigBlock = DashboardConfigBlock(),
     val totp: TotpConfig = TotpConfig(),
-    val security: SecurityConfig = SecurityConfig()
+    val security: SecurityConfig = SecurityConfig(),
+    val webauthn: WebAuthnConfig = WebAuthnConfig()
 )
 
 @Serializable
@@ -67,6 +68,27 @@ data class TotpConfig(
 data class SecurityConfig(
     @SerialName("token_encryption_key_file")
     val tokenEncryptionKeyFile: String = "config/modules/auth/session.key"
+)
+
+/**
+ * WebAuthn / Passkey settings.
+ *
+ * `rpId` **must** match the dashboard's public hostname (no scheme, no port, no path).
+ * `origins` is the list of allowed `https://host[:port]` the browser may be served from.
+ * Empty strings auto-derive from `[dashboard] public_url`.
+ */
+@Serializable
+data class WebAuthnConfig(
+    val enabled: Boolean = true,
+    @SerialName("rp_id")
+    val rpId: String = "",
+    @SerialName("rp_name")
+    val rpName: String = "Nimbus Dashboard",
+    val origins: List<String> = emptyList(),
+    @SerialName("challenge_ttl_seconds")
+    val challengeTtlSeconds: Long = 300,
+    @SerialName("max_credentials_per_user")
+    val maxCredentialsPerUser: Int = 10
 )
 
 /**
@@ -149,6 +171,18 @@ class AuthConfigStore(private val moduleDir: Path, private val baseDir: Path) {
 
             [security]
             token_encryption_key_file = "config/modules/auth/session.key"
+
+            [webauthn]
+            enabled = true
+            # rp_id must match the dashboard hostname exactly (no scheme/port/path).
+            # Leave empty to auto-derive from [dashboard] public_url.
+            rp_id = ""
+            rp_name = "Nimbus Dashboard"
+            # Allowed browser origins. Leave empty to auto-derive from public_url.
+            # Add localhost entries here for local development.
+            origins = []
+            challenge_ttl_seconds = 300
+            max_credentials_per_user = 10
         """.trimIndent() + "\n"
         val tmp = configFile.resolveSibling(configFile.fileName.toString() + ".tmp")
         Files.writeString(tmp, content)

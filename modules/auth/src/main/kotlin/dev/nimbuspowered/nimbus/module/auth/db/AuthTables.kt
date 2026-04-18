@@ -59,3 +59,27 @@ object DashboardRecoveryCodes : Table("dashboard_recovery_codes") {
 
     override val primaryKey = PrimaryKey(codeHash)
 }
+
+/**
+ * WebAuthn / Passkey credentials. One user can register multiple devices.
+ *
+ * `credentialId` is the raw authenticator-assigned handle (base64url-encoded here for
+ * storage convenience — the browser hands it back on every login). `publicKeyCose`
+ * is the COSE_Key-encoded public key blob returned from registration. `signCount`
+ * is the authenticator's monotonic counter used to detect cloned credentials.
+ */
+object DashboardWebAuthnCredentials : Table("dashboard_webauthn_credentials") {
+    val credentialId = varchar("credential_id", 512)
+    val uuid = varchar("uuid", 36).index("idx_webauthn_uuid")
+    /** MC name captured at enrollment — used to issue sessions on usernameless login. */
+    val mcName = varchar("mc_name", 16)
+    val publicKeyCose = binary("public_key_cose", 512)
+    val signCount = long("sign_count").default(0)
+    /** User-facing device label ("MacBook Touch ID", "YubiKey 5C"). */
+    val label = varchar("label", 64)
+    val createdAt = long("created_at")
+    val lastUsedAt = long("last_used_at").nullable()
+    val aaguid = varchar("aaguid", 36).nullable()
+
+    override val primaryKey = PrimaryKey(credentialId)
+}

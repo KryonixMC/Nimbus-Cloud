@@ -63,6 +63,9 @@ dependencies {
     implementation("com.github.luben:zstd-jni:1.5.6-4")
     implementation("org.apache.commons:commons-compress:1.27.1")
 
+    // Auth module WebAuthn / Passkey deps (shaded into fat JAR; module uses compileOnly)
+    implementation("com.yubico:webauthn-server-core:2.6.0")
+
     // Netty engine for cluster server (native TLS/SSL support via sslConnector)
     implementation("io.ktor:ktor-server-netty:3.1.1")
     // Self-signed certificate generation for auto-TLS
