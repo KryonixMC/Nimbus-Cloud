@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -27,13 +27,10 @@ import { isPasskeySupported, loginWithPasskey } from "@/lib/passkeys";
 type Screen =
   | "connect"
   | "method"
-  | "mc-method"
   | "code"
-  | "magic-link"
   | "api-token"
   | "totp";
 
-type McMethod = "code" | "magic-link";
 type Direction = "forward" | "back";
 
 interface ConsumeChallengeResponse {
@@ -76,8 +73,8 @@ function friendlyNetworkError(err: unknown): string {
  * state machine acts as implicit routing without touching Next's router.
  *
  * Flow:
- *   connect → method → {mc-method → {code|magic-link} | api-token}
- *   code|magic-link → (optional) totp
+ *   connect → method → {passkey | code | api-token}
+ *   code → (optional) totp
  */
 export function LoginForm({
   className,
@@ -99,23 +96,10 @@ export function LoginForm({
   // Code screen state
   const [mcCode, setMcCode] = useState("");
 
-  // Magic-link screen state
-  const [mcName, setMcName] = useState("");
-  const [linkSent, setLinkSent] = useState(false);
-  const [linkTtl, setLinkTtl] = useState(0);
-  const linkTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // TOTP state
   const [totpCode, setTotpCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [lastMcMethod, setLastMcMethod] = useState<McMethod>("code");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (linkTimer.current) clearInterval(linkTimer.current);
-    };
-  }, []);
 
   function go(next: Screen) {
     setError("");
@@ -130,39 +114,16 @@ export function LoginForm({
       case "method":
         setScreen("connect");
         break;
-      case "mc-method":
-        setScreen("method");
-        break;
       case "code":
-        setScreen("mc-method");
-        break;
-      case "magic-link":
-        setScreen("mc-method");
-        break;
       case "api-token":
         setScreen("method");
         break;
       case "totp":
-        setScreen(lastMcMethod === "magic-link" ? "magic-link" : "code");
+        setScreen("code");
         break;
       default:
         break;
     }
-  }
-
-  function startLinkCountdown(ttlSeconds: number) {
-    setLinkTtl(ttlSeconds);
-    if (linkTimer.current) clearInterval(linkTimer.current);
-    linkTimer.current = setInterval(() => {
-      setLinkTtl((t) => {
-        if (t <= 1) {
-          if (linkTimer.current) clearInterval(linkTimer.current);
-          setLinkSent(false);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
   }
 
   // ---- actions ---------------------------------------------------------
@@ -216,7 +177,6 @@ export function LoginForm({
       const body: ConsumeChallengeResponse = await res.json();
       if (body.totpRequired && body.challengeId) {
         setChallengeId(body.challengeId);
-        setLastMcMethod("code");
         setTotpCode("");
         go("totp");
         return;
@@ -227,45 +187,6 @@ export function LoginForm({
         return;
       }
       setError("Unexpected response from controller");
-    } catch (err) {
-      setError(friendlyNetworkError(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSendMagicLink(e: React.FormEvent) {
-    e.preventDefault();
-    if (linkSent) return;
-    setError("");
-    setLoading(true);
-    try {
-      const res = await controllerFetch(
-        resolvedUrl,
-        "/api/auth/deliver-magic-link",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: mcName.trim() }),
-        }
-      );
-      if (res.status === 404) {
-        setError("You need to be online on a Nimbus server first.");
-        return;
-      }
-      if (res.status === 403) {
-        setError("Magic link login is disabled on this network.");
-        return;
-      }
-      if (!res.ok) {
-        setError(await readError(res, "Could not send magic link"));
-        return;
-      }
-      const body = await res.json().catch(() => ({} as { ttlSeconds?: number }));
-      const ttl = typeof body.ttlSeconds === "number" ? body.ttlSeconds : 60;
-      setLastMcMethod("magic-link");
-      setLinkSent(true);
-      startLinkCountdown(ttl);
     } catch (err) {
       setError(friendlyNetworkError(err));
     } finally {
@@ -368,19 +289,13 @@ export function LoginForm({
       ? "Let's get you signed in"
       : screen === "method"
         ? "How would you like to sign in?"
-        : screen === "mc-method"
-          ? "Pick your preferred sign-in"
-          : screen === "code"
-            ? "Enter your six-digit code"
-            : screen === "magic-link"
-              ? linkSent
-                ? "Check your chat"
-                : "Get a magic link in-game"
-              : screen === "api-token"
-                ? "Paste your controller token"
-                : screen === "totp"
-                  ? "Enter your authenticator code"
-                  : "";
+        : screen === "code"
+          ? "Enter your six-digit code"
+          : screen === "api-token"
+            ? "Paste your controller token"
+            : screen === "totp"
+              ? "Enter your authenticator code"
+              : "";
 
   const subheading =
     screen === "connect"
@@ -423,7 +338,7 @@ export function LoginForm({
           </div>
           {heading && (
             <CardTitle
-              key={`h-${screen}-${linkSent}`}
+              key={`h-${screen}`}
               className={animated}
             >
               {heading}
@@ -530,8 +445,7 @@ export function LoginForm({
               )}
               <MethodCard
                 title="Minecraft Account"
-                description="Sign in with an in-game code or a magic link."
-                primary
+                description="Sign in with a one-time code from /nimbus dashboard login."
                 icon={
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
@@ -543,7 +457,7 @@ export function LoginForm({
                     loading="lazy"
                   />
                 }
-                onClick={() => go("mc-method")}
+                onClick={() => go("code")}
               />
               <MethodCard
                 title="API Token"
@@ -564,25 +478,6 @@ export function LoginForm({
                   />
                 }
                 onClick={() => go("api-token")}
-              />
-            </div>
-          )}
-
-          {screen === "mc-method" && (
-            <div
-              key="s-mc-method"
-              className={cn("flex flex-col gap-3", animated)}
-            >
-              <MethodCard
-                title="Login code"
-                description="Type /nimbus dashboard login on any Nimbus server."
-                primary
-                onClick={() => go("code")}
-              />
-              <MethodCard
-                title="Magic link ✨"
-                description="Get a clickable sign-in link in your in-game chat."
-                onClick={() => go("magic-link")}
               />
             </div>
           )}
@@ -637,86 +532,6 @@ export function LoginForm({
                     label="Sign in"
                     loadingLabel="Signing in…"
                   />
-                </Field>
-              </FieldGroup>
-            </form>
-          )}
-
-          {screen === "magic-link" && (
-            <form
-              key={`s-link-${linkSent}`}
-              onSubmit={handleSendMagicLink}
-              className={animated}
-            >
-              <FieldGroup>
-                {!linkSent ? (
-                  <Field>
-                    <FieldLabel htmlFor="mc-name">
-                      Minecraft username
-                    </FieldLabel>
-                    <Input
-                      id="mc-name"
-                      type="text"
-                      placeholder="Notch"
-                      value={mcName}
-                      onChange={(e) => setMcName(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </Field>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 py-4 text-center">
-                    <span
-                      aria-hidden
-                      className="nimbus-sparkle text-3xl"
-                    >
-                      ✨
-                    </span>
-                    <p className="text-sm">Check your in-game chat</p>
-                    <p className="text-xs text-muted-foreground/80">
-                      Link expires in {linkTtl}s
-                    </p>
-                  </div>
-                )}
-                {error && (
-                  <div className={cn("flex flex-col gap-2", errorAnim)}>
-                    <p
-                      role="alert"
-                      className="text-sm text-[color:var(--severity-err)]"
-                    >
-                      {error}
-                    </p>
-                    {error.includes("disabled") && (
-                      <button
-                        type="button"
-                        onClick={() => go("code")}
-                        className="text-left text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                      >
-                        Use code instead
-                      </button>
-                    )}
-                  </div>
-                )}
-                <Field>
-                  {linkSent && linkTtl === 0 ? (
-                    <Button
-                      type="button"
-                      className="h-10 w-full animate-in fade-in-0 duration-200"
-                      onClick={() => {
-                        setLinkSent(false);
-                        setError("");
-                      }}
-                    >
-                      Send another link
-                    </Button>
-                  ) : (
-                    <SubmitButton
-                      loading={loading}
-                      disabled={linkSent}
-                      label={linkSent ? `Link sent (${linkTtl}s)` : "Send link"}
-                      loadingLabel="Sending…"
-                    />
-                  )}
                 </Field>
               </FieldGroup>
             </form>
@@ -875,28 +690,24 @@ function SubmitButton({
 }
 
 /**
- * Method picker button — visual language matches the rest of the app
- * (stock Button outline tokens, `rounded-3xl` like Inputs). `primary`
- * still gets the default filled variant so the user's eye lands on it,
- * but no custom shadows/lifts/tints.
+ * Method picker button — identical visual treatment for every option so
+ * nothing on the screen implies hierarchy the user didn't choose.
  */
 function MethodCard({
   title,
   description,
-  primary,
   onClick,
   icon,
 }: {
   title: string;
   description: string;
-  primary?: boolean;
   onClick: () => void;
   icon?: React.ReactNode;
 }) {
   return (
     <Button
       type="button"
-      variant={primary ? "secondary" : "outline"}
+      variant="secondary"
       onClick={onClick}
       className="group h-auto w-full justify-start gap-3 px-4 py-3 text-left whitespace-normal"
     >

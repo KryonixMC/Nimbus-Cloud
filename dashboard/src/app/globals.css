@@ -210,16 +210,6 @@
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: oklch(0.5 0 0 / 40%);
 }
-/* Login — sparkle pulse for magic-link waiting state. */
-@keyframes nimbus-sparkle-pulse {
-  0%, 100% { opacity: 0.9; transform: scale(1); filter: drop-shadow(0 0 0 rgba(88,166,255,0)); }
-  50%      { opacity: 1;   transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(88,166,255,0.55)); }
-}
-.nimbus-sparkle {
-  display: inline-block;
-  animation: nimbus-sparkle-pulse 2.4s ease-in-out infinite;
-}
-
 /* Login background — pixel sky. Stars twinkle, clouds drift. All via CSS
    so the component is purely declarative SVG. */
 @keyframes pixel-sky-twinkle {
@@ -245,8 +235,7 @@
    the motion. */
 @media (prefers-reduced-motion: reduce) {
   .pixel-sky-stars rect,
-  .pixel-sky-cloud,
-  .nimbus-sparkle {
+  .pixel-sky-cloud {
     animation: none !important;
   }
 }
