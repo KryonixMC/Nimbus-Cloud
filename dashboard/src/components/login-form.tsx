@@ -19,7 +19,7 @@ import {
   type UserInfo,
 } from "@/lib/api";
 import { buildControllerUrl, controllerFetch } from "@/lib/controller-url";
-import { ArrowLeft } from "@/lib/icons";
+import { ArrowLeft, CircleCheck, Loader2 } from "@/lib/icons";
 
 type Screen =
   | "connect"
@@ -31,6 +31,7 @@ type Screen =
   | "totp";
 
 type McMethod = "code" | "magic-link";
+type Direction = "forward" | "back";
 
 interface ConsumeChallengeResponse {
   token?: string;
@@ -82,10 +83,12 @@ export function LoginForm({
   const router = useRouter();
 
   const [screen, setScreen] = useState<Screen>("connect");
+  const [direction, setDirection] = useState<Direction>("forward");
   const [host, setHost] = useState("");
   const [resolvedUrl, setResolvedUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [connectSuccess, setConnectSuccess] = useState(false);
 
   // API-token screen state
   const [apiToken, setApiToken] = useState("");
@@ -112,11 +115,13 @@ export function LoginForm({
 
   function go(next: Screen) {
     setError("");
+    setDirection("forward");
     setScreen(next);
   }
 
   function back() {
     setError("");
+    setDirection("back");
     switch (screen) {
       case "method":
         setScreen("connect");
@@ -172,7 +177,13 @@ export function LoginForm({
         return;
       }
       setResolvedUrl(url);
-      go("method");
+      setConnectSuccess(true);
+      // Briefly show the success check before we transition — premium feel,
+      // not a full success screen.
+      window.setTimeout(() => {
+        setConnectSuccess(false);
+        go("method");
+      }, 320);
     } catch (err) {
       setError(friendlyNetworkError(err));
     } finally {
@@ -314,34 +325,70 @@ export function LoginForm({
 
   // ---- rendering -------------------------------------------------------
 
-  const animated =
-    "animate-in fade-in-0 duration-200";
+  // Screen-swap animation. Direction-aware: forward slides in from the right,
+  // back from the left. Keyed by `screen` so React re-mounts and re-runs the
+  // CSS animation on every transition.
+  const animated = cn(
+    "animate-in fade-in-0 duration-200",
+    direction === "forward"
+      ? "slide-in-from-right-2"
+      : "slide-in-from-left-2"
+  );
+
+  const errorAnim =
+    "animate-in fade-in-0 slide-in-from-top-1 duration-200";
 
   const showBack = screen !== "connect";
 
-  const description =
+  // Per-screen copy — warmer than the old generic descriptions.
+  const heading =
     screen === "connect"
-      ? "Connect to your Nimbus controller"
-      : screen === "totp"
-        ? "Two-factor authentication"
+      ? "Let's get you signed in"
+      : screen === "method"
+        ? "How would you like to sign in?"
+        : screen === "mc-method"
+          ? "Pick your preferred sign-in"
+          : screen === "code"
+            ? "Enter your six-digit code"
+            : screen === "magic-link"
+              ? linkSent
+                ? "Check your chat"
+                : "Get a magic link in-game"
+              : screen === "api-token"
+                ? "Paste your controller token"
+                : screen === "totp"
+                  ? "Enter your authenticator code"
+                  : "";
+
+  const subheading =
+    screen === "connect"
+      ? "Where does your Nimbus controller live?"
+      : screen === "code"
+        ? "Grab it in-game with /nimbus dashboard login"
         : undefined;
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="relative">
+      <Card
+        className={cn(
+          "relative rounded-2xl p-1 shadow-xl shadow-primary/10",
+          "ring-1 ring-primary/10 transition-shadow duration-300",
+          "focus-within:ring-primary/25 focus-within:shadow-primary/15 hover:ring-primary/20"
+        )}
+      >
         {showBack && (
           <button
             type="button"
             onClick={back}
             aria-label="Back"
-            className="absolute left-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="absolute left-3 top-3 z-10 inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
           </button>
         )}
 
-        <CardHeader className="text-center">
-          <div className="mb-2 flex justify-center">
+        <CardHeader className="px-6 pt-6 text-center">
+          <div className="mb-3 flex justify-center">
             <Image
               src="/icon.png"
               alt="Nimbus"
@@ -353,10 +400,23 @@ export function LoginForm({
               // adds visible fuzz on the logo's flat-colour edges.
               unoptimized
               quality={100}
-              className="h-16 w-16"
+              className="h-16 w-16 drop-shadow-[0_4px_16px_rgba(88,166,255,0.25)]"
             />
           </div>
-          {description && <CardDescription>{description}</CardDescription>}
+          {heading && (
+            <h1
+              key={`h-${screen}-${linkSent}`}
+              className={cn(
+                "text-lg font-semibold tracking-tight",
+                animated
+              )}
+            >
+              {heading}
+            </h1>
+          )}
+          {subheading && (
+            <CardDescription className="mt-1">{subheading}</CardDescription>
+          )}
           {screen !== "connect" && resolvedUrl && (
             <p className="mt-1 truncate text-xs text-muted-foreground">
               Connected to{" "}
@@ -365,21 +425,38 @@ export function LoginForm({
           )}
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="px-6 pb-7">
           {screen === "connect" && (
-            <form onSubmit={handleConnect} className={animated}>
+            <form
+              key="s-connect"
+              onSubmit={handleConnect}
+              className={animated}
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="host">Controller Address</FieldLabel>
-                  <Input
-                    id="host"
-                    type="text"
-                    placeholder="IP or hostname (e.g. 192.168.1.100)"
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                    required
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <Input
+                      id="host"
+                      type="text"
+                      placeholder="IP or hostname (e.g. 192.168.1.100)"
+                      value={host}
+                      onChange={(e) => setHost(e.target.value)}
+                      required
+                      autoFocus
+                      className={cn(
+                        "pr-9 transition-colors",
+                        connectSuccess &&
+                          "border-[color:var(--severity-ok)]/60"
+                      )}
+                    />
+                    {connectSuccess && (
+                      <CircleCheck
+                        className="absolute right-2.5 top-1/2 size-5 -translate-y-1/2 text-[color:var(--severity-ok)] animate-in fade-in-0 zoom-in-50 duration-200"
+                        aria-hidden
+                      />
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Port defaults to 8080 if not specified
                   </p>
@@ -387,22 +464,30 @@ export function LoginForm({
                 {error && (
                   <p
                     role="alert"
-                    className="text-sm text-[color:var(--severity-err)]"
+                    className={cn(
+                      "text-sm text-[color:var(--severity-err)]",
+                      errorAnim
+                    )}
                   >
                     {error}
                   </p>
                 )}
                 <Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Connecting…" : "Continue"}
-                  </Button>
+                  <SubmitButton
+                    loading={loading}
+                    label="Continue"
+                    loadingLabel="Connecting…"
+                  />
                 </Field>
               </FieldGroup>
             </form>
           )}
 
           {screen === "method" && (
-            <div className={cn("flex flex-col gap-3", animated)}>
+            <div
+              key="s-method"
+              className={cn("flex flex-col gap-3", animated)}
+            >
               <MethodCard
                 title="Minecraft Account"
                 description="Sign in with an in-game code or a magic link."
@@ -414,7 +499,7 @@ export function LoginForm({
                     alt=""
                     width={40}
                     height={40}
-                    className="rounded-sm"
+                    className="rounded-sm transition-transform duration-200 group-hover:scale-110"
                     loading="lazy"
                   />
                 }
@@ -434,7 +519,7 @@ export function LoginForm({
                     alt=""
                     width={40}
                     height={40}
-                    className="rounded-sm"
+                    className="rounded-sm transition-transform duration-200 group-hover:scale-110"
                     loading="lazy"
                   />
                 }
@@ -444,7 +529,10 @@ export function LoginForm({
           )}
 
           {screen === "mc-method" && (
-            <div className={cn("flex flex-col gap-3", animated)}>
+            <div
+              key="s-mc-method"
+              className={cn("flex flex-col gap-3", animated)}
+            >
               <MethodCard
                 title="Login code"
                 description="Type /nimbus dashboard login on any Nimbus server."
@@ -460,7 +548,11 @@ export function LoginForm({
           )}
 
           {screen === "code" && (
-            <form onSubmit={handleCodeSubmit} className={animated}>
+            <form
+              key="s-code"
+              onSubmit={handleCodeSubmit}
+              className={animated}
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="mc-code">Login code</FieldLabel>
@@ -475,6 +567,7 @@ export function LoginForm({
                     required
                     autoComplete="one-time-code"
                     autoFocus
+                    className="text-center font-mono text-lg tracking-[0.4em]"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
                     Code not working? Make sure you typed{" "}
@@ -484,22 +577,31 @@ export function LoginForm({
                 {error && (
                   <p
                     role="alert"
-                    className="text-sm text-[color:var(--severity-err)]"
+                    className={cn(
+                      "text-sm text-[color:var(--severity-err)]",
+                      errorAnim
+                    )}
                   >
                     {error}
                   </p>
                 )}
                 <Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Signing in…" : "Sign in"}
-                  </Button>
+                  <SubmitButton
+                    loading={loading}
+                    label="Sign in"
+                    loadingLabel="Signing in…"
+                  />
                 </Field>
               </FieldGroup>
             </form>
           )}
 
           {screen === "magic-link" && (
-            <form onSubmit={handleSendMagicLink} className={animated}>
+            <form
+              key={`s-link-${linkSent}`}
+              onSubmit={handleSendMagicLink}
+              className={animated}
+            >
               <FieldGroup>
                 {!linkSent ? (
                   <Field>
@@ -517,15 +619,21 @@ export function LoginForm({
                     />
                   </Field>
                 ) : (
-                  <div className="flex flex-col items-center gap-2 py-4 text-center">
-                    <p className="text-sm">Check your in-game chat ✨</p>
-                    <p className="text-xs text-muted-foreground">
+                  <div className="flex flex-col items-center gap-3 py-4 text-center">
+                    <span
+                      aria-hidden
+                      className="nimbus-sparkle text-3xl"
+                    >
+                      ✨
+                    </span>
+                    <p className="text-sm">Check your in-game chat</p>
+                    <p className="text-xs text-muted-foreground/80">
                       Link expires in {linkTtl}s
                     </p>
                   </div>
                 )}
                 {error && (
-                  <div className="flex flex-col gap-2">
+                  <div className={cn("flex flex-col gap-2", errorAnim)}>
                     <p
                       role="alert"
                       className="text-sm text-[color:var(--severity-err)]"
@@ -547,7 +655,7 @@ export function LoginForm({
                   {linkSent && linkTtl === 0 ? (
                     <Button
                       type="button"
-                      className="w-full"
+                      className="h-10 w-full animate-in fade-in-0 duration-200"
                       onClick={() => {
                         setLinkSent(false);
                         setError("");
@@ -556,17 +664,12 @@ export function LoginForm({
                       Send another link
                     </Button>
                   ) : (
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={loading || linkSent}
-                    >
-                      {loading
-                        ? "Sending…"
-                        : linkSent
-                          ? `Link sent (${linkTtl}s)`
-                          : "Send link"}
-                    </Button>
+                    <SubmitButton
+                      loading={loading}
+                      disabled={linkSent}
+                      label={linkSent ? `Link sent (${linkTtl}s)` : "Send link"}
+                      loadingLabel="Sending…"
+                    />
                   )}
                 </Field>
               </FieldGroup>
@@ -574,7 +677,11 @@ export function LoginForm({
           )}
 
           {screen === "api-token" && (
-            <form onSubmit={handleApiTokenSubmit} className={animated}>
+            <form
+              key="s-token"
+              onSubmit={handleApiTokenSubmit}
+              className={animated}
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="token">API Token</FieldLabel>
@@ -591,22 +698,31 @@ export function LoginForm({
                 {error && (
                   <p
                     role="alert"
-                    className="text-sm text-[color:var(--severity-err)]"
+                    className={cn(
+                      "text-sm text-[color:var(--severity-err)]",
+                      errorAnim
+                    )}
                   >
                     {error}
                   </p>
                 )}
                 <Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Connecting…" : "Sign in"}
-                  </Button>
+                  <SubmitButton
+                    loading={loading}
+                    label="Sign in"
+                    loadingLabel="Connecting…"
+                  />
                 </Field>
               </FieldGroup>
             </form>
           )}
 
           {screen === "totp" && (
-            <form onSubmit={handleTotpSubmit} className={animated}>
+            <form
+              key="s-totp"
+              onSubmit={handleTotpSubmit}
+              className={animated}
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="totp">Authenticator code</FieldLabel>
@@ -620,6 +736,7 @@ export function LoginForm({
                     onChange={(e) => setTotpCode(e.target.value)}
                     required
                     autoFocus
+                    className="text-center font-mono text-lg tracking-[0.3em]"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
                     Lost your device? Use a recovery code.
@@ -628,15 +745,20 @@ export function LoginForm({
                 {error && (
                   <p
                     role="alert"
-                    className="text-sm text-[color:var(--severity-err)]"
+                    className={cn(
+                      "text-sm text-[color:var(--severity-err)]",
+                      errorAnim
+                    )}
                   >
                     {error}
                   </p>
                 )}
                 <Field>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Verifying…" : "Verify"}
-                  </Button>
+                  <SubmitButton
+                    loading={loading}
+                    label="Verify"
+                    loadingLabel="Verifying…"
+                  />
                 </Field>
               </FieldGroup>
             </form>
@@ -644,6 +766,29 @@ export function LoginForm({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function SubmitButton({
+  loading,
+  disabled,
+  label,
+  loadingLabel,
+}: {
+  loading: boolean;
+  disabled?: boolean;
+  label: string;
+  loadingLabel: string;
+}) {
+  return (
+    <Button
+      type="submit"
+      className="h-10 w-full gap-2"
+      disabled={loading || disabled}
+    >
+      {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
+      <span>{loading ? loadingLabel : label}</span>
+    </Button>
   );
 }
 
@@ -665,10 +810,12 @@ function MethodCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-colors",
+        "group flex w-full items-center gap-3 rounded-xl border p-4 text-left",
+        "transition-all duration-200 will-change-transform",
+        "hover:-translate-y-0.5 active:translate-y-0",
         primary
-          ? "border-primary/40 bg-primary/5 hover:border-primary hover:bg-primary/10"
-          : "border-border hover:bg-muted"
+          ? "border-primary/40 bg-primary/5 shadow-sm shadow-primary/10 hover:border-primary hover:bg-primary/10 hover:shadow-md hover:shadow-primary/20 hover:ring-2 hover:ring-primary/20"
+          : "border-border hover:border-foreground/20 hover:bg-muted hover:shadow-sm"
       )}
     >
       {icon && <div className="shrink-0">{icon}</div>}
@@ -679,4 +826,3 @@ function MethodCard({
     </button>
   );
 }
-
