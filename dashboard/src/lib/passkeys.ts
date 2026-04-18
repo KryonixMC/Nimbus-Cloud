@@ -32,7 +32,7 @@ interface CredentialDto {
   aaguid: string | null;
 }
 
-export interface PasskeyEnrollResult extends CredentialDto {}
+export type PasskeyEnrollResult = CredentialDto;
 
 function unwrapPublicKey(obj: unknown): unknown {
   if (obj && typeof obj === "object" && "publicKey" in (obj as object)) {
