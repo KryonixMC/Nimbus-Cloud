@@ -58,6 +58,13 @@ Dashboard surface for the new **Auth** module: multi-user login, a `/profile` se
 - Magic-link screen state from `login-form.tsx` — `mcName`, `linkSent`, `linkTtl`, `linkTimer`, `startLinkCountdown`, `handleSendMagicLink`. The `nimbus-sparkle` CSS keyframes the waiting state relied on are gone too.
 - Inline `NimbusLogo`, `SkinHeadIcon`, `CoinIcon` components from earlier login iterations (~140 lines). The real banner + MC-head CDN cover both needs.
 
+### Security hardening
+
+Landed alongside the controller 0.11.0 review pass:
+
+- **WebSocket + SSE auth via short-lived tickets.** `apiWebSocket()` and `apiProxyWebSocket()` now `await` `fetchWsToken()` before opening a connection. For user sessions that call hits the new `GET /api/auth/ws-ticket` controller endpoint and places a single-use `wt_…` ticket in the `?token=` query param; the long-lived session bearer never lands in a URL. API tokens pass through unchanged (operator-chosen long-lived credential).
+- **Session tokens moved to `sessionStorage`.** `setUserSessionCredentials()` persists to `sessionStorage` so the login survives a Cmd-R without landing in `localStorage` (no cross-tab reads, cleared on tab close). `getToken()` rehydrates the in-memory cache on the first call after a refresh. API-token credentials remain in-memory only.
+
 ### Notes
 
 - **No dashboard-only changes needed on existing pages.** Permission gating is additive: the sidebar filters for user sessions, every other screen works identically whether the caller is an API token or a session-authed user.

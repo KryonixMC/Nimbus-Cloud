@@ -17,6 +17,7 @@ import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8001_Challenges
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8002_Totp
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8003_RecoveryCodes
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8004_WebAuthnCredentials
+import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8005_TotpLastUsedStep
 import dev.nimbuspowered.nimbus.module.auth.routes.PlayerLookup
 import dev.nimbuspowered.nimbus.module.auth.routes.authPublicDeliveryRoutes
 import dev.nimbuspowered.nimbus.module.auth.routes.authRoutes
@@ -29,6 +30,7 @@ import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.TotpService
 import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
+import dev.nimbuspowered.nimbus.module.auth.service.WsTicketStore
 import dev.nimbuspowered.nimbus.module.service
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -74,6 +76,7 @@ class AuthModule : NimbusModule {
     private lateinit var totpService: TotpService
     private lateinit var pendingTotpStore: PendingTotpStore
     private lateinit var webAuthnService: WebAuthnService
+    private lateinit var wsTicketStore: WsTicketStore
     private lateinit var context: ModuleContext
 
     override suspend fun init(context: ModuleContext) {
@@ -96,7 +99,8 @@ class AuthModule : NimbusModule {
             AuthV8001_Challenges,
             AuthV8002_Totp,
             AuthV8003_RecoveryCodes,
-            AuthV8004_WebAuthnCredentials
+            AuthV8004_WebAuthnCredentials,
+            AuthV8005_TotpLastUsedStep
         ))
 
         // Auto-deploy the Velocity companion plugin. Every Nimbus network
@@ -121,6 +125,7 @@ class AuthModule : NimbusModule {
             context.service<NimbusConfig>()?.dashboard?.publicUrl?.takeIf { it.isNotBlank() }
                 ?: authConfig.dashboard.publicUrl
         }
+        wsTicketStore = WsTicketStore()
 
         // Prefer the core `[dashboard] public_url` so operators only have to
         // set the URL in one place. Falls back to the module's own config
@@ -162,6 +167,7 @@ class AuthModule : NimbusModule {
                     permissionResolver,
                     totpService,
                     pendingTotpStore,
+                    wsTicketStore,
                     configSupplier
                 )
             },
@@ -214,7 +220,17 @@ class AuthModule : NimbusModule {
         context.registerService(SessionService::class.java, sessionService)
         context.registerService(TotpService::class.java, totpService)
         context.registerService(SessionValidator::class.java, SessionValidator { raw ->
-            sessionService.validate(raw)
+            // WebSocket / SSE callers exchange their bearer for a short-lived
+            // ticket before connecting, so the raw session token never ends
+            // up in a URL query string. Redeem tickets transparently here —
+            // regular bearers fall through to the normal session lookup.
+            val trimmed = raw.trim()
+            val effective = if (wsTicketStore.looksLikeTicket(trimmed)) {
+                wsTicketStore.consume(trimmed) ?: return@SessionValidator null
+            } else {
+                trimmed
+            }
+            sessionService.validate(effective)
         })
 
         logger.info("Auth module initialised (magic_link_enabled={}, public_url={})",

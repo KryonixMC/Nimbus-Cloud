@@ -92,8 +92,20 @@ class WebAuthnService(
 
     fun isEnabled(): Boolean = config().webauthn.enabled
 
-    /** Build a fresh `RelyingParty` each call — cheap, avoids stale config. */
-    private fun relyingParty(): RelyingParty {
+    /**
+     * Build a fresh `RelyingParty` for one ceremony, backed by the supplied
+     * in-memory credential snapshot.
+     *
+     * The Yubico library calls [CredentialRepository] methods synchronously
+     * during `startRegistration` / `finishRegistration` / `startAssertion` /
+     * `finishAssertion`. Doing blocking DB I/O from those callbacks — which
+     * is what an earlier iteration did via `runBlocking` — can deadlock the
+     * Ktor IO pool under load (the ceremony runs *on* an IO thread, and a
+     * blocking lookup wants another IO thread from the same pool). Instead,
+     * each call site pre-fetches exactly the rows that ceremony can touch
+     * and hands them to this method; the repository never does I/O.
+     */
+    private fun relyingParty(cache: CredentialCache): RelyingParty {
         val cfg = config().webauthn
         val publicUrl = dashboardPublicUrl()
         val rpId = cfg.rpId.ifBlank { deriveRpId(publicUrl) }
@@ -106,12 +118,17 @@ class WebAuthnService(
             .build()
         return RelyingParty.builder()
             .identity(identity)
-            .credentialRepository(ExposedCredentialRepository())
+            .credentialRepository(InMemoryCredentialRepository(cache))
             .origins(origins)
             // We don't verify attestation certificates — user is already
             // authenticated (session bearer) at enroll time, so authenticator
             // provenance doesn't add meaningful trust.
-            .allowOriginPort(true)
+            //
+            // `allowOriginPort` is operator-gated: off by default so production
+            // RP binding is strict (https://host:443 and https://host:3000 are
+            // separate origins), on for local-dev setups where the dashboard
+            // may float between ports.
+            .allowOriginPort(cfg.allowOriginPort)
             .allowOriginSubdomain(false)
             .build()
     }
@@ -130,12 +147,11 @@ class WebAuthnService(
     ): Pair<String, PublicKeyCredentialCreationOptions> {
         require(isEnabled()) { "WebAuthn disabled" }
         val cfg = config().webauthn
-        val count = newSuspendedTransaction(Dispatchers.IO, db.database) {
-            DashboardWebAuthnCredentials.selectAll()
-                .where { DashboardWebAuthnCredentials.uuid eq uuid }
-                .count()
-        }
-        require(count < cfg.maxCredentialsPerUser) {
+        // Pre-fetch every existing credential for this user, so Yubico can
+        // populate `excludeCredentials` without blocking, and so the cap check
+        // runs off the same snapshot.
+        val existing = loadByUuid(uuid)
+        require(existing.size < cfg.maxCredentialsPerUser) {
             "Too many passkeys registered (max ${cfg.maxCredentialsPerUser})"
         }
 
@@ -145,7 +161,8 @@ class WebAuthnService(
             .displayName(name)
             .id(YubiByteArray(userHandle))
             .build()
-        val options = relyingParty().startRegistration(
+        val cache = CredentialCache(byUuid = mapOf(uuid to existing))
+        val options = relyingParty(cache).startRegistration(
             StartRegistrationOptions.builder()
                 .user(userIdentity)
                 .authenticatorSelection(
@@ -176,7 +193,10 @@ class WebAuthnService(
         require(pc.expiresAt >= System.currentTimeMillis()) { "Ceremony expired" }
 
         val credential = PublicKeyCredential.parseRegistrationResponseJson(responseJson)
-        val result: RegistrationResult = relyingParty().finishRegistration(
+        // Finish-registration only needs the existing credential IDs for the
+        // enrolling user (to reject collisions). Pre-fetch that slice.
+        val cache = CredentialCache(byUuid = mapOf(pc.uuid to loadByUuid(pc.uuid)))
+        val result: RegistrationResult = relyingParty(cache).finishRegistration(
             FinishRegistrationOptions.builder()
                 .request(pc.options)
                 .response(credential)
@@ -213,7 +233,11 @@ class WebAuthnService(
      */
     suspend fun startAuthentication(username: String? = null): Pair<String, AssertionRequest> {
         require(isEnabled()) { "WebAuthn disabled" }
-        val req = relyingParty().startAssertion(
+        // Username-scoped starts would need a name→credentials lookup; we
+        // advertise usernameless (resident-key) flows only, so the cache is
+        // empty and Yubico never touches it for this call.
+        val cache = CredentialCache()
+        val req = relyingParty(cache).startAssertion(
             StartAssertionOptions.builder()
                 .apply {
                     if (username != null) username(username)
@@ -241,7 +265,19 @@ class WebAuthnService(
         require(pc.expiresAt >= System.currentTimeMillis()) { "Ceremony expired" }
 
         val credential = PublicKeyCredential.parseAssertionResponseJson(responseJson)
-        val result: AssertionResult = relyingParty().finishAssertion(
+        val credentialIdFromResponse = credential.id.base64Url
+        // Pre-fetch the specific credential(s) Yubico will ask about during
+        // `finishAssertion`. The library calls `lookup(credId, userHandle)`
+        // once per assertion — giving it the row up-front avoids a blocking
+        // DB hit inside the synchronous callback.
+        val rows = loadByCredentialId(credentialIdFromResponse)
+        if (rows.isEmpty()) error("Unknown credential id")
+        val cache = CredentialCache(
+            byCredentialId = mapOf(credentialIdFromResponse to rows),
+            byUuid = rows.groupBy { it.uuid }.mapValues { it.value }
+        )
+
+        val result: AssertionResult = relyingParty(cache).finishAssertion(
             FinishAssertionOptions.builder()
                 .request(pc.request)
                 .response(credential)
@@ -258,11 +294,8 @@ class WebAuthnService(
                 it[lastUsedAt] = now
             }
         }
-        val mcName = newSuspendedTransaction(Dispatchers.IO, db.database) {
-            DashboardWebAuthnCredentials.selectAll()
-                .where { DashboardWebAuthnCredentials.credentialId eq credentialId }
-                .firstOrNull()?.get(DashboardWebAuthnCredentials.mcName)
-        } ?: error("Credential row missing after successful assertion")
+        val mcName = rows.firstOrNull { it.credentialIdBase64Url == credentialId }?.mcName
+            ?: error("Credential row missing after successful assertion")
         logger.info("Passkey login for {} ({}, credId={})", mcName, uuid, credentialId.take(12))
         return uuid to mcName
     }
@@ -298,31 +331,92 @@ class WebAuthnService(
 
     // ── Internals ───────────────────────────────────────────────────────
 
+    /**
+     * Drops expired `pending` ceremonies. Cheap to call — iterates the map at
+     * most once every [CLEANUP_INTERVAL_MS], which keeps us from leaking
+     * expired entries even when traffic stays below a size-based threshold.
+     */
     private fun cleanupExpired() {
-        if (pending.size < 32) return
         val now = System.currentTimeMillis()
+        val last = lastCleanupAt
+        if (now - last < CLEANUP_INTERVAL_MS) return
+        // Benign race: multiple threads may see the same stale value and all
+        // run cleanup once. `removeIf` is thread-safe on ConcurrentHashMap.
+        lastCleanupAt = now
         pending.entries.removeIf { it.value.expiresAt < now }
     }
 
-    /** `CredentialRepository` backed by Exposed. Called by Yubico during ceremonies. */
-    private inner class ExposedCredentialRepository : CredentialRepository {
-        override fun getCredentialIdsForUsername(username: String): MutableSet<PublicKeyCredentialDescriptor> {
-            // `username` is the MC name we passed into UserIdentity. We stored uuid,
-            // not name, so we resolve by looking up credentials whose owner currently
-            // matches — name-based login is only used for non-resident flows, which we
-            // don't advertise. Keep this best-effort via the name→uuid hint embedded
-            // in the DB `name` column (createdAt-sorted). Usernameless flows (common
-            // case) skip this method entirely.
-            return mutableSetOf()
+    @Volatile
+    private var lastCleanupAt: Long = 0L
+
+    /**
+     * Internal row shape used by the in-memory credential cache. Distinct from
+     * the public [StoredCredential] DTO because the repository needs the raw
+     * COSE public key + sign counter, which are implementation details.
+     */
+    private data class RawCredential(
+        val credentialIdBase64Url: String,
+        val uuid: String,
+        val mcName: String,
+        val publicKeyCose: ByteArray,
+        val signCount: Long
+    )
+
+    /**
+     * Snapshot of DB rows passed into a single ceremony. Indexing by both
+     * credentialId and uuid lets the three [CredentialRepository] methods
+     * we care about (`lookup`, `lookupAll`, `getCredentialIdsForUsername`)
+     * serve their answers without touching the database.
+     */
+    private class CredentialCache(
+        val byCredentialId: Map<String, List<RawCredential>> = emptyMap(),
+        val byUuid: Map<String, List<RawCredential>> = emptyMap()
+    )
+
+    private suspend fun loadByUuid(uuid: String): List<RawCredential> =
+        newSuspendedTransaction(Dispatchers.IO, db.database) {
+            DashboardWebAuthnCredentials.selectAll()
+                .where { DashboardWebAuthnCredentials.uuid eq uuid }
+                .map { it.toRaw() }
         }
+
+    private suspend fun loadByCredentialId(credentialId: String): List<RawCredential> =
+        newSuspendedTransaction(Dispatchers.IO, db.database) {
+            DashboardWebAuthnCredentials.selectAll()
+                .where { DashboardWebAuthnCredentials.credentialId eq credentialId }
+                .map { it.toRaw() }
+        }
+
+    private fun org.jetbrains.exposed.sql.ResultRow.toRaw(): RawCredential = RawCredential(
+        credentialIdBase64Url = this[DashboardWebAuthnCredentials.credentialId],
+        uuid = this[DashboardWebAuthnCredentials.uuid],
+        mcName = this[DashboardWebAuthnCredentials.mcName],
+        publicKeyCose = this[DashboardWebAuthnCredentials.publicKeyCose],
+        signCount = this[DashboardWebAuthnCredentials.signCount]
+    )
+
+    /**
+     * [CredentialRepository] served entirely from the pre-built [CredentialCache].
+     * Never does DB I/O; callable from Yubico's synchronous callbacks without
+     * risking a thread-pool deadlock.
+     *
+     * Non-resident / username-scoped flows are intentionally not supported —
+     * the service only advertises discoverable credentials, so Yubico never
+     * needs to resolve a username→handle mapping. The relevant methods return
+     * empty / empty-optional and the ceremony proceeds off the resident key.
+     */
+    private inner class InMemoryCredentialRepository(
+        private val cache: CredentialCache
+    ) : CredentialRepository {
+        override fun getCredentialIdsForUsername(username: String): MutableSet<PublicKeyCredentialDescriptor> =
+            // Unsupported for non-resident flows. We only ship discoverable
+            // credentials, so Yubico never drives a username-scoped `startAssertion`.
+            mutableSetOf()
 
         override fun getUserHandleForUsername(username: String): Optional<YubiByteArray> =
             Optional.empty()
 
         override fun getUsernameForUserHandle(userHandle: YubiByteArray): Optional<String> {
-            // Yubico needs *some* username string associated with the user handle.
-            // We synthesise it from the MC UUID so the ceremony never collides;
-            // the dashboard uses the UUID directly for session issuance.
             return try {
                 Optional.of(bytesToUuid(userHandle.bytes))
             } catch (_: Exception) {
@@ -333,48 +427,26 @@ class WebAuthnService(
         override fun lookup(credentialId: YubiByteArray, userHandle: YubiByteArray): Optional<RegisteredCredential> {
             val credId = credentialId.base64Url
             val uuid = try { bytesToUuid(userHandle.bytes) } catch (_: Exception) { return Optional.empty() }
-            val row = runCatching {
-                kotlinx.coroutines.runBlocking {
-                    newSuspendedTransaction(Dispatchers.IO, db.database) {
-                        DashboardWebAuthnCredentials.selectAll()
-                            .where {
-                                (DashboardWebAuthnCredentials.credentialId eq credId) and
-                                    (DashboardWebAuthnCredentials.uuid eq uuid)
-                            }
-                            .firstOrNull()
-                    }
-                }
-            }.getOrNull() ?: return Optional.empty()
-            return Optional.of(
-                RegisteredCredential.builder()
-                    .credentialId(credentialId)
-                    .userHandle(userHandle)
-                    .publicKeyCose(YubiByteArray(row[DashboardWebAuthnCredentials.publicKeyCose]))
-                    .signatureCount(row[DashboardWebAuthnCredentials.signCount])
-                    .build()
-            )
+            val row = cache.byCredentialId[credId]?.firstOrNull { it.uuid == uuid }
+                ?: return Optional.empty()
+            return Optional.of(row.toRegistered(credentialId, userHandle))
         }
 
         override fun lookupAll(credentialId: YubiByteArray): MutableSet<RegisteredCredential> {
             val credId = credentialId.base64Url
-            val rows = runCatching {
-                kotlinx.coroutines.runBlocking {
-                    newSuspendedTransaction(Dispatchers.IO, db.database) {
-                        DashboardWebAuthnCredentials.selectAll()
-                            .where { DashboardWebAuthnCredentials.credentialId eq credId }
-                            .toList()
-                    }
-                }
-            }.getOrNull() ?: return mutableSetOf()
+            val rows = cache.byCredentialId[credId] ?: return mutableSetOf()
             return rows.mapTo(mutableSetOf()) { row ->
-                RegisteredCredential.builder()
-                    .credentialId(credentialId)
-                    .userHandle(YubiByteArray(uuidToBytes(row[DashboardWebAuthnCredentials.uuid])))
-                    .publicKeyCose(YubiByteArray(row[DashboardWebAuthnCredentials.publicKeyCose]))
-                    .signatureCount(row[DashboardWebAuthnCredentials.signCount])
-                    .build()
+                row.toRegistered(credentialId, YubiByteArray(uuidToBytes(row.uuid)))
             }
         }
+
+        private fun RawCredential.toRegistered(credentialId: YubiByteArray, userHandle: YubiByteArray) =
+            RegisteredCredential.builder()
+                .credentialId(credentialId)
+                .userHandle(userHandle)
+                .publicKeyCose(YubiByteArray(publicKeyCose))
+                .signatureCount(signCount)
+                .build()
     }
 
     private fun uuidToBytes(uuid: String): ByteArray {
@@ -410,5 +482,10 @@ class WebAuthnService(
         } catch (_: Exception) {
             "https://localhost"
         }
+    }
+
+    companion object {
+        /** How often [cleanupExpired] actually sweeps the pending map. */
+        private const val CLEANUP_INTERVAL_MS = 60_000L
     }
 }

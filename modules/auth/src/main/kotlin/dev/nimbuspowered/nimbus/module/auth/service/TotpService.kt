@@ -6,9 +6,11 @@ import dev.nimbuspowered.nimbus.module.auth.db.DashboardRecoveryCodes
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardTotp
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.update
@@ -94,8 +96,7 @@ class TotpService(
      * TOTP is already enabled, returns true when the code verifies.
      */
     suspend fun confirm(uuid: String, code: String): Boolean {
-        val secret = loadSecret(uuid) ?: return false
-        if (!verifyCode(secret, code)) return false
+        if (!verifyAndAdvance(uuid, code)) return false
         val now = System.currentTimeMillis()
         newSuspendedTransaction(Dispatchers.IO, db.database) {
             DashboardTotp.update({ DashboardTotp.uuid eq uuid }) {
@@ -112,10 +113,9 @@ class TotpService(
      * wiped alongside the secret.
      */
     suspend fun disable(uuid: String, code: String): Boolean {
-        val secret = loadSecret(uuid) ?: return false
         // Accept either a live TOTP or a still-unused recovery code for the
         // disable operation — matches the "I lost my phone" escape hatch.
-        val ok = verifyCode(secret, code) || consumeRecoveryCode(uuid, code)
+        val ok = verifyAndAdvance(uuid, code) || consumeRecoveryCode(uuid, code)
         if (!ok) return false
         newSuspendedTransaction(Dispatchers.IO, db.database) {
             DashboardTotp.deleteWhere { DashboardTotp.uuid eq uuid }
@@ -126,12 +126,12 @@ class TotpService(
 
     /**
      * Verifies [code] as part of the login flow. Returns true if the code is
-     * a valid live TOTP OR an unused recovery code. Recovery codes are consumed
-     * atomically so replay is impossible.
+     * a valid live TOTP OR an unused recovery code. Both paths are replay-safe:
+     * TOTP codes advance [DashboardTotp.lastUsedStep] atomically, recovery
+     * codes flip their `consumedAt` flag.
      */
     suspend fun verifyForLogin(uuid: String, code: String): Boolean {
-        val secret = loadSecret(uuid) ?: return false
-        if (verifyCode(secret, code)) return true
+        if (verifyAndAdvance(uuid, code)) return true
         return consumeRecoveryCode(uuid, code)
     }
 
@@ -168,18 +168,57 @@ class TotpService(
 
     // ── TOTP core (RFC 6238) ────────────────────────────────────────────────
 
-    private fun verifyCode(secret: ByteArray, code: String): Boolean {
+    /**
+     * Matches [code] against the stored secret for [uuid] and advances the
+     * per-user replay window in a single atomic transaction.
+     *
+     * RFC 6238 §5.2 requires that an accepted code not be re-accepted by the
+     * same user within the same time step. We go a little further and reject
+     * any matching step that is *less than or equal to* the most-recently
+     * accepted step, so a late arrival inside the `window` tolerance can't
+     * replay a code the user already used earlier in the same login burst.
+     *
+     * `window` is deliberately capped low (default 1 = ±30 s, hard max 2 =
+     * ±60 s). Higher values would widen the replay window for any attacker
+     * who can observe a code before the legitimate user submits it, which is
+     * the main shoulder-surfing / MitM threat this guards against.
+     */
+    private suspend fun verifyAndAdvance(uuid: String, code: String): Boolean {
         val normalized = code.replace(" ", "").trim()
         if (!normalized.all { it.isDigit() } || normalized.length != 6) return false
         val expectedInt = normalized.toIntOrNull() ?: return false
 
-        val window = config().totp.window.coerceIn(0, 10)
-        val step = Instant.now().epochSecond / 30
-        for (offset in -window..window) {
-            val candidate = generateCode(secret, step + offset)
-            if (candidate == expectedInt) return true
+        val window = config().totp.window.coerceIn(0, 2)
+        val nowStep = Instant.now().epochSecond / 30
+
+        return newSuspendedTransaction(Dispatchers.IO, db.database) {
+            val row = DashboardTotp.selectAll()
+                .where { DashboardTotp.uuid eq uuid }
+                .firstOrNull() ?: return@newSuspendedTransaction false
+            val secret = runCatching { decrypt(row[DashboardTotp.secretEnc]) }.getOrNull()
+                ?: return@newSuspendedTransaction false
+            val lastStep = row[DashboardTotp.lastUsedStep]
+
+            // Walk the window from oldest to newest. Accept the first matching
+            // step that is strictly greater than `lastStep`.
+            for (offset in -window..window) {
+                val candidateStep = nowStep + offset
+                if (lastStep != null && candidateStep <= lastStep) continue
+                if (generateCode(secret, candidateStep) != expectedInt) continue
+
+                val updated = DashboardTotp.update({
+                    (DashboardTotp.uuid eq uuid) and
+                        (
+                            (DashboardTotp.lastUsedStep.isNull()) or
+                                (DashboardTotp.lastUsedStep less candidateStep)
+                        )
+                }) {
+                    it[lastUsedStep] = candidateStep
+                }
+                return@newSuspendedTransaction updated == 1
+            }
+            false
         }
-        return false
     }
 
     private fun generateCode(secret: ByteArray, step: Long): Int {
@@ -237,15 +276,6 @@ class TotpService(
     }
 
     // ── Secret crypto ───────────────────────────────────────────────────────
-
-    private suspend fun loadSecret(uuid: String): ByteArray? {
-        return newSuspendedTransaction(Dispatchers.IO, db.database) {
-            val row = DashboardTotp.selectAll()
-                .where { DashboardTotp.uuid eq uuid }
-                .firstOrNull() ?: return@newSuspendedTransaction null
-            runCatching { decrypt(row[DashboardTotp.secretEnc]) }.getOrNull()
-        }
-    }
 
     /**
      * AES-GCM-256 with a per-record random 12-byte nonce. Layout:

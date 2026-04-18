@@ -46,6 +46,10 @@ Passkeys are discoverable credentials keyed on the MC UUID, so the browser offer
 Passkey login is **offline** — it doesn't require a Nimbus-managed proxy to be reachable from the client. Code and magic-link logins require a live proxy so the player can receive the chat challenge. Keep at least one enrolled passkey or a set of [TOTP recovery codes](#two-factor-authentication-totp) per admin so you can always get in, even during an incident.
 </Callout>
 
+<Callout type="info">
+**Passkeys already are multi-factor.** A WebAuthn assertion proves *possession* of the private-key-holding authenticator (phone, laptop, security key) plus *user verification* (biometric or PIN), so a successful passkey login does not additionally prompt for a TOTP code — doing so would be redundant and worse UX. If you want stricter gating for admin users, enforce it via a [WebAuthn user-verification policy](https://www.w3.org/TR/webauthn-2/#user-verification) in your authenticator (e.g. "biometric only, no PIN fallback") rather than stacking a second factor the passkey already supplies. TOTP continues to apply to code + magic-link logins.
+</Callout>
+
 ## Two-factor authentication (TOTP)
 
 Users can enable TOTP from **Profile → Security**:
@@ -202,11 +206,15 @@ Admins can still globally boot a user via the service-token `POST /api/auth/logo
 ## Security notes
 
 - Session tokens are 256-bit URL-safe random. Only `sha256(token)` is stored — a DB leak cannot be replayed as a valid session.
+- **WebSocket & SSE connections use one-time tickets.** The dashboard exchanges its bearer for a 30-second, single-use `wt_…` ticket via `GET /api/auth/ws-ticket` before opening any WS or SSE connection. The long-lived session token never lands in a URL query string, access log, or referrer header. API tokens (which operators paste manually) pass through unchanged.
 - Login challenges (codes + magic links) live at most 60 seconds, are single-use, and are also stored hashed.
+- **Rate-limit counters are DB-backed.** Code/magic-link issuance limits are enforced by counting rows in `dashboard_login_challenges`, so a controller restart doesn't reset the quota and a timed brute-force can't slip through the window.
 - Magic-link tokens carry more leak surface than codes (URL history, referrer, clipboard) — the login page sets `Referrer-Policy: no-referrer`, consumes the token on load, and strips it from the URL via `history.replaceState`.
 - TOTP secrets are AES-GCM encrypted at rest using a per-install key in `config/modules/auth/session.key` (auto-generated, chmod 600).
+- **TOTP codes are replay-protected.** A step-counter per user is advanced atomically on each successful verification; RFC 6238 §5.2 says an accepted code must not be re-accepted for the same step, and we additionally reject any step less-than-or-equal-to the most-recently-accepted one. An observed code is unusable the moment the legitimate user submits it.
 - Recovery codes are SHA-256 hashed and single-use.
 - Passkey credentials store only the COSE public key + a monotonic sign counter. The private key never leaves the authenticator; controller-side compromise cannot forge an assertion. Sign-counter rollback triggers a failed login and logs a warning (possible cloned-authenticator indicator).
 - Rate limits: 5 code/magic-link issuances per minute per UUID; global 120/min request limit already applies. Passkey ceremonies are bounded by a configurable `challenge_ttl_seconds` (default 300s) and a per-user credential cap (default 10).
+- Session tokens persist only in `sessionStorage` inside the originating tab — cleared on tab close, not readable from other tabs. API tokens are not persisted at all; operators re-enter them after a tab close.
 
 See [Auth config reference](/docs/config/auth) for tuneables.

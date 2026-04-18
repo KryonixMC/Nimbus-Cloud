@@ -2,10 +2,25 @@ import { toast } from "sonner";
 
 const API_URL_KEY = "nimbus_api_url";
 const TOKEN_KEY = "nimbus_api_token";
+const SESSION_TOKEN_KEY = "nimbus_session_token";
 export const AUTH_KIND_KEY = "nimbus_auth_kind";
 
-// Keep sensitive auth token in memory only (do not persist in localStorage).
+/**
+ * Session tokens live in `sessionStorage`: they survive a page refresh (so
+ * the user isn't bounced to /login after Cmd-R) but **not** a closed tab and
+ * are not readable from other tabs. API tokens are long-lived, operator-chosen
+ * credentials and stay in-memory for the session's lifetime — we deliberately
+ * never persist them.
+ */
 let inMemoryToken = "";
+function readPersistedSessionToken(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return sessionStorage.getItem(SESSION_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
 
 export type AuthKind = "api-token" | "user-session";
 
@@ -58,6 +73,12 @@ export function getToken(): string {
   if (typeof window === "undefined") return "";
   // Best-effort cleanup for legacy persisted token value.
   localStorage.removeItem(TOKEN_KEY);
+  if (inMemoryToken) return inMemoryToken;
+  // First call after a page refresh — rehydrate the session token from
+  // sessionStorage. API-token credentials don't persist and will stay empty
+  // here, forcing the auth bootstrap to redirect to /login as before.
+  const persisted = readPersistedSessionToken();
+  if (persisted) inMemoryToken = persisted;
   return inMemoryToken;
 }
 
@@ -68,10 +89,27 @@ export function getAuthKind(): AuthKind | null {
   return null;
 }
 
+function persistSessionToken(token: string) {
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+  } catch {
+    // sessionStorage unavailable (private mode, etc.) — fall back to in-memory only.
+  }
+}
+
+function clearPersistedSessionToken() {
+  try {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function setCredentials(apiUrl: string, token: string) {
   localStorage.setItem(API_URL_KEY, apiUrl);
   inMemoryToken = token;
   localStorage.removeItem(TOKEN_KEY);
+  clearPersistedSessionToken();
 }
 
 /** Stores an API-token style credential (long-lived controller token). */
@@ -79,6 +117,8 @@ export function setApiTokenCredentials(apiUrl: string, token: string) {
   localStorage.setItem(API_URL_KEY, apiUrl);
   inMemoryToken = token;
   localStorage.removeItem(TOKEN_KEY);
+  // API tokens are never persisted — user re-enters after a tab close.
+  clearPersistedSessionToken();
   localStorage.setItem(AUTH_KIND_KEY, "api-token");
 }
 
@@ -87,6 +127,9 @@ export function setUserSessionCredentials(apiUrl: string, token: string) {
   localStorage.setItem(API_URL_KEY, apiUrl);
   inMemoryToken = token;
   localStorage.removeItem(TOKEN_KEY);
+  // Session tokens survive a page refresh inside the same tab via
+  // sessionStorage — cleared on tab close, not readable from other tabs.
+  persistSessionToken(token);
   localStorage.setItem(AUTH_KIND_KEY, "user-session");
 }
 
@@ -95,6 +138,7 @@ export function clearCredentials() {
   localStorage.removeItem(API_URL_KEY);
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(AUTH_KIND_KEY);
+  clearPersistedSessionToken();
 }
 
 export function isAuthenticated(): boolean {
@@ -320,9 +364,35 @@ async function apiChunkedUpload<T = unknown>(
   );
 }
 
-export function apiWebSocket(path: string): WebSocket {
-  const apiUrl = getApiUrl();
+/**
+ * Exchange the current session bearer for a short-lived (30s), single-use
+ * WebSocket ticket. API-token principals skip this — they use their master
+ * token directly. Returns the token that should be placed in the `?token=`
+ * query param: a `wt_…` ticket for session users, the bearer itself for
+ * API-token users, or an empty string if no credentials are present.
+ */
+export async function fetchWsToken(): Promise<string> {
   const token = getToken();
+  if (!token) return "";
+  const kind = getAuthKind();
+  if (kind !== "user-session") return token;
+  try {
+    const res = await apiFetch<{ ticket: string; expiresAt: number }>(
+      "/api/auth/ws-ticket",
+      { method: "GET", silent: true }
+    );
+    return res.ticket;
+  } catch {
+    // Fall back to the bearer if the controller doesn't expose the ticket
+    // endpoint yet (mixed-version rollouts). Session WS connections still
+    // work, just without the URL-exposure hardening.
+    return token;
+  }
+}
+
+export async function apiWebSocket(path: string): Promise<WebSocket> {
+  const apiUrl = getApiUrl();
+  const token = await fetchWsToken();
   const wsUrl = apiUrl.replace(/^http/, "ws");
   return new WebSocket(`${wsUrl}${path}?token=${encodeURIComponent(token)}`);
 }
@@ -343,7 +413,6 @@ export function apiProxyWebSocket(
   options?: { maxRetries?: number; baseDelay?: number }
 ): { send: (message: string) => Promise<void>; cleanup: () => void } {
   const apiUrl = getApiUrl();
-  const token = getToken();
   const maxRetries = options?.maxRetries ?? 10;
   const baseDelay = options?.baseDelay ?? 1000;
   let eventSource: EventSource | null = null;
@@ -351,7 +420,13 @@ export function apiProxyWebSocket(
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function connect() {
+  async function connect() {
+    if (stopped) return;
+
+    // Fetch a fresh single-use ticket per (re)connect. Sessions exchange
+    // their bearer for a `wt_…` ticket so the long-lived token never lands
+    // in a URL query param; API tokens pass straight through.
+    const token = await fetchWsToken();
     if (stopped) return;
 
     // EventSource doesn't support custom headers, so we pass credentials as query params
@@ -387,19 +462,21 @@ export function apiProxyWebSocket(
     if (stopped || retries >= maxRetries) return;
     const delay = Math.min(baseDelay * Math.pow(2, retries), 30000);
     retries++;
-    timer = setTimeout(connect, delay);
+    timer = setTimeout(() => { void connect(); }, delay);
   }
 
-  connect();
+  void connect();
 
   return {
     send: async (message: string) => {
+      // POST side uses the bearer in a header (not the URL), so it's safe
+      // to send the long-lived token directly.
       await fetch(`/api/proxy-ws${path}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Nimbus-Controller": apiUrl,
-          "X-Nimbus-Token": token,
+          "X-Nimbus-Token": getToken(),
         },
         body: JSON.stringify({ message }),
       });
@@ -452,9 +529,13 @@ export function apiWebSocketReconnect(
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function connect() {
+  async function connect() {
     if (stopped) return;
-    ws = apiWebSocket(path);
+    ws = await apiWebSocket(path);
+    if (stopped) {
+      ws.close();
+      return;
+    }
 
     ws.onopen = () => {
       retries = 0;
@@ -470,11 +551,11 @@ export function apiWebSocketReconnect(
       if (stopped || retries >= maxRetries) return;
       const delay = Math.min(baseDelay * Math.pow(2, retries), 30000);
       retries++;
-      timer = setTimeout(connect, delay);
+      timer = setTimeout(() => { void connect(); }, delay);
     };
   }
 
-  connect();
+  void connect();
 
   return {
     getSocket: () => ws,

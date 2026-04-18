@@ -48,6 +48,7 @@ rp_name = "Nimbus Dashboard"
 origins = []                        # empty → auto-derive from public_url
 challenge_ttl_seconds = 300
 max_credentials_per_user = 10
+allow_origin_port = false           # turn on only for local dev
 ```
 
 ## `[sessions]`
@@ -110,6 +111,7 @@ Passkey / WebAuthn settings. The module ships with sensible defaults — you onl
 | `origins`                    | `[]`                 | Allowed browser origins (`https://host[:port]`). Empty = auto-derive from `public_url`. Add `http://localhost:3000` for local dev. |
 | `challenge_ttl_seconds`      | `300`                | How long a registration / authentication ceremony stays valid before the server drops it from its in-memory cache. |
 | `max_credentials_per_user`   | `10`                 | Cap per MC UUID. Keeps the credential table from growing unbounded if a user enrolls a device and never prunes it. |
+| `allow_origin_port`          | `false`              | When `true`, the RP accepts assertions from the same host on any port. Off by default so production RP binding is strict (`https://host:443` and `https://host:3000` are distinct origins). Turn on only for local dev where the dashboard floats between ports. |
 
 <Callout type="warn">
   Changing `rp_id` invalidates every existing passkey — browsers bind the credential to the RP ID at registration time, and a mismatch is indistinguishable from a phishing attempt. Only change this if the dashboard's public hostname actually changes, and warn users to re-enroll.
@@ -126,6 +128,7 @@ Passkey / WebAuthn settings. The module ships with sensible defaults — you onl
 | `POST /api/auth/consume-magic-link`         | Public                  | Dashboard consumes a `?link=<token>` deep-link on page load.                                           |
 | `POST /api/auth/totp-verify`                | Public                  | Second step when TOTP is enabled. Accepts a live TOTP code or a recovery code.                         |
 | `POST /api/auth/logout`                     | Bearer session          | Revokes the calling session.                                                                           |
+| `GET /api/auth/ws-ticket`                   | Bearer session          | Mints a single-use, 30-second `wt_…` ticket the dashboard uses in `?token=` when opening a WebSocket or SSE connection, so the long-lived session token never lands in a URL. |
 | `GET /api/auth/me`                          | Bearer session          | Returns `{uuid, name, permissions[], isAdmin, totpEnabled}`.                                           |
 | `GET /api/auth/my-sessions`                 | Bearer session          | Lists the caller's own sessions with a `currentSessionId` marker.                                     |
 | `DELETE /api/auth/my-sessions/{sessionId}`  | Bearer session          | Revokes a sibling session.                                                                             |

@@ -55,3 +55,17 @@ object AuthV8004_WebAuthnCredentials : Migration {
         SchemaUtils.createMissingTablesAndColumns(DashboardWebAuthnCredentials)
     }
 }
+
+/**
+ * Adds `last_used_step` to `dashboard_totp` for RFC 6238 §5.2 replay prevention.
+ * Existing rows are left `NULL`, which the service reads as "no code seen yet"
+ * and admits the next verification normally — no user-facing disruption.
+ */
+object AuthV8005_TotpLastUsedStep : Migration {
+    override val version = 8005
+    override val description = "TOTP replay-prevention column (last_used_step)"
+    override val baseline = false
+    override fun Transaction.migrate() {
+        SchemaUtils.createMissingTablesAndColumns(DashboardTotp)
+    }
+}

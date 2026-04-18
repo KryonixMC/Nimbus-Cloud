@@ -94,6 +94,21 @@ Four new tables under the 8000+ migration range:
 - New guide: [`/docs/guide/dashboard-auth`](/docs/guide/dashboard-auth) — end-user login flow, 2FA, passkeys, permission model, recommended group templates, backwards-compat matrix, security notes
 - New reference: [`/docs/config/auth`](/docs/config/auth) — `auth.toml` field-by-field, endpoint table, `session.key` backup warning
 
+### Security hardening (pre-release review)
+
+Fixes landed on top of the phase-1 through phase-9 feature work, driven by a pre-release review pass:
+
+- **TOTP replay prevention (RFC 6238 §5.2).** New `last_used_step` column (migration `V8005`) on `dashboard_totp`; `verifyAndAdvance` atomically advances the step counter so an observed code cannot be re-accepted within the same or any earlier step inside the tolerance window
+- **TOTP window cap tightened.** Config `[totp] window` now coerces into `0..2` (was `0..10`). Default `1` = ±30 s, hard max `2` = ±60 s; paired with the replay column the effective "how long is a captured code live" dropped from potentially 5 minutes to a single 30-second step
+- **WebAuthn `CredentialRepository` is pre-fetch only.** The earlier implementation called `runBlocking { newSuspendedTransaction { … } }` from inside Yubico's synchronous callbacks, which could deadlock the Ktor IO pool under load. Each ceremony now snapshots the relevant rows into an in-memory `CredentialCache` *before* entering the library, and the in-memory repo serves lookups without doing any I/O
+- **`allowOriginPort` is operator-gated.** New `[webauthn] allow_origin_port` config key, off by default. Earlier iteration hard-coded `true` which weakened phishing-resistance (`host:443` and `host:3000` were treated as the same origin). Flip on only for local dev; production keeps strict origin binding
+- **Short-lived WebSocket tickets.** New `GET /api/auth/ws-ticket` (bearer session) mints a 30-second, single-use `wt_` token. The dashboard exchanges its bearer for a ticket before opening any WS or SSE connection, so the long-lived session token never lands in a URL query string, access log, or referrer header. `SessionValidator` transparently redeems tickets on first use
+- **Rate-limit state now DB-backed.** The per-UUID 5-per-minute quota on code + magic-link issuance is counted from `dashboard_login_challenges` rows instead of an in-memory map — a controller restart no longer resets the counter
+- **`PLAYER_OFFLINE` no longer leaks existence.** The dashboard-initiated magic-link delivery endpoint now returns a generic "Player not found — please join any Nimbus server and try again" for every negative outcome (offline, never existed, Players module absent)
+- **Permission snapshots stored as JSON.** `permissions_snapshot` is now a JSON array, so nodes containing commas round-trip cleanly. Legacy comma-joined snapshots are still readable — existing sessions survive the upgrade
+- **Session token persistence moved to `sessionStorage`.** Session bearers now survive a page refresh without moving to `localStorage` (no cross-tab reads, cleared on tab close). API tokens continue to live in-memory only
+- **Passkey login is treated as MFA-equivalent.** A WebAuthn assertion proves possession (authenticator holds the private key) + user verification (biometric or PIN), so successful passkey login doesn't additionally prompt for TOTP. Stricter requirements should be enforced via the authenticator's user-verification policy rather than stacking redundant factors. Code + magic-link logins continue to gate on TOTP
+
 ### Notes
 
 - **No breaking changes for existing token-based setups.** Bearer tokens keep working identically. Upgrading from 0.10.0 is drop-in — the auth module migrations run on first boot, no operator action required

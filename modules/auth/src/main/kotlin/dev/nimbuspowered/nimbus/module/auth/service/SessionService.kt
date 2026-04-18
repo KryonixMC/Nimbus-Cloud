@@ -17,6 +17,9 @@ import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.update
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
@@ -36,6 +39,29 @@ class SessionService(
     private val config: () -> AuthConfig
 ) {
     private val secureRandom = SecureRandom()
+    private val snapshotJson = Json { ignoreUnknownKeys = true }
+    private val snapshotSerializer = ListSerializer(String.serializer())
+
+    /** Permissions are persisted as a JSON array so nodes containing commas
+     *  round-trip cleanly. Legacy comma-joined snapshots are still readable. */
+    private fun encodeSnapshot(permissions: PermissionSet): String =
+        snapshotJson.encodeToString(snapshotSerializer, permissions.asSet().toList())
+
+    private fun decodeSnapshot(raw: String): Set<String> {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return emptySet()
+        if (trimmed.startsWith("[")) {
+            return runCatching {
+                snapshotJson.decodeFromString(snapshotSerializer, trimmed).toSet()
+            }.getOrElse { emptySet() }
+        }
+        // Pre-0.11.1 rows used comma-joined strings. Keep the decoder
+        // backwards-compatible so old sessions survive the upgrade.
+        return trimmed.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+    }
 
     /**
      * Issue a new session for the given user. Enforces `max_per_user` by revoking
@@ -59,7 +85,7 @@ class SessionService(
         val hash = LoginChallengeService.sha256Hex(raw)
         val sessionId = hash.take(16)
 
-        val snapshot = permissions.asSet().joinToString(",")
+        val snapshot = encodeSnapshot(permissions)
 
         newSuspendedTransaction(Dispatchers.IO, db.database) {
             // Evict oldest sessions if we're over max_per_user (non-revoked, non-expired).
@@ -134,11 +160,7 @@ class SessionService(
                 if (cfg.rollingRefresh) it[expiresAt] = newExpires
             }
 
-            val permSet = row[DashboardSessions.permissionsSnapshot]
-                .split(',')
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .toSet()
+            val permSet = decodeSnapshot(row[DashboardSessions.permissionsSnapshot])
 
             AuthPrincipal.UserSession(
                 uuid = runCatching { UUID.fromString(row[DashboardSessions.uuid]) }.getOrNull()
@@ -159,7 +181,7 @@ class SessionService(
      * Returns the number of sessions updated.
      */
     suspend fun refreshPermissionsFor(uuid: String, permissions: PermissionSet): Int {
-        val snapshot = permissions.asSet().joinToString(",")
+        val snapshot = encodeSnapshot(permissions)
         return newSuspendedTransaction(Dispatchers.IO, db.database) {
             DashboardSessions.update({
                 (DashboardSessions.uuid eq uuid) and

@@ -48,6 +48,14 @@ object DashboardTotp : Table("dashboard_totp") {
     val enabled = bool("enabled").default(false)
     val enabledAt = long("enabled_at").nullable()
 
+    /**
+     * Highest RFC 6238 step value successfully accepted for this user. A valid
+     * code must advance strictly past this step, so an observed code cannot be
+     * replayed within the remainder of its 30-second window or any earlier
+     * step inside the verify `window`.
+     */
+    val lastUsedStep = long("last_used_step").nullable()
+
     override val primaryKey = PrimaryKey(uuid)
 }
 

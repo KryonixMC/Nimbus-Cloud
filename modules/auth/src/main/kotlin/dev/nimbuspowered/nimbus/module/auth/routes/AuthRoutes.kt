@@ -13,6 +13,7 @@ import dev.nimbuspowered.nimbus.module.auth.service.PendingTotpStore
 import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.TotpService
+import dev.nimbuspowered.nimbus.module.auth.service.WsTicketStore
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -117,6 +118,9 @@ data class SessionListResponse(val sessions: List<SessionSummaryDto>)
 
 @Serializable
 data class LogoutAllResponse(val revoked: Int)
+
+@Serializable
+data class WsTicketResponse(val ticket: String, val expiresAt: Long)
 
 /**
  * Abstraction over the online-player lookup used to resolve a dashboard-initiated
@@ -250,9 +254,10 @@ fun Route.authServiceRoutes(
  * to an online player and fires an `AUTH_MAGIC_LINK_DELIVERY` event that the
  * SDK plugin on the target service turns into a clickable chat component.
  *
- * If the player is offline we deliberately return 404 `PLAYER_OFFLINE` —
- * the frontend surfaces this as a friendly "join any Nimbus server first"
- * hint. We do **not** leak whether the name ever existed.
+ * All negative outcomes (player offline, name never existed, Players module
+ * absent) collapse to the same 404 `PLAYER_OFFLINE` with an identical error
+ * body. That way this unauthenticated surface cannot be used to probe which
+ * names are registered on the network.
  */
 fun Route.authPublicDeliveryRoutes(
     challengeService: LoginChallengeService,
@@ -273,13 +278,18 @@ fun Route.authPublicDeliveryRoutes(
                     apiError("Magic link login is disabled", AuthErrors.AUTH_DISABLED))
             }
 
+            // Uniform error message whether the player is offline, never
+            // existed, or the Players module isn't loaded — avoids leaking
+            // account-existence info across this unauthenticated surface.
+            val genericNotFound = apiError(
+                "Player not found — please join any Nimbus server and try again.",
+                AuthErrors.PLAYER_OFFLINE
+            )
             val lookup = playerLookupSupplier()
-                ?: return@post call.respond(HttpStatusCode.NotFound,
-                    apiError("Player is not online (Players module not available)", AuthErrors.PLAYER_OFFLINE))
+                ?: return@post call.respond(HttpStatusCode.NotFound, genericNotFound)
 
             val (uuidStr, _) = lookup.findOnlinePlayer(req.name)
-                ?: return@post call.respond(HttpStatusCode.NotFound,
-                    apiError("Player '${req.name}' is not online on any Nimbus service", AuthErrors.PLAYER_OFFLINE))
+                ?: return@post call.respond(HttpStatusCode.NotFound, genericNotFound)
 
             val ip = call.request.local.remoteAddress
             val issued = try {
@@ -328,6 +338,7 @@ fun Route.authRoutes(
     permissionResolver: PermissionResolver,
     totpService: TotpService,
     pendingTotpStore: PendingTotpStore,
+    wsTicketStore: WsTicketStore,
     configSupplier: () -> AuthConfig
 ) {
     route("/api/auth") {
@@ -450,6 +461,28 @@ fun Route.authRoutes(
                     apiError("Missing session token", ApiErrors.UNAUTHORIZED))
             val ok = sessionService.revoke(raw)
             call.respond(ApiMessage(success = ok, message = if (ok) "Session revoked" else "No such session"))
+        }
+
+        /**
+         * Mint a short-lived, single-use WebSocket ticket bound to the calling
+         * session. The dashboard exchanges its long-lived bearer for a ticket
+         * before opening a WS/SSE connection, so the session token never lands
+         * in a URL query param (access logs, referrer, browser history).
+         *
+         * Tickets are `wt_`-prefixed and consumed on first validate() — see
+         * [WsTicketStore] and the SessionValidator wiring in `AuthModule`.
+         */
+        get("ws-ticket") {
+            val raw = extractBearerToken(call)
+                ?: return@get call.respond(HttpStatusCode.Unauthorized,
+                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+            sessionService.validate(raw)
+                ?: return@get call.respond(HttpStatusCode.Unauthorized,
+                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+            // Bind the ticket to the raw bearer, so revocation + rolling
+            // refresh continue to apply when the ticket is consumed later.
+            val ticket = wsTicketStore.mint(raw)
+            call.respond(WsTicketResponse(ticket = ticket.token, expiresAt = ticket.expiresAt))
         }
 
         get("me") {

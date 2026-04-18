@@ -88,7 +88,15 @@ data class WebAuthnConfig(
     @SerialName("challenge_ttl_seconds")
     val challengeTtlSeconds: Long = 300,
     @SerialName("max_credentials_per_user")
-    val maxCredentialsPerUser: Int = 10
+    val maxCredentialsPerUser: Int = 10,
+    /**
+     * When true, the RP accepts assertions from the same host on any port.
+     * Off by default — production deployments should register passkeys
+     * against a single canonical origin. Flip on only for local dev where
+     * the dashboard may float between `:3000` / `:8080` / etc.
+     */
+    @SerialName("allow_origin_port")
+    val allowOriginPort: Boolean = false
 )
 
 /**
@@ -183,6 +191,9 @@ class AuthConfigStore(private val moduleDir: Path, private val baseDir: Path) {
             origins = []
             challenge_ttl_seconds = 300
             max_credentials_per_user = 10
+            # Off by default — keeps production RP binding strict.
+            # Enable for local dev where the dashboard floats between ports.
+            allow_origin_port = false
         """.trimIndent() + "\n"
         val tmp = configFile.resolveSibling(configFile.fileName.toString() + ".tmp")
         Files.writeString(tmp, content)
