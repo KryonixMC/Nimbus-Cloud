@@ -19,6 +19,7 @@ import { useApiResource, POLL } from "@/hooks/use-api-resource";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { CheckCircle2, CircleAlert, Shield } from "@/lib/icons";
+import { PasskeyCard } from "@/components/passkey-card";
 
 interface TotpStatus {
   enabled: boolean;
@@ -472,6 +473,7 @@ export default function ProfileSecurityPage() {
     <>
       <div className="flex flex-col gap-4">
         {renderTotpCard()}
+        <PasskeyCard />
         {renderSessionsCard()}
       </div>
 

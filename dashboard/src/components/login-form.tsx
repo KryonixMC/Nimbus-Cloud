@@ -22,6 +22,7 @@ import {
 import { buildControllerUrl, controllerFetch } from "@/lib/controller-url";
 import { ArrowLeft, CircleCheck, Loader2 } from "@/lib/icons";
 import { OtpInput } from "@/components/otp-input";
+import { isPasskeySupported, loginWithPasskey } from "@/lib/passkeys";
 
 type Screen =
   | "connect"
@@ -272,6 +273,22 @@ export function LoginForm({
     }
   }
 
+  async function handlePasskeyLogin() {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await loginWithPasskey(resolvedUrl || host);
+      setUserSessionCredentials(resolvedUrl || host, res.token);
+      router.push("/");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Passkey login failed";
+      // Abort / user-cancel = silent.
+      if (!/cancel|abort|NotAllowedError/i.test(msg)) setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleApiTokenSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -489,6 +506,13 @@ export function LoginForm({
               key="s-method"
               className={cn("flex flex-col gap-3", animated)}
             >
+              {isPasskeySupported() && (
+                <MethodCard
+                  title="Passkey"
+                  description="Sign in with Touch ID, Windows Hello, or a security key."
+                  onClick={() => void handlePasskeyLogin()}
+                />
+              )}
               <MethodCard
                 title="Minecraft Account"
                 description="Sign in with an in-game code or a magic link."
