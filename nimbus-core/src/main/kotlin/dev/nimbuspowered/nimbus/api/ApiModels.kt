@@ -760,8 +760,19 @@ data class CommandListResponse(
 )
 
 @Serializable
+data class CommandCallerDto(
+    val uuid: String,
+    val name: String
+)
+
+@Serializable
 data class CommandExecuteRequest(
-    val args: List<String> = emptyList()
+    val args: List<String> = emptyList(),
+    /**
+     * Caller identity, populated by Bridge when the invoking source is a
+     * Velocity player. Null for console / admin / programmatic callers.
+     */
+    val caller: CommandCallerDto? = null
 )
 
 @Serializable

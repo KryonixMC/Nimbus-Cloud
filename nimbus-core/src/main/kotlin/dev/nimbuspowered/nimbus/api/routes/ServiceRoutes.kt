@@ -43,6 +43,7 @@ fun Route.serviceRoutes(
 
         // GET /api/services — List all services
         get {
+            if (!call.requirePermission("nimbus.dashboard.services.view")) return@get
             val group = call.queryParameters["group"]
             val stateParam = call.queryParameters["state"]
 
@@ -75,6 +76,7 @@ fun Route.serviceRoutes(
 
         // GET /api/services/health — Aggregated health summary
         get("health") {
+            if (!call.requirePermission("nimbus.dashboard.services.view")) return@get
             val allServices = registry.getAll()
             val readyServices = allServices.filter { it.state == ServiceState.READY }
             val healthyCount = readyServices.count { it.healthy }
@@ -123,6 +125,7 @@ fun Route.serviceRoutes(
 
         // GET /api/services/{name} — Get service details
         get("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.services.view")) return@get
             val name = call.parameters["name"]!!
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
@@ -134,6 +137,7 @@ fun Route.serviceRoutes(
         // Used by the dashboard chart so users see memory over the last hour instead
         // of starting from blank when they open the page.
         get("{name}/metrics/history") {
+            if (!call.requirePermission("nimbus.dashboard.services.view")) return@get
             val name = call.parameters["name"]!!
             if (registry.get(name) == null) {
                 return@get call.respond(
@@ -167,6 +171,7 @@ fun Route.serviceRoutes(
 
         // POST /api/services/{name}/start — Start a new instance of a group
         post("{name}/start") {
+            if (!call.requirePermission("nimbus.dashboard.services.start")) return@post
             val groupName = call.parameters["name"]!!
 
             if (groupManager.getGroup(groupName) == null) {
@@ -183,6 +188,7 @@ fun Route.serviceRoutes(
 
         // POST /api/services/{name}/stop — Stop a service
         post("{name}/stop") {
+            if (!call.requirePermission("nimbus.dashboard.services.stop")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
@@ -197,6 +203,7 @@ fun Route.serviceRoutes(
 
         // POST /api/services/{name}/restart — Restart a service
         post("{name}/restart") {
+            if (!call.requirePermission("nimbus.dashboard.services.restart")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
@@ -211,6 +218,7 @@ fun Route.serviceRoutes(
 
         // POST /api/services/{name}/migrate — Move a service to a different node
         post("{name}/migrate") {
+            if (!call.requirePermission("nimbus.dashboard.nodes.manage")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
@@ -232,6 +240,7 @@ fun Route.serviceRoutes(
 
         // POST /api/services/{name}/exec — Execute command on service
         post("{name}/exec") {
+            if (!call.requirePermission("nimbus.dashboard.services.console")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
@@ -305,6 +314,7 @@ fun Route.serviceRoutes(
 
         // GET /api/services/{name}/logs — Get recent log lines (tail-read, not full file)
         get("{name}/logs") {
+            if (!call.requirePermission("nimbus.dashboard.services.console")) return@get
             val name = call.parameters["name"]!!
             val service = registry.get(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))

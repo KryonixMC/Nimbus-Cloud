@@ -87,6 +87,27 @@ class AdventureHelper {
         player.sendActionBar(LEGACY_AMP.deserialize(legacyText));
     }
 
+    static void sendClickableLink(Player player, String template, String clickLabel, String url, String hover) {
+        Component clickable = LEGACY_AMP.deserialize(clickLabel)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(url));
+        if (hover != null && !hover.isEmpty()) {
+            clickable = clickable.hoverEvent(
+                net.kyori.adventure.text.event.HoverEvent.showText(LEGACY_AMP.deserialize(hover))
+            );
+        }
+
+        int placeholderIdx = template.indexOf("{click}");
+        Component msg;
+        if (placeholderIdx >= 0) {
+            Component before = LEGACY_AMP.deserialize(template.substring(0, placeholderIdx));
+            Component after = LEGACY_AMP.deserialize(template.substring(placeholderIdx + "{click}".length()));
+            msg = Component.empty().append(before).append(clickable).append(after);
+        } else {
+            msg = LEGACY_AMP.deserialize(template).append(Component.text(" ")).append(clickable);
+        }
+        player.sendMessage(msg);
+    }
+
     static void sendTitle(Player player, String title, String subtitle, int fadeIn, int stay, int fadeOut) {
         net.kyori.adventure.title.Title.Times times = net.kyori.adventure.title.Title.Times.times(
                 java.time.Duration.ofMillis(fadeIn * 50L),

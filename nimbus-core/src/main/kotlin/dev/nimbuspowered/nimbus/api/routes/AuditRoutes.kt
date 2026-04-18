@@ -2,6 +2,7 @@ package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.AuditEntryResponse
 import dev.nimbuspowered.nimbus.api.AuditListResponse
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.database.AuditLog
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import io.ktor.http.*
@@ -22,6 +23,7 @@ import org.jetbrains.exposed.sql.selectAll
  */
 fun Route.auditRoutes(db: DatabaseManager) {
     get("/api/audit") {
+        if (!call.requirePermission("nimbus.dashboard.audit.view")) return@get
         val limit = (call.queryParameters["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 500)
         val offset = (call.queryParameters["offset"]?.toLongOrNull() ?: 0L).coerceAtLeast(0)
         val actionFilter = call.queryParameters["action"]

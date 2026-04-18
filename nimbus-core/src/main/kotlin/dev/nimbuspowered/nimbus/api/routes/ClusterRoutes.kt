@@ -17,6 +17,7 @@ fun Route.clusterRoutes(
 ) {
     // GET /api/nodes — List all cluster nodes
     get("/api/nodes") {
+        if (!call.requirePermission("nimbus.dashboard.nodes.view")) return@get
         if (nodeManager == null) {
             return@get call.respond(HttpStatusCode.NotFound, apiError("Cluster mode not enabled", ApiErrors.CLUSTER_NOT_ENABLED))
         }
@@ -58,6 +59,7 @@ fun Route.clusterRoutes(
 
     // GET /api/loadbalancer — Load balancer status
     get("/api/loadbalancer") {
+        if (!call.requirePermission("nimbus.dashboard.nodes.view")) return@get
         if (loadBalancer == null) {
             return@get call.respond(HttpStatusCode.NotFound, apiError("Load balancer not enabled", ApiErrors.LOAD_BALANCER_NOT_ENABLED))
         }

@@ -40,12 +40,22 @@ import Link from "next/link"
 import { useModules } from "@/lib/modules"
 import { channel, channelLabel } from "@/lib/version"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth"
+import { PERM, requiredPermissionFor } from "@/lib/permissions"
 
-const navOverview = [
-  { title: "Dashboard", url: "/", icon: <LayoutDashboardIcon /> },
+interface NavItem {
+  title: string
+  url: string
+  icon?: React.ReactNode
+  /** Optional override; defaults to [requiredPermissionFor(url)]. */
+  perm?: string
+}
+
+const navOverview: NavItem[] = [
+  { title: "Dashboard", url: "/", icon: <LayoutDashboardIcon />, perm: PERM.OVERVIEW },
 ]
 
-const navInfrastructure = [
+const navInfrastructure: NavItem[] = [
   { title: "Services", url: "/services", icon: <ServerIcon /> },
   { title: "Groups", url: "/groups", icon: <FolderTreeIcon /> },
   { title: "Dedicated", url: "/dedicated", icon: <BoxIcon /> },
@@ -53,13 +63,13 @@ const navInfrastructure = [
   { title: "Nodes", url: "/nodes", icon: <NetworkIcon /> },
 ]
 
-const navOperations = [
+const navOperations: NavItem[] = [
   { title: "Console", url: "/console", icon: <TerminalIcon /> },
   { title: "Plugins", url: "/plugins", icon: <PlugIcon /> },
   { title: "Stress Test", url: "/stress", icon: <ZapIcon /> },
 ]
 
-const navMonitoring = [
+const navMonitoring: NavItem[] = [
   { title: "Doctor", url: "/doctor", icon: <StethoscopeIcon /> },
   { title: "Audit Log", url: "/audit", icon: <ScrollTextIcon /> },
 ]
@@ -84,6 +94,16 @@ const iconMap: Record<string, LucideIcon> = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { activeModules } = useModules()
+  const { hasPermission } = useAuth()
+
+  // Hide nav entries the caller can't access. API-token auth always passes
+  // (hasPermission short-circuits to true) so the existing admin-token flow
+  // keeps its full menu.
+  const filter = (items: NavItem[]) =>
+    items.filter((item) => {
+      const perm = item.perm ?? requiredPermissionFor(item.url)
+      return perm == null || hasPermission(perm)
+    })
 
   const moduleItems = [
     ...coreModules,
@@ -95,7 +115,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         icon: <Icon />,
       }
     }),
-  ]
+  ].filter((item) => {
+    const perm = requiredPermissionFor(item.url)
+    return perm == null || hasPermission(perm)
+  })
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -126,10 +149,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain label="Overview" items={navOverview} />
-        <NavMain label="Infrastructure" items={navInfrastructure} />
-        <NavMain label="Operations" items={navOperations} />
-        <NavMain label="Monitoring" items={navMonitoring} />
+        <NavMain label="Overview" items={filter(navOverview)} />
+        <NavMain label="Infrastructure" items={filter(navInfrastructure)} />
+        <NavMain label="Operations" items={filter(navOperations)} />
+        <NavMain label="Monitoring" items={filter(navMonitoring)} />
         <NavDocuments items={moduleItems} />
       </SidebarContent>
       <SidebarFooter>

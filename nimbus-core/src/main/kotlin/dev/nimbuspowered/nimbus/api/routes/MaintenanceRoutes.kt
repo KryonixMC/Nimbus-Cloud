@@ -13,11 +13,13 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // GET /api/maintenance — Full maintenance status
     get("/api/maintenance") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@get
         call.respond(buildStatusResponse(proxySyncManager))
     }
 
     // POST /api/maintenance/global — Toggle global maintenance
     post("/api/maintenance/global") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@post
         val req = call.receive<MaintenanceToggleRequest>()
         val changed = proxySyncManager.setGlobalMaintenance(req.enabled)
         if (changed) {
@@ -32,6 +34,7 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // PUT /api/maintenance/global — Update global maintenance config
     put("/api/maintenance/global") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@put
         val req = call.receive<GlobalMaintenanceUpdateRequest>()
         proxySyncManager.updateGlobalMaintenanceConfig(req.motdLine1, req.motdLine2, req.protocolText, req.kickMessage)
         call.respond(buildStatusResponse(proxySyncManager))
@@ -39,6 +42,7 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // POST /api/maintenance/groups/{name} — Toggle group maintenance
     post("/api/maintenance/groups/{name}") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@post
         val groupName = call.parameters["name"]!!
         val req = call.receive<MaintenanceToggleRequest>()
         val changed = proxySyncManager.setGroupMaintenance(groupName, req.enabled)
@@ -54,6 +58,7 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // PUT /api/maintenance/groups/{name} — Update group maintenance config
     put("/api/maintenance/groups/{name}") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@put
         val groupName = call.parameters["name"]!!
         val req = call.receive<GroupMaintenanceUpdateRequest>()
         if (req.kickMessage != null) {
@@ -64,6 +69,7 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // POST /api/maintenance/whitelist — Add to whitelist
     post("/api/maintenance/whitelist") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@post
         val req = call.receive<MaintenanceWhitelistRequest>()
         val added = proxySyncManager.addToMaintenanceWhitelist(req.entry)
         val msg = if (added) "Added '${req.entry}' to maintenance whitelist" else "'${req.entry}' is already whitelisted"
@@ -72,6 +78,7 @@ fun Route.maintenanceRoutes(proxySyncManager: ProxySyncManager, eventBus: EventB
 
     // DELETE /api/maintenance/whitelist — Remove from whitelist
     delete("/api/maintenance/whitelist") {
+        if (!call.requirePermission("nimbus.dashboard.maintenance.toggle")) return@delete
         val req = call.receive<MaintenanceWhitelistRequest>()
         val removed = proxySyncManager.removeFromMaintenanceWhitelist(req.entry)
         val msg = if (removed) "Removed '${req.entry}' from maintenance whitelist" else "'${req.entry}' is not whitelisted"

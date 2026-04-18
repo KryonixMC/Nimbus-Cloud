@@ -49,6 +49,9 @@ class PlayersModule : NimbusModule {
 
         // Initialize tracker
         tracker = PlayerTracker(db)
+        // Expose so other modules (e.g. auth — magic-link delivery) can
+        // resolve a player name → (uuid, service) without duplicating state.
+        context.registerService(PlayerTracker::class.java, tracker)
 
         // Listen to player events from Bridge/SDK
         eventBus.on<NimbusEvent.PlayerConnected> { event ->

@@ -63,6 +63,9 @@ dependencies {
     implementation("com.github.luben:zstd-jni:1.5.6-4")
     implementation("org.apache.commons:commons-compress:1.27.1")
 
+    // Auth module WebAuthn / Passkey deps (shaded into fat JAR; module uses compileOnly)
+    implementation("com.yubico:webauthn-server-core:2.6.0")
+
     // Netty engine for cluster server (native TLS/SSL support via sslConnector)
     implementation("io.ktor:ktor-server-netty:3.1.1")
     // Self-signed certificate generation for auto-TLS
@@ -157,8 +160,16 @@ val resourcePacksJar = tasks.register("copyResourcePacksJar", Copy::class) {
     rename { "nimbus-resourcepacks.jar" }
 }
 
+// Embed the Auth Velocity plugin JAR (proxy-side /dashboard)
+val authVelocityJar = tasks.register("copyAuthVelocityJar", Copy::class) {
+    dependsOn(project(":nimbus-auth-velocity").tasks.named("shadowJar"))
+    from(project(":nimbus-auth-velocity").tasks.named("shadowJar").map { (it as Jar).archiveFile })
+    into(layout.buildDirectory.dir("resources/main/plugins"))
+    rename { "nimbus-auth-velocity.jar" }
+}
+
 tasks.processResources {
-    dependsOn(pluginJar, sdkJar, displayJar, permsJar, punishmentsJar, punishmentsBackendJar, resourcePacksJar, downloadFancyNpcs)
+    dependsOn(pluginJar, sdkJar, displayJar, permsJar, punishmentsJar, punishmentsBackendJar, resourcePacksJar, authVelocityJar, downloadFancyNpcs)
 }
 
 tasks.jar {
@@ -176,13 +187,14 @@ val embeddedModules = mapOf(
     ":nimbus-module-punishments" to "nimbus-module-punishments.jar",
     ":nimbus-module-resourcepacks" to "nimbus-module-resourcepacks.jar",
     ":nimbus-module-backup" to "nimbus-module-backup.jar",
-    ":nimbus-module-docker" to "nimbus-module-docker.jar"
+    ":nimbus-module-docker" to "nimbus-module-docker.jar",
+    ":nimbus-module-auth" to "nimbus-module-auth.jar"
 )
 
 tasks.shadowJar {
     archiveClassifier.set("")
     mergeServiceFiles()
-    dependsOn(pluginJar, sdkJar, displayJar, permsJar, punishmentsJar, punishmentsBackendJar, resourcePacksJar, downloadFancyNpcs)
+    dependsOn(pluginJar, sdkJar, displayJar, permsJar, punishmentsJar, punishmentsBackendJar, resourcePacksJar, authVelocityJar, downloadFancyNpcs)
 
     // Embed controller module JARs (extracted by SetupWizard to modules/)
     // These are added only to shadowJar to avoid circular dependency during compileKotlin

@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AuthProvider } from "@/lib/auth";
 import { ModulesProvider } from "@/lib/modules";
 import { ClusterEventToaster } from "@/components/cluster-event-toaster";
+import { RoutePermissionGuard } from "@/components/route-permission-guard";
 
 export default function DashboardLayout({
   children,
@@ -30,7 +31,7 @@ export default function DashboardLayout({
             <div className="flex flex-1 flex-col">
               <div className="@container/main flex flex-1 flex-col gap-2">
                 <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-                  {children}
+                  <RoutePermissionGuard>{children}</RoutePermissionGuard>
                 </div>
               </div>
             </div>

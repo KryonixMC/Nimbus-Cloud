@@ -71,6 +71,11 @@ class PermsModule : NimbusModule {
         context.registerCommand(PermsCommand(permissionManager, eventBus))
         context.registerRoutes({ permissionRoutes(permissionManager, eventBus) })
 
+        // Expose PermissionManager so other modules (Auth / PermissionResolver)
+        // can ask for the flattened permission set of a UUID without reaching
+        // through the REST API.
+        context.registerService(PermissionManager::class.java, permissionManager)
+
         // Tab completion for perms command
         context.registerCompleter("perms") { args, prefix ->
             when (args.size) {

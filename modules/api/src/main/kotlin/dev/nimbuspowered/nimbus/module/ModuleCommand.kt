@@ -31,4 +31,16 @@ interface ModuleCommand {
      * @return true if the command handled the execution, false if not supported.
      */
     suspend fun execute(args: List<String>, output: CommandOutput): Boolean = false
+
+    /**
+     * Caller-aware overload. The default delegates to [execute] without the
+     * caller — existing modules keep working untouched. Commands that need
+     * the invoking player's identity (e.g. `/nimbus dashboard login`) should
+     * override this.
+     *
+     * [caller] is `null` for console invocations and for Bridge calls from
+     * non-player sources.
+     */
+    suspend fun execute(args: List<String>, output: CommandOutput, caller: CommandCaller?): Boolean =
+        execute(args, output)
 }

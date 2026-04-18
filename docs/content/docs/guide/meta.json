@@ -17,6 +17,7 @@
     "modpacks",
     "---Advanced---",
     "dashboard",
+    "dashboard-auth",
     "remote-cli",
     "multi-node",
     "cluster-topologies",

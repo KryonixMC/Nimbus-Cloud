@@ -1,0 +1,220 @@
+---
+title: Dashboard Auth & RBAC
+description: Per-user Minecraft-account login, TOTP 2FA, and role-based access control for the Nimbus Dashboard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Nimbus Dashboard (v0.11+) supports per-user login tied to Minecraft accounts, with granular permissions powered by the Perms module. API tokens still work as admin-superuser for CLI and automation — nothing breaks.
+
+## How users sign in
+
+Three paths, all anchored to a real Minecraft identity. No passwords, no Microsoft SSO (3rd-party apps can't do Mojang OAuth). The dashboard login screen shows them side-by-side as equal-weight choice cards — pick whatever fits the moment.
+
+### Login Code
+
+The friction-free default: works from any device, no prior setup.
+
+1. Player joins any Nimbus-managed server and types `/nimbus dashboard login`.
+2. Chat reply: `§a[Nimbus] §fYour login code: §e483 927 §7(60s valid).`
+3. Player opens the dashboard → picks the **Minecraft Account** card → types the 6-digit code.
+4. Session created. Sidebar populates with only the pages the user's permissions allow.
+
+### Magic Link ✨
+
+Fastest path when you're already logged into a proxy: one click in chat, no typing.
+
+1. In-game: `/nimbus dashboard login link`.
+2. Chat message: `§d✨ §f[Nimbus] §fYour magic login link is ready! §e§l[Click to sign in]§r §7(60s valid)`.
+3. Clicking opens the dashboard with `?link=<token>` → auto-consumed, URL cleaned up, session created.
+
+<Callout type="info">
+The dashboard UI no longer offers a "Send me a magic link" form — the in-game command is the single entry point, so players always prove they're at the keyboard of the target account before the link is dispatched. Operators can still disable the feature entirely via `magic_link_enabled = false` in `config/modules/auth/auth.toml`.
+</Callout>
+
+### Passkey / WebAuthn
+
+One-time enrollment from an existing session, then Touch ID / Windows Hello / a security key replaces the in-game round-trip entirely.
+
+1. Sign in once via code or magic link.
+2. Go to **Profile → Security → Passkeys**, click **Add passkey**, give it a label (e.g. "MacBook Touch ID"), and complete the platform prompt.
+3. Next login: dashboard detects WebAuthn support, shows the **Passkey** card as the first option. Click it → platform prompt → done. No chat, no Minecraft server reachable required.
+
+Passkeys are discoverable credentials keyed on the MC UUID, so the browser offers the right account directly — you never type a username.
+
+<Callout type="info">
+Passkey login is **offline** — it doesn't require a Nimbus-managed proxy to be reachable from the client. Code and magic-link logins require a live proxy so the player can receive the chat challenge. Keep at least one enrolled passkey or a set of [TOTP recovery codes](#two-factor-authentication-totp) per admin so you can always get in, even during an incident.
+</Callout>
+
+<Callout type="info">
+**Passkeys already are multi-factor.** A WebAuthn assertion proves *possession* of the private-key-holding authenticator (phone, laptop, security key) plus *user verification* (biometric or PIN), so a successful passkey login does not additionally prompt for a TOTP code — doing so would be redundant and worse UX. If you want stricter gating for admin users, enforce it via a [WebAuthn user-verification policy](https://www.w3.org/TR/webauthn-2/#user-verification) in your authenticator (e.g. "biometric only, no PIN fallback") rather than stacking a second factor the passkey already supplies. TOTP continues to apply to code + magic-link logins.
+</Callout>
+
+## Two-factor authentication (TOTP)
+
+Users can enable TOTP from **Profile → Security**:
+
+1. Click **Enable 2FA** → QR code + 10 recovery codes appear.
+2. Scan with any authenticator app (Google Authenticator, 1Password, Bitwarden, ...).
+3. Enter a 6-digit code to confirm.
+4. **Save the recovery codes** — they won't be shown again. Each is single-use.
+
+Next login: after consuming the code/magic-link, the dashboard prompts for a TOTP code. Recovery codes are accepted here too for the "I lost my phone" case.
+
+### `require_for_admin`
+
+Set `[totp] require_for_admin = true` in `auth.toml` to enforce 2FA for `nimbus.dashboard.admin` holders. Enforcement is done at the UI layer — the dashboard prompts admins without TOTP to enroll on first login. The backend does not *block* login, so you can still recover a locked-out admin by disabling the flag.
+
+## Permission model
+
+All dashboard nodes live under `nimbus.dashboard.*`. They resolve through the existing Perms module with full wildcard support (`*`, `.`-segment expansion). Grant them like any other permission node — to groups, to individual players, via tracks, etc.
+
+### Gatekeeper
+
+```
+nimbus.dashboard.access          # REQUIRED — any user without this is rejected at login
+```
+
+### Per-feature nodes
+
+```
+nimbus.dashboard.overview                     # Home / cluster status
+nimbus.dashboard.services.view
+nimbus.dashboard.services.start
+nimbus.dashboard.services.stop
+nimbus.dashboard.services.restart
+nimbus.dashboard.services.console             # Live console WebSocket
+nimbus.dashboard.services.edit_config
+
+nimbus.dashboard.groups.view
+nimbus.dashboard.groups.edit
+
+nimbus.dashboard.dedicated.view
+nimbus.dashboard.dedicated.manage
+
+nimbus.dashboard.players.view
+nimbus.dashboard.players.kick
+nimbus.dashboard.players.history
+
+nimbus.dashboard.punishments.view
+nimbus.dashboard.punishments.warn
+nimbus.dashboard.punishments.mute
+nimbus.dashboard.punishments.tempmute
+nimbus.dashboard.punishments.kick
+nimbus.dashboard.punishments.ban
+nimbus.dashboard.punishments.tempban
+nimbus.dashboard.punishments.ipban
+nimbus.dashboard.punishments.revoke
+nimbus.dashboard.punishments.history
+
+nimbus.dashboard.resourcepacks.view
+nimbus.dashboard.resourcepacks.manage
+nimbus.dashboard.resourcepacks.assign
+
+nimbus.dashboard.backups.view
+nimbus.dashboard.backups.trigger
+nimbus.dashboard.backups.restore
+nimbus.dashboard.backups.delete
+nimbus.dashboard.backups.edit_config
+
+nimbus.dashboard.perms.view
+nimbus.dashboard.perms.edit
+
+nimbus.dashboard.docker.view
+nimbus.dashboard.docker.manage
+
+nimbus.dashboard.scaling.view
+nimbus.dashboard.scaling.edit
+
+nimbus.dashboard.nodes.view
+nimbus.dashboard.nodes.manage
+
+nimbus.dashboard.maintenance.toggle
+nimbus.dashboard.reload
+nimbus.dashboard.shutdown
+
+nimbus.dashboard.audit.view
+
+nimbus.dashboard.admin                         # Short-circuits all checks
+```
+
+### Recommended group templates
+
+Copy-paste starting point — Nimbus does **not** auto-create these.
+
+#### Supporter
+
+```
+nimbus.dashboard.access
+nimbus.dashboard.overview
+nimbus.dashboard.players.view
+nimbus.dashboard.players.kick
+nimbus.dashboard.players.history
+nimbus.dashboard.punishments.view
+nimbus.dashboard.punishments.warn
+nimbus.dashboard.punishments.mute
+nimbus.dashboard.punishments.tempmute
+nimbus.dashboard.punishments.kick
+nimbus.dashboard.punishments.history
+```
+
+#### Moderator — Supporter + bans/revoke
+
+```
+nimbus.dashboard.punishments.ban
+nimbus.dashboard.punishments.tempban
+nimbus.dashboard.punishments.revoke
+```
+
+#### Developer — infrastructure, no player moderation
+
+```
+nimbus.dashboard.access
+nimbus.dashboard.overview
+nimbus.dashboard.services.*
+nimbus.dashboard.groups.*
+nimbus.dashboard.dedicated.*
+nimbus.dashboard.resourcepacks.*
+nimbus.dashboard.scaling.*
+nimbus.dashboard.nodes.view
+nimbus.dashboard.audit.view
+```
+
+#### Admin
+
+```
+nimbus.dashboard.admin
+```
+
+## Backwards compatibility
+
+| Consumer                     | Behaviour                            |
+|------------------------------|--------------------------------------|
+| CLI (`nimbus-cli`)           | API token, unchanged, admin          |
+| Remote automation            | API token, unchanged, admin          |
+| Dashboard (existing users)   | API token still works; MC login preferred |
+| In-game Bridge → Controller  | Cluster token, unchanged             |
+
+API tokens are treated as implicit `nimbus.dashboard.admin` — every existing integration keeps its full access without configuration changes.
+
+## Session management
+
+Every signed-in user has a **Sessions** card at `/profile/security` listing the devices they're currently authenticated from — browser/OS hint, last-used timestamp, and the current session highlighted. Each row has a **Revoke** action; the card-level **Sign out everywhere else** button keeps the active session and drops every sibling in one call.
+
+Admins can still globally boot a user via the service-token `POST /api/auth/logout-all` path (called by the in-game `/nimbus dashboard logout-all` command), which is the right move if you suspect an account compromise.
+
+## Security notes
+
+- Session tokens are 256-bit URL-safe random. Only `sha256(token)` is stored — a DB leak cannot be replayed as a valid session.
+- **WebSocket & SSE connections use one-time tickets.** The dashboard exchanges its bearer for a 30-second, single-use `wt_…` ticket via `GET /api/auth/ws-ticket` before opening any WS or SSE connection. The long-lived session token never lands in a URL query string, access log, or referrer header. API tokens (which operators paste manually) pass through unchanged.
+- Login challenges (codes + magic links) live at most 60 seconds, are single-use, and are also stored hashed.
+- **Rate-limit counters are DB-backed.** Code/magic-link issuance limits are enforced by counting rows in `dashboard_login_challenges`, so a controller restart doesn't reset the quota and a timed brute-force can't slip through the window.
+- Magic-link tokens carry more leak surface than codes (URL history, referrer, clipboard) — the login page sets `Referrer-Policy: no-referrer`, consumes the token on load, and strips it from the URL via `history.replaceState`.
+- TOTP secrets are AES-GCM encrypted at rest using a per-install key in `config/modules/auth/session.key` (auto-generated, chmod 600).
+- **TOTP codes are replay-protected.** A step-counter per user is advanced atomically on each successful verification; RFC 6238 §5.2 says an accepted code must not be re-accepted for the same step, and we additionally reject any step less-than-or-equal-to the most-recently-accepted one. An observed code is unusable the moment the legitimate user submits it.
+- Recovery codes are SHA-256 hashed and single-use.
+- Passkey credentials store only the COSE public key + a monotonic sign counter. The private key never leaves the authenticator; controller-side compromise cannot forge an assertion. Sign-counter rollback triggers a failed login and logs a warning (possible cloned-authenticator indicator).
+- Rate limits: 5 code/magic-link issuances per minute per UUID; global 120/min request limit already applies. Passkey ceremonies are bounded by a configurable `challenge_ttl_seconds` (default 300s) and a per-user credential cap (default 10).
+- Session tokens persist only in `sessionStorage` inside the originating tab — cleared on tab close, not readable from other tabs. API tokens are not persisted at all; operators re-enter them after a tab close.
+
+See [Auth config reference](/docs/config/auth) for tuneables.

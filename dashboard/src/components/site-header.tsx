@@ -44,6 +44,9 @@ const routeLabels: Record<string, string> = {
   doctor: "Doctor",
   stats: "Stats",
   login: "Login",
+  profile: "Profile",
+  security: "Security",
+  permissions: "Permissions",
 }
 
 export function SiteHeader() {

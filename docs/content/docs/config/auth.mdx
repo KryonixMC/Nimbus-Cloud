@@ -1,0 +1,149 @@
+---
+title: Auth Module
+description: Dashboard authentication, session TTLs, magic-link + TOTP tuneables.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Auth module powers dashboard login, sessions, magic links, and TOTP 2FA. Introduced in v0.11 alongside the dashboard RBAC rewrite.
+
+Runtime config lives at `config/modules/auth/auth.toml` — auto-generated with safe defaults on first launch. The companion AES-256 key file `config/modules/auth/session.key` is also auto-generated (chmod 600 on POSIX).
+
+<Callout type="info">
+  The auth module requires the [Perms module](/docs/config/permissions) for Minecraft-account login. Without Perms, only API-token auth works and sessions cannot resolve permissions. See the [Dashboard Auth guide](/docs/guide/dashboard-auth) for the end-user flow.
+</Callout>
+
+## Complete example
+
+```toml title="config/modules/auth/auth.toml"
+[sessions]
+ttl_seconds = 604800        # 7 days
+rolling_refresh = true
+max_per_user = 10
+
+[login_challenge]
+code_ttl_seconds = 60
+code_length = 6
+code_alphabet = "numeric"        # or "alphanumeric"
+magic_link_ttl_seconds = 60
+magic_link_token_bytes = 32
+magic_link_enabled = true
+max_generates_per_minute = 5
+
+[dashboard]
+public_url = "https://dashboard.nimbuspowered.org"
+
+[totp]
+issuer = "Nimbus"
+require_for_admin = false
+window = 1
+
+[security]
+token_encryption_key_file = "config/modules/auth/session.key"
+
+[webauthn]
+enabled = true
+rp_id = ""                          # empty → auto-derive from public_url
+rp_name = "Nimbus Dashboard"
+origins = []                        # empty → auto-derive from public_url
+challenge_ttl_seconds = 300
+max_credentials_per_user = 10
+allow_origin_port = false           # turn on only for local dev
+```
+
+## `[sessions]`
+
+| Key                | Default   | Notes                                                                 |
+|--------------------|-----------|-----------------------------------------------------------------------|
+| `ttl_seconds`      | `604800`  | 7 days. Session expiry from creation (or last use if rolling refresh).|
+| `rolling_refresh`  | `true`    | Extends `expires_at` on every authenticated call.                    |
+| `max_per_user`     | `10`      | When exceeded, the oldest active session is revoked on new login.    |
+
+## `[login_challenge]`
+
+| Key                         | Default     | Notes                                                                |
+|-----------------------------|-------------|----------------------------------------------------------------------|
+| `code_ttl_seconds`          | `60`        | How long a 6-digit code stays valid.                                 |
+| `code_length`               | `6`         | Number of characters in the in-game code.                            |
+| `code_alphabet`             | `"numeric"` | `"numeric"` (0-9) or `"alphanumeric"` (ambiguity-safe: no 0/O, 1/I). |
+| `magic_link_ttl_seconds`    | `60`        | Lifetime of magic-link tokens.                                       |
+| `magic_link_token_bytes`    | `32`        | 256-bit URL-safe random token.                                       |
+| `magic_link_enabled`        | `true`      | Operator kill-switch — `false` forces code-only login.               |
+| `max_generates_per_minute`  | `5`         | Per-UUID rate limit on code/link issuance.                           |
+
+## `[dashboard]`
+
+| Key          | Default                                  | Notes                                         |
+|--------------|------------------------------------------|-----------------------------------------------|
+| `public_url` | `"https://dashboard.nimbuspowered.org"`  | Base URL used to construct magic-link targets.|
+
+<Callout type="info">
+  `public_url` also exists in the core `nimbus.toml` under `[dashboard]`. The auth module prefers the core value when set — so operators only need to update one file. The module-level key remains as an override for unusual deployments.
+</Callout>
+
+## `[totp]`
+
+| Key                  | Default    | Notes                                                                  |
+|----------------------|------------|------------------------------------------------------------------------|
+| `issuer`             | `"Nimbus"` | Shown in the authenticator app entry (`Nimbus: <player-name>`).       |
+| `require_for_admin`  | `false`    | Dashboard prompts admins without TOTP to enroll on first login.       |
+| `window`             | `1`        | Clock-skew tolerance in 30-second steps (±1 = accepts 30s past/future).|
+
+## `[security]`
+
+| Key                          | Default                                | Notes                                        |
+|------------------------------|----------------------------------------|----------------------------------------------|
+| `token_encryption_key_file`  | `"config/modules/auth/session.key"`    | 32-byte AES-256 key used to encrypt TOTP secrets. |
+
+<Callout type="warn">
+  **Back up `session.key` alongside your database.** If the key is lost, every TOTP enrollment is unrecoverable — all users will need to re-enroll from scratch. The key is auto-regenerated if missing on boot, so restoring only the DB is **not** enough.
+</Callout>
+
+## `[webauthn]`
+
+Passkey / WebAuthn settings. The module ships with sensible defaults — you only need to edit this block if the dashboard is reachable on a hostname that doesn't match `[dashboard] public_url`, or if you want to allow additional origins (e.g. `http://localhost:3000` for local dev).
+
+| Key                          | Default              | Notes                                                                                                             |
+|------------------------------|----------------------|-------------------------------------------------------------------------------------------------------------------|
+| `enabled`                    | `true`               | Kill-switch. When `false`, the Passkey card is hidden in the UI and all `/api/auth/passkey/*` routes return 404. |
+| `rp_id`                      | `""`                 | Relying Party ID — **must** be the dashboard's hostname exactly, no scheme/port/path. Empty = auto-derive from `public_url`. |
+| `rp_name`                    | `"Nimbus Dashboard"` | Human-readable RP name shown in the authenticator prompt.                                                         |
+| `origins`                    | `[]`                 | Allowed browser origins (`https://host[:port]`). Empty = auto-derive from `public_url`. Add `http://localhost:3000` for local dev. |
+| `challenge_ttl_seconds`      | `300`                | How long a registration / authentication ceremony stays valid before the server drops it from its in-memory cache. |
+| `max_credentials_per_user`   | `10`                 | Cap per MC UUID. Keeps the credential table from growing unbounded if a user enrolls a device and never prunes it. |
+| `allow_origin_port`          | `false`              | When `true`, the RP accepts assertions from the same host on any port. Off by default so production RP binding is strict (`https://host:443` and `https://host:3000` are distinct origins). Turn on only for local dev where the dashboard floats between ports. |
+
+<Callout type="warn">
+  Changing `rp_id` invalidates every existing passkey — browsers bind the credential to the RP ID at registration time, and a mismatch is indistinguishable from a phishing attempt. Only change this if the dashboard's public hostname actually changes, and warn users to re-enroll.
+</Callout>
+
+## Endpoints
+
+| Route                              | Auth            | Purpose                                                                      |
+|------------------------------------|-----------------|------------------------------------------------------------------------------|
+| `POST /api/auth/generate-code`              | Service token           | Called from the controller-side `/nimbus dashboard login` command handler to mint a 6-digit challenge. |
+| `POST /api/auth/request-magic-link`         | Service token           | Called from `/nimbus dashboard login link` to mint a magic-link token.                                 |
+| `POST /api/auth/deliver-magic-link`         | Public (rate-limited)   | Dashboard-initiated: user types their MC name, controller fires `AUTH_MAGIC_LINK_DELIVERY` which the `nimbus-auth-velocity` plugin turns into a clickable chat component. |
+| `POST /api/auth/consume-challenge`          | Public                  | Dashboard exchanges a code or magic-link token for a session.                                          |
+| `POST /api/auth/consume-magic-link`         | Public                  | Dashboard consumes a `?link=<token>` deep-link on page load.                                           |
+| `POST /api/auth/totp-verify`                | Public                  | Second step when TOTP is enabled. Accepts a live TOTP code or a recovery code.                         |
+| `POST /api/auth/logout`                     | Bearer session          | Revokes the calling session.                                                                           |
+| `GET /api/auth/ws-ticket`                   | Bearer session          | Mints a single-use, 30-second `wt_…` ticket the dashboard uses in `?token=` when opening a WebSocket or SSE connection, so the long-lived session token never lands in a URL. |
+| `GET /api/auth/me`                          | Bearer session          | Returns `{uuid, name, permissions[], isAdmin, totpEnabled}`.                                           |
+| `GET /api/auth/my-sessions`                 | Bearer session          | Lists the caller's own sessions with a `currentSessionId` marker.                                     |
+| `DELETE /api/auth/my-sessions/{sessionId}`  | Bearer session          | Revokes a sibling session.                                                                             |
+| `POST /api/auth/my-sessions/revoke-others`  | Bearer session          | Revokes every session belonging to the caller except the current one.                                 |
+| `GET /api/auth/sessions`                    | Service token           | Admin view of all sessions (used by the in-game `/nimbus dashboard sessions` command).                 |
+| `POST /api/auth/logout-all`                 | Service token           | Revokes every session for a given UUID (used by `/nimbus dashboard logout-all`).                       |
+| `GET /api/profile/totp/status`              | Bearer session          | Reports TOTP state + remaining recovery codes.                                                         |
+| `POST /api/profile/totp/enroll`             | Bearer session          | Starts enrollment — returns secret, `otpauth://` URI, and 10 recovery codes.                           |
+| `POST /api/profile/totp/confirm`            | Bearer session          | Activates a pending enrollment.                                                                        |
+| `POST /api/profile/totp/disable`            | Bearer session          | Requires a current TOTP code or a recovery code.                                                       |
+| `POST /api/auth/passkey/register/start`     | Bearer session          | Begins a WebAuthn registration ceremony. Returns `{ceremonyId, publicKeyOptionsJson}`.                 |
+| `POST /api/auth/passkey/register/finish`    | Bearer session          | Completes registration. Persists the credential under the caller's UUID with the supplied label.       |
+| `POST /api/auth/passkey/login/start`        | Public                  | Begins an authentication ceremony. Discoverable credentials — no username needed.                      |
+| `POST /api/auth/passkey/login/finish`       | Public                  | Completes authentication and issues a regular dashboard session (`loginMethod = "passkey"`).           |
+| `GET /api/auth/passkey/credentials`         | Bearer session          | Lists the caller's registered passkeys.                                                                |
+| `DELETE /api/auth/passkey/credentials/{id}` | Bearer session          | Deletes a registered passkey.                                                                          |
+
+Service-token endpoints are called by the controller's own `/nimbus dashboard ...` `ModuleCommand` handler when a player runs the in-game command (the caller UUID is forwarded from the Bridge plugin via `CommandExecuteRequest`). The `nimbus-auth-velocity` plugin itself only subscribes to the `AUTH_MAGIC_LINK_DELIVERY` module event — it doesn't hold a service token and doesn't call these endpoints directly.

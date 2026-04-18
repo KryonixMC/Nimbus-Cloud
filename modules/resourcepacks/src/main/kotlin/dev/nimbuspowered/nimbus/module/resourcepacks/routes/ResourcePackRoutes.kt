@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.module.resourcepacks.routes
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.module.resourcepacks.AssignmentRequest
 import dev.nimbuspowered.nimbus.module.resourcepacks.CreateResourcePackRequest
@@ -32,12 +33,14 @@ fun Route.resourcePackAuthedRoutes(
 
         // GET /api/resourcepacks — list all packs
         get {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.view")) return@get
             val packs = manager.listPacks()
             call.respond(ResourcePackListResponse(packs.map { it.toResponse() }, packs.size))
         }
 
         // GET /api/resourcepacks/{id}
         get("{id}") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.view")) return@get
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val pack = manager.getPack(id)
@@ -47,6 +50,7 @@ fun Route.resourcePackAuthedRoutes(
 
         // POST /api/resourcepacks — create by URL (JSON body)
         post {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@post
             val req = call.receive<CreateResourcePackRequest>()
             if (req.name.isBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest, apiError("name is required", ApiErrors.VALIDATION_FAILED))
@@ -86,6 +90,7 @@ fun Route.resourcePackAuthedRoutes(
          * bytes (no Content-Type disposition overhead).
          */
         post("upload") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@post
             val name = call.request.queryParameters["name"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("name query param is required", ApiErrors.VALIDATION_FAILED))
             val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() ?: false
@@ -116,6 +121,7 @@ fun Route.resourcePackAuthedRoutes(
 
         // DELETE /api/resourcepacks/{id}
         delete("{id}") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val pack = manager.getPack(id)
@@ -129,6 +135,7 @@ fun Route.resourcePackAuthedRoutes(
 
         // GET /api/resourcepacks/assignments
         get("assignments") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.view")) return@get
             val packId = call.request.queryParameters["packId"]?.toIntOrNull()
             val list = manager.listAssignments(packId)
             call.respond(list.map { it.toResponse() })
@@ -136,6 +143,7 @@ fun Route.resourcePackAuthedRoutes(
 
         // POST /api/resourcepacks/{id}/assignments
         post("{id}/assignments") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.assign")) return@post
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val req = call.receive<AssignmentRequest>()
@@ -156,6 +164,7 @@ fun Route.resourcePackAuthedRoutes(
 
         // DELETE /api/resourcepacks/assignments/{id}
         delete("assignments/{id}") {
+            if (!call.requirePermission("nimbus.dashboard.resourcepacks.assign")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val deleted = manager.deleteAssignment(id)

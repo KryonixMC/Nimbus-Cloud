@@ -180,6 +180,44 @@ public final class TextCompat {
         }
     }
 
+    // ── Clickable links ─────────────────────────────────────────────
+
+    /**
+     * Send a chat message containing a clickable URL. The {@code template}
+     * uses {@code &} colour codes and must contain the placeholder
+     * {@code {click}} to mark where the clickable label should appear.
+     * <p>
+     * On Paper/Adventure: renders {@code clickLabel} as an Adventure
+     * {@code Component} with a {@code ClickEvent.OPEN_URL} pointing at
+     * {@code url} and a hover tooltip rendered from {@code hover}.
+     * <p>
+     * On legacy Spigot: falls back to a plain chat line with the raw URL
+     * appended (clients can still click/copy in most launchers from 1.13+,
+     * but we make no guarantees below that).
+     *
+     * @param player     target player
+     * @param template   legacy-coloured template with {@code {click}} placeholder
+     * @param clickLabel legacy-coloured visible label for the click target
+     * @param url        full URL opened on click
+     * @param hover      optional hover tooltip (legacy-coloured, can be empty)
+     */
+    public static void sendClickableLink(Player player, String template, String clickLabel, String url, String hover) {
+        if (VersionHelper.hasAdventure()) {
+            AdventureHelper.sendClickableLink(player, template, clickLabel, url, hover);
+        } else {
+            String combined;
+            int placeholderIdx = template.indexOf("{click}");
+            if (placeholderIdx >= 0) {
+                combined = template.substring(0, placeholderIdx)
+                    + clickLabel + " " + ChatColor.GRAY + url
+                    + template.substring(placeholderIdx + "{click}".length());
+            } else {
+                combined = template + " " + clickLabel + " " + url;
+            }
+            player.sendMessage(colorize(combined));
+        }
+    }
+
     // ── Title ───────────────────────────────────────────────────────
 
     /**

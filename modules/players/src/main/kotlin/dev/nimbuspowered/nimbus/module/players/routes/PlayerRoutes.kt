@@ -1,5 +1,6 @@
 package dev.nimbuspowered.nimbus.module.players.routes
 
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.module.players.PlayerTracker
 import io.ktor.http.*
 import io.ktor.server.response.*
@@ -47,6 +48,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/online — All online players
         get("online") {
+            if (!call.requirePermission("nimbus.dashboard.players.view")) return@get
             val players = tracker.getOnlinePlayers().map {
                 OnlinePlayer(it.uuid, it.name, it.currentService, it.currentGroup, it.connectedAt.toString())
             }
@@ -55,6 +57,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/online/{uuid} — Single online player
         get("online/{uuid}") {
+            if (!call.requirePermission("nimbus.dashboard.players.view")) return@get
             val uuid = call.parameters["uuid"]!!
             val player = tracker.getPlayer(uuid)
             if (player != null) {
@@ -66,6 +69,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/history/{uuid} — Session history
         get("history/{uuid}") {
+            if (!call.requirePermission("nimbus.dashboard.players.history")) return@get
             val uuid = call.parameters["uuid"]!!
             val limit = call.queryParameters["limit"]?.toIntOrNull() ?: 20
             val history = tracker.getSessionHistory(uuid, limit).map {
@@ -81,6 +85,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/info/{uuid} — Player meta + online status
         get("info/{uuid}") {
+            if (!call.requirePermission("nimbus.dashboard.players.view")) return@get
             val uuid = call.parameters["uuid"]!!
             val meta = tracker.getPlayerMeta(uuid)
             if (meta != null) {
@@ -101,6 +106,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/all — All known players (search + paginate)
         get("all") {
+            if (!call.requirePermission("nimbus.dashboard.players.view")) return@get
             val query = call.queryParameters["q"] ?: ""
             val limit = call.queryParameters["limit"]?.toIntOrNull() ?: 50
 
@@ -126,6 +132,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
 
         // GET /api/players/stats — Aggregate stats
         get("stats") {
+            if (!call.requirePermission("nimbus.dashboard.players.view")) return@get
             val stats = tracker.getStats()
             @Suppress("UNCHECKED_CAST")
             call.respond(PlayerStatsResponse(

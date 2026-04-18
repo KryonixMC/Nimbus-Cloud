@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.module.punishments.routes
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.module.punishments.DurationParser
 import dev.nimbuspowered.nimbus.module.punishments.IssuePunishmentRequest
@@ -38,6 +39,7 @@ fun Route.punishmentRoutes(
 
         // GET /api/punishments?active=true&type=BAN&limit=50&offset=0
         get {
+            if (!call.requirePermission("nimbus.dashboard.punishments.view")) return@get
             val active = call.request.queryParameters["active"]?.toBooleanStrictOrNull() ?: true
             val type = call.request.queryParameters["type"]?.let {
                 runCatching { PunishmentType.valueOf(it.uppercase()) }.getOrNull()
@@ -52,16 +54,19 @@ fun Route.punishmentRoutes(
         // Separate top-level block so routing doesn't mistake "messages" for a {id}.
 
         get("messages") {
+            if (!call.requirePermission("nimbus.dashboard.punishments.view")) return@get
             call.respond(messages.current())
         }
 
         put("messages") {
+            if (!call.requirePermission("nimbus.dashboard.admin")) return@put
             val next = call.receive<PunishmentsMessages>()
             call.respond(messages.update(next))
         }
 
         // GET /api/punishments/{id}
         get("{id}") {
+            if (!call.requirePermission("nimbus.dashboard.punishments.view")) return@get
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val record = manager.getById(id)
@@ -71,6 +76,7 @@ fun Route.punishmentRoutes(
 
         // GET /api/punishments/player/{uuid}
         get("player/{uuid}") {
+            if (!call.requirePermission("nimbus.dashboard.punishments.history")) return@get
             val uuid = call.parameters["uuid"]!!
             val limit = (call.request.queryParameters["limit"]?.toIntOrNull() ?: 100).coerceIn(1, 500)
             val history = manager.getHistory(uuid, limit)
@@ -111,11 +117,23 @@ fun Route.punishmentRoutes(
             call.respond(record.toCheckResponse(messages.current()))
         }
 
-        // POST /api/punishments — issue a new punishment
+        // POST /api/punishments — issue a new punishment.
+        // Per-type permission: warn / mute / tempmute / kick / ban / tempban / ipban.
         post {
             val req = call.receive<IssuePunishmentRequest>()
             val type = runCatching { PunishmentType.valueOf(req.type.uppercase()) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Unknown type '${req.type}'", ApiErrors.VALIDATION_FAILED))
+
+            val requiredNode = when (type) {
+                PunishmentType.WARN -> "nimbus.dashboard.punishments.warn"
+                PunishmentType.MUTE -> "nimbus.dashboard.punishments.mute"
+                PunishmentType.TEMPMUTE -> "nimbus.dashboard.punishments.tempmute"
+                PunishmentType.KICK -> "nimbus.dashboard.punishments.kick"
+                PunishmentType.BAN -> "nimbus.dashboard.punishments.ban"
+                PunishmentType.TEMPBAN -> "nimbus.dashboard.punishments.tempban"
+                PunishmentType.IPBAN -> "nimbus.dashboard.punishments.ipban"
+            }
+            if (!call.requirePermission(requiredNode)) return@post
 
             if (req.targetName.isBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest, apiError("targetName is required", ApiErrors.PUNISHMENT_TARGET_INVALID))
@@ -195,6 +213,7 @@ fun Route.punishmentRoutes(
 
         // DELETE /api/punishments/{id} — revoke
         delete("{id}") {
+            if (!call.requirePermission("nimbus.dashboard.punishments.revoke")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
                 ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
             val req = runCatching { call.receive<RevokePunishmentRequest>() }.getOrDefault(RevokePunishmentRequest())

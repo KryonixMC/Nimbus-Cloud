@@ -1365,6 +1365,17 @@ public class CloudCommand implements SimpleCommand {
         JsonObject body = new JsonObject();
         body.add("args", argsArray);
 
+        // Forward the caller's MC identity when a player runs the command.
+        // Caller-scoped module commands (e.g. `/nimbus dashboard login`) read
+        // this to know whose code/link to issue. Console/RCON sources keep
+        // the body caller-less and commands default to the old behaviour.
+        if (source instanceof com.velocitypowered.api.proxy.Player player) {
+            JsonObject caller = new JsonObject();
+            caller.addProperty("uuid", player.getUniqueId().toString());
+            caller.addProperty("name", player.getUsername());
+            body.add("caller", caller);
+        }
+
         api.post("/api/commands/" + enc(commandName) + "/execute", body).thenAccept(result -> {
             if (!result.isSuccess()) {
                 source.sendMessage(apiError(result));

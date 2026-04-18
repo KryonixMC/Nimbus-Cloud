@@ -25,6 +25,7 @@ fun Route.systemRoutes(
 ) {
     // POST /api/reload — Hot-reload group configs
     post("/api/reload") {
+        if (!call.requirePermission("nimbus.dashboard.reload")) return@post
         try {
             val configs = ConfigLoader.reloadGroupConfigs(groupsDir)
             groupManager.reloadGroups(configs)
@@ -51,6 +52,7 @@ fun Route.systemRoutes(
     // call System.exit(0) after a short delay so the response can be flushed.
     // The JVM shutdown hook then runs the normal graceful cleanup path.
     post("/api/shutdown") {
+        if (!call.requirePermission("nimbus.dashboard.shutdown")) return@post
         call.respond(ApiMessage(true, "Shutdown initiated"))
         scope.launch {
             kotlinx.coroutines.delay(250)

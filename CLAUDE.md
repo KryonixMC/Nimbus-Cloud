@@ -67,13 +67,17 @@ Core (root):
 - `nimbus-protocol` — Shared cluster message types
 - `nimbus-cli` — Remote CLI: standalone JLine3 console that connects to controller via REST + WebSocket (no Minecraft dependencies)
 
-Plugins (`plugins/`):
+Core Plugins (`plugins/`) — deployed on every service/proxy independent of installed modules:
 - `plugins/sdk` — Server SDK (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed to backend servers)
-- `plugins/bridge` — Velocity plugin: hub commands + cloud bridge + punishment login enforcement (Java, auto-embedded as resource `nimbus-bridge.jar` during build)
-- `plugins/perms` — Permissions plugin: builtin or LuckPerms provider (Spigot 1.8.8+ / Paper / Folia compatible, auto-deployed, configurable)
-- `plugins/display` — Display plugin: server selector signs + NPCs via FancyNpcs (Spigot 1.13+ signs, Paper 1.20+ NPCs, Folia compatible)
-- `plugins/punishments` — Punishments plugin: in-game `/ban` `/tempban` `/mute` `/tempmute` `/kick` `/warn` `/unban` `/unmute` `/history` commands + chat mute listener (cross-version, Folia compatible)
-- `plugins/resourcepacks` — Resource packs plugin: applies network-wide packs on player join, 1.20.3+ multi-pack stack, telemetry reporting (cross-version, Folia compatible)
+- `plugins/bridge` — Velocity plugin: `/cloud` + `/nimbus` commands, cloud bridge, remote-command forwarding (incl. caller UUID for caller-scoped module commands) (Java, auto-embedded as resource `nimbus-bridge.jar` during build)
+
+Module-owned plugins (live next to their owning module under `modules/<mod>/plugin[-variant]/`, auto-deployed only when that module is enabled via `ModuleContext.registerPluginDeployment(...)`):
+- `modules/perms/plugin` — Permissions plugin (Spigot/Paper/Folia, builtin or LuckPerms provider)
+- `modules/display/plugin` — Display plugin: server selector signs + NPCs via FancyNpcs (Spigot 1.13+ signs, Paper 1.20+ NPCs, Folia compatible)
+- `modules/punishments/plugin-backend` — Chat mute listener (enforces mutes without registering commands)
+- `modules/punishments/plugin-velocity` — Velocity listeners for login-enforcement (ban/ipban)
+- `modules/resourcepacks/plugin` — Applies network-wide packs on player join, 1.20.3+ multi-pack stack, telemetry
+- `modules/auth/plugin-velocity` — Delivers dashboard-initiated magic-link chat components via `AUTH_MAGIC_LINK_DELIVERY` event subscription (no command registration — `/nimbus dashboard …` runs through Bridge's remote-command forwarding)
 - (no backup plugin — backup module runs entirely on the controller; no SDK calls into running services)
 
 Controller Modules (`modules/`):
@@ -86,6 +90,7 @@ Controller Modules (`modules/`):
 - `modules/resourcepacks` — Resource pack registry: URL-referenced + locally hosted packs, GLOBAL/GROUP/SERVICE assignments, streaming upload with SHA-1 (migration range 6000+)
 - `modules/backup` — Scheduled tar+zstd snapshots (services/dedicated/templates/config/state-sync/database) with GFS retention, single-pass SHA-256 manifest, multi-threaded zstd-jni compression, and live TOML config editing via REST (migration range 7000+)
 - `modules/docker` — Opt-in Docker backend: services run as containers when `[group.docker] enabled = true` is set, otherwise as bare processes. Raw HTTP/1.1 over the Docker Engine socket (no `docker` CLI dep, JVM `UnixDomainSocketAddress`), TTY-mode attach for bidirectional stdin+stdout, cgroup-enforced memory/CPU limits, auto network + image pull, container crash recovery via label-based reattach. Controller-only in Phase 1 — agent-node Docker is a follow-up
+- `modules/auth` — Dashboard auth + RBAC (v0.11): MC-account login via 6-digit code OR magic link (no passwords, no OAuth), TOTP 2FA with recovery codes, 7-day rolling sessions, `nimbus.dashboard.*` permission nodes resolved through the Perms module. API tokens keep working as implicit `nimbus.dashboard.admin` for full backwards compat. Auto-deploys `nimbus-auth-velocity.jar` to every Velocity proxy (registers `/dashboard login | login link | sessions | logout-all`, delivers magic-link chat components via `AUTH_MAGIC_LINK_DELIVERY` module event). Migration range 8000+ (dashboard_sessions, dashboard_login_challenges, dashboard_totp, dashboard_recovery_codes). TOTP secrets AES-GCM-encrypted with `config/modules/auth/session.key` (auto-generated, chmod 600). Session tokens stored as SHA-256 hash only — raw token lives in the dashboard httpOnly cookie/localStorage
 
 Other:
 - `dashboard` — Web Dashboard (BETA): Next.js + shadcn/ui management UI, connects to controller REST API + WebSocket. Live at `dashboard.nimbuspowered.org`. Separate app, not embedded in core JAR.
@@ -94,7 +99,7 @@ Other:
     - `useApiResource` is the canonical data hook; no bare `useEffect` + `fetch` in pages. Mutations go through `apiFetch`, which auto-surfaces 4xx/5xx as toasts (opt-out with `{ silent: true }` for user-initiated flows that render their own errors).
     - Severity colors use CSS variables (`--severity-ok`, `--severity-warn`, `--severity-err`, `--severity-info`). Do not reintroduce hardcoded `emerald-*` / `amber-*` / `destructive` tailwind classes in status UI.
     - Polling intervals are standardized as `POLL.fast` (3s) / `POLL.normal` (5s) / `POLL.slow` (30s) and pause while the tab is hidden.
-    - Dashboard version lives in `dashboard/package.json` (currently `0.10.0-beta.1`), is injected at build via `next.config.ts`, exposed through `dashboard/src/lib/version.ts`, and the sidebar renders a Beta/Alpha badge reflecting the channel. Dashboard version is independent of the controller patch cadence.
+    - Dashboard version lives in `dashboard/package.json` (currently `0.11.0-beta.1`), is injected at build via `next.config.ts`, exposed through `dashboard/src/lib/version.ts`, and the sidebar renders a Beta/Alpha badge reflecting the channel. Dashboard version is independent of the controller patch cadence.
 
 Gradle project names remain unchanged (`:nimbus-sdk`, `:nimbus-module-perms`, etc.) via `projectDir` mappings in `settings.gradle.kts`.
 
@@ -193,7 +198,7 @@ dashboard/src/              # Web Dashboard (Next.js, BETA)
 - Bedrock support: Geyser + Floodgate auto-downloaded from GeyserMC API, key.pem centrally managed
 - Permission system: groups, inheritance, tracks, meta, weight, audit log, debug — central DB on controller
 - LuckPerms support: optional provider in NimbusPerms, syncs display data to controller for proxy features
-- Database migrations: `MigrationManager` auto-applies versioned schema changes on startup; core uses V1 (baseline) + V2 (audit); modules register migrations via `ModuleContext.registerMigrations()`. Module-specific ranges: perms 1000+, scaling 2000+, players 3000+, display 4000+, punishments 5000+, resourcepacks 6000+, backup 7000+
+- Database migrations: `MigrationManager` auto-applies versioned schema changes on startup; core uses V1 (baseline) + V2 (audit); modules register migrations via `ModuleContext.registerMigrations()`. Module-specific ranges: perms 1000+, scaling 2000+, players 3000+, display 4000+, punishments 5000+, resourcepacks 6000+, backup 7000+, auth 8000+
 - Audit logging: `AuditCollector` subscribes to EventBus, batch-writes to `audit_log` table; `audit` console command + `GET /api/audit` endpoint
 - CLI session tracking: `CliSessionTracker` records Remote CLI connections in `cli_sessions` table; `sessions` console command (active/history); `CliSessionConnected`/`CliSessionDisconnected` events displayed in local console
 - Event actor tracking: `NimbusEvent.actor` field identifies trigger source (`system`, `console`, `api:admin`, `api:service`)

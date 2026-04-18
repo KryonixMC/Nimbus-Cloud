@@ -4,6 +4,7 @@ import dev.nimbuspowered.nimbus.api.*
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
+import dev.nimbuspowered.nimbus.module.CommandCaller
 import dev.nimbuspowered.nimbus.module.CommandOutput
 import io.ktor.http.*
 import io.ktor.server.request.*
@@ -54,9 +55,10 @@ fun Route.commandRoutes(dispatcher: CommandDispatcher) {
 
             val request = call.receive<CommandExecuteRequest>()
             val collector = CollectorOutput()
+            val caller = request.caller?.let { CommandCaller(it.uuid, it.name) }
 
             try {
-                val handled = command.execute(request.args, collector)
+                val handled = command.execute(request.args, collector, caller)
                 if (!handled) {
                     call.respond(
                         HttpStatusCode.BadRequest,

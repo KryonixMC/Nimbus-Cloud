@@ -111,6 +111,20 @@ interface ModuleContext {
     fun <T : Any> registerService(type: Class<T>, instance: T) {}
 
     /**
+     * Look up a registered service by its fully-qualified class name.
+     *
+     * Each module JAR is loaded with its own `URLClassLoader`, so `Class<?>`
+     * instances from different modules are never `==`-equal even when their
+     * FQCN matches — which means [getService] cannot find a cross-module
+     * service when the caller can't reference the concrete `Class<T>` at
+     * compile time. This name-based lookup bridges that gap by scanning the
+     * registered services for one whose class name matches.
+     *
+     * Returns `null` if no registered service has a matching name.
+     */
+    fun getServiceByClassName(fqcn: String): Any? = null
+
+    /**
      * Register a diagnostic check that shows up in `doctor` / `GET /api/doctor`.
      * Call from [NimbusModule.init]; checks are invoked every time the doctor runs.
      */

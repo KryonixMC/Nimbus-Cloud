@@ -13,6 +13,65 @@ The Nimbus Web Dashboard is versioned independently of the controller, so its UI
 
 ---
 
+## [0.11.0-beta.1] — 2026-04-19
+
+**Controller compatibility:** `0.11.0`
+
+Dashboard surface for the new **Auth** module: multi-user login, a `/profile` section with TOTP + passkey + session management, a permission-aware navigation that hides what the user can't reach, and a ground-up rewrite of the login screen as a multi-screen wizard.
+
+### Added
+
+- **Login wizard** at `/login`. Replaces the old Tabs + ToggleGroup layout with a 7-screen flow (connect → method → code | magic-link | TOTP | API token) and direction-aware slide transitions. One concern per screen, back-arrow navigation, `autoFocus` per step, stock shadcn primitives end-to-end.
+- **Passkey login + enrollment.** Thin `lib/passkeys.ts` wrapper around the browser's native `PublicKeyCredential.parseCreationOptionsFromJSON` / `parseRequestOptionsFromJSON` API — no external WebAuthn dependency. Login MethodCard is gated on `isPasskeySupported()` so unsupported browsers don't see a dead option. New `PasskeyCard` on `/profile/security` for labeled enrollment and a list-with-delete of registered credentials. Cancellations and `NotAllowedError` are silent — the user just sees the login screen again, no stack-traced toast.
+- **TOTP setup UI.** QR render via `api.qrserver.com` fallback (no new deps), confirm step, disable. Ten recovery codes presented in a copy-all grid with a one-shot "save these somewhere safe" warning; the grid never re-renders them.
+- **`/profile` section.** Layout owns a single `PageShell` titled *Profile* with pill-tabs as sub-navigation; sub-pages render section cards directly instead of stacking their own page headers.
+  - `/profile` — avatar, UUID, derived role badge, permission count, `totpEnabled` flag
+  - `/profile/security` — TOTP card, Passkey card, Sessions card (list with revoke + "sign out everywhere else")
+  - `/profile/permissions` — permission nodes grouped by the second dotted segment, admin callout when the user holds `nimbus.dashboard.admin`
+- **Permission-aware UI.**
+  - `lib/permissions.ts` — `nimbus.dashboard.*` node registry + longest-match route-prefix lookup
+  - `<RequirePermission>` / `<IfPermission>` / `<PermissionButton>` components for inline gating
+  - `AppSidebar` filters nav items by required permission (API-token auth still sees everything)
+  - `<RoutePermissionGuard>` wraps `(dashboard)` children and 404-fallbacks routes the user can't access — doesn't leak page existence through the status code
+- **`NavUser` three-mode render.**
+  - `api-token` — command-block head (real custom head from minecraft-heads.com, rendered via mc-heads.net with the textures.minecraft.net hash), "API Admin" label, connected-controller URL, Disconnect action
+  - `user` — real `mc-heads.net/avatar/<uuid>` head, derived role label (Admin / Developer / Moderator / Supporter / User from permission grants), links to Profile / Security / Permissions, theme toggle, Logout
+  - `anonymous` — renders nothing
+- **Magic-link deep-link handler** in `app/login/login-client.tsx` with `history.replaceState` cleanup and a `Suspense` boundary around `useSearchParams`. Click a magic link → land on the dashboard authenticated, URL token is stripped so it never shows up in the address bar.
+- **Pixel-sky login background.** New `<PixelSky />` component: Minecraft-style animated sky, day-time vertical gradient, 20 seeded twinkling star pixels, three drifting pixel clouds at different altitudes and speeds. Pure SVG + CSS, no external media. `prefers-reduced-motion` honoured — the animations freeze to their initial frame and the twinkle holds at full opacity.
+- **OTP tile input.** New `<OtpInput />`: six single-digit cells with auto-advance, Backspace-jumps-back, arrow-key nav, full paste-spread, one-time-code autofill. Shared between the login code screen and the TOTP screen. Submit button disabled until the code is complete; auto-submit fires on last-digit entry so the user rarely touches the button.
+- **Minecraft-head icons on method cards.** Each login method now shows a themed pixel-head:
+  - Passkey — keypad head (minecraft-heads.com #43871, texture hash `7e1959dd…`)
+  - Minecraft Account — `MHF_Alex`, the default modern skin
+  - API Token — command-block head (minecraft-heads.com #120843), same asset reused in the `NavUser` API-token mode
+
+### Changed
+
+- **Login visuals back to stock shadcn primitives.** Earlier iterations drifted into custom `rounded-2xl`, primary-tinted shadows, bespoke hover-lifts, and a floating-circle back button that read as a different product. Reverted: `Card` uses its stock `rounded-4xl` + `shadow-md` + `ring-1 ring-foreground/5`; back arrow is `<Button variant="ghost" size="icon">` with `rounded-md`; headings are `<CardTitle>`; submit buttons are `<Button size="lg">`; MethodCards are `<Button variant="secondary">` with a custom inner layout. Pixel-sky background and screen transitions kept.
+- **Login collapses to a single choice screen.** The intermediate `mc-method` screen and the magic-link waiting UI are gone from the dashboard — the in-game `/nimbus dashboard login` code path is friction-free enough on its own, and the extra options made the grid feel cluttered. MethodCards now all use the same `secondary` variant so nothing implies a default. (The backend magic-link endpoints are still live — the in-game `/nimbus dashboard login link` command and the Velocity plugin delivery path still depend on them.)
+- **`apiFetch` honours session auth.** The client auth state is a union (`loading` / `anonymous` / `api-token` / `user`), and every request attaches either the bearer token or the session cookie based on the current kind. A silent 5-minute refresh keeps the `user` state's permission snapshot fresh without round-tripping on every page load.
+- **`useAuth().hasPermission(node)`** mirrors backend wildcard semantics (`*`, `a.b.*`, `nimbus.dashboard.admin` shortcut). Single source of truth for permission checks across the UI.
+- **Breadcrumbs** now render `profile` / `security` / `permissions` with proper casing via `routeLabels` in `site-header.tsx` — no more raw URL segments.
+
+### Removed
+
+- Magic-link screen state from `login-form.tsx` — `mcName`, `linkSent`, `linkTtl`, `linkTimer`, `startLinkCountdown`, `handleSendMagicLink`. The `nimbus-sparkle` CSS keyframes the waiting state relied on are gone too.
+- Inline `NimbusLogo`, `SkinHeadIcon`, `CoinIcon` components from earlier login iterations (~140 lines). The real banner + MC-head CDN cover both needs.
+
+### Security hardening
+
+Landed alongside the controller 0.11.0 review pass:
+
+- **WebSocket + SSE auth via short-lived tickets.** `apiWebSocket()` and `apiProxyWebSocket()` now `await` `fetchWsToken()` before opening a connection. For user sessions that call hits the new `GET /api/auth/ws-ticket` controller endpoint and places a single-use `wt_…` ticket in the `?token=` query param; the long-lived session bearer never lands in a URL. API tokens pass through unchanged (operator-chosen long-lived credential).
+- **Session tokens moved to `sessionStorage`.** `setUserSessionCredentials()` persists to `sessionStorage` so the login survives a Cmd-R without landing in `localStorage` (no cross-tab reads, cleared on tab close). `getToken()` rehydrates the in-memory cache on the first call after a refresh. API-token credentials remain in-memory only.
+
+### Notes
+
+- **No dashboard-only changes needed on existing pages.** Permission gating is additive: the sidebar filters for user sessions, every other screen works identically whether the caller is an API token or a session-authed user.
+- **Beta quality.** The new auth flow has been exercised end-to-end against a local controller with all three login methods (code, magic link, passkey) plus TOTP enrolled. Live-testing on your own controller before relying on the browser UI for account-critical operations is still recommended.
+
+---
+
 ## [0.10.0-beta.1] — 2026-04-17
 
 **Controller compatibility:** `0.10.0`

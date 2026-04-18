@@ -12,6 +12,7 @@ import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
+import dev.nimbuspowered.nimbus.module.AuthPrincipal
 import dev.nimbuspowered.nimbus.module.ModuleContextImpl
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -214,6 +215,11 @@ class NimbusApi(
 
         if (apiConfig.token.isNotBlank()) {
             val serviceToken = deriveServiceToken(apiConfig.token)
+            // Session validator is published by the auth module at runtime.
+            // We re-resolve on every call so modules loaded after API startup still work.
+            val sessionValidatorLookup: () -> dev.nimbuspowered.nimbus.module.SessionValidator? = {
+                moduleContext?.getService(dev.nimbuspowered.nimbus.module.SessionValidator::class.java)
+            }
             install(Authentication) {
                 // Full admin access — only for the master API token or JWT with admin scope
                 bearer("api-token") {
@@ -224,15 +230,25 @@ class NimbusApi(
                             if (jwt != null) {
                                 val scopes = jwtTokenManager.extractScopes(jwt)
                                 if (ApiScope.ADMIN in scopes) {
+                                    setAuthPrincipal(AuthPrincipal.ApiToken("jwt:${jwt.subject}"))
                                     return@authenticate UserIdPrincipal("jwt:${jwt.subject}")
                                 }
                             }
                             return@authenticate null
                         }
                         if (timingSafeEquals(credential.token, apiConfig.token)) {
+                            setAuthPrincipal(AuthPrincipal.ApiToken("nimbus-admin"))
                             UserIdPrincipal("nimbus-admin")
                         } else {
-                            null
+                            // Session token fallback: dashboard users with
+                            // `nimbus.dashboard.admin` can reach admin routes via
+                            // their session cookie/bearer.
+                            val session = sessionValidatorLookup()?.validate(credential.token)
+                            if (session != null && session.permissions.has(
+                                    dev.nimbuspowered.nimbus.module.PermissionSet.ADMIN_NODE)) {
+                                setAuthPrincipal(session)
+                                UserIdPrincipal("user:${session.uuid}")
+                            } else null
                         }
                     }
                 }
@@ -245,15 +261,28 @@ class NimbusApi(
                             if (jwt != null) {
                                 val scopes = jwtTokenManager.extractScopes(jwt)
                                 if (ApiScope.ADMIN in scopes || scopes.any { it in ApiScope.SERVICE_SCOPES }) {
+                                    setAuthPrincipal(AuthPrincipal.ApiToken("jwt:${jwt.subject}"))
                                     return@authenticate UserIdPrincipal("jwt:${jwt.subject}")
                                 }
                             }
                             return@authenticate null
                         }
                         when {
-                            timingSafeEquals(credential.token, apiConfig.token) -> UserIdPrincipal("nimbus-admin")
-                            timingSafeEquals(credential.token, serviceToken) -> UserIdPrincipal("nimbus-service")
-                            else -> null
+                            timingSafeEquals(credential.token, apiConfig.token) -> {
+                                setAuthPrincipal(AuthPrincipal.ApiToken("nimbus-admin"))
+                                UserIdPrincipal("nimbus-admin")
+                            }
+                            timingSafeEquals(credential.token, serviceToken) -> {
+                                setAuthPrincipal(AuthPrincipal.ApiToken("nimbus-service"))
+                                UserIdPrincipal("nimbus-service")
+                            }
+                            else -> {
+                                val session = sessionValidatorLookup()?.validate(credential.token)
+                                if (session != null) {
+                                    setAuthPrincipal(session)
+                                    UserIdPrincipal("user:${session.uuid}")
+                                } else null
+                            }
                         }
                     }
                 }

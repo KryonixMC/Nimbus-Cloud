@@ -1,5 +1,6 @@
 package dev.nimbuspowered.nimbus.module.scaling.routes
 
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.module.scaling.SmartScalingConfigManager
 import dev.nimbuspowered.nimbus.module.scaling.SmartScalingManager
 import io.ktor.http.*

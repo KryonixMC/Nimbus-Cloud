@@ -41,8 +41,9 @@ The core engine, cluster system, and module framework are feature-complete for m
 
 | Goal | Why it matters |
 |------|----------------|
-| **Fill in operator workflows** | Things every network needs but nobody should have to glue together from third-party plugins — punishments, resource packs, reports/appeals, chat filtering, staff tooling. Each lands as its own module so operators can opt in |
+| **Fill in operator workflows** | Things every network needs but nobody should have to glue together from third-party plugins — reports/appeals, chat filtering, staff tooling, analytics. Each lands as its own module so operators can opt in. Punishments, resource packs, and dashboard auth have already shipped |
 | **Dashboard parity + depth** | Every console workflow should have a first-class dashboard equivalent. Not "a UI for the API", but the thing operators reach for first |
+| **Multi-user dashboard maturity** | v0.11 shipped the auth core — next is operational depth: audit-log view of auth events, admin-facing user management, per-user API tokens, configurable session TTL per group, and webhook delivery for magic links (Discord / email) alongside the in-game path |
 
 ### Stabilization
 
@@ -139,6 +140,7 @@ For detailed release notes, see the [Changelog](/docs/project/changelog).
 
 | Version | Date | Theme |
 |---------|------|-------|
+| **v0.11.0** | April 19, 2026 | Auth module — dashboard gains real multi-user login (MC-account 6-digit code, magic link, WebAuthn/passkeys, TOTP 2FA + recovery codes) with `nimbus.dashboard.*` permission tree via the Perms module; API tokens keep working as implicit admin. Module-owned plugins co-locate next to their modules on disk. Dashboard rewrites the login screen as a wizard and ships a `/profile` section |
 | **v0.10.0** | April 17, 2026 | Docker module — opt-in container backend per group/dedicated, resource limits, daemon doctor check, dashboard module page + group toggle + service badge; new `LocalServiceHandleFactory` + `ServiceMemorySource` extension points |
 | **v0.9.1** | April 15, 2026 | Backup module — scheduled tar+zstd snapshots with GFS retention, native multi-threaded zstd, SHA-256 manifests, live TOML config editing, full dashboard editor |
 | **v0.9.0** | April 14, 2026 | Punishments + Resource Packs modules, runtime plugin deployment (templates fully user-owned), Velocity + backend enforcement plugins, scoped bans |

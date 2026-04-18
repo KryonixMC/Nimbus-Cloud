@@ -21,7 +21,19 @@ data class NimbusConfig(
     val cluster: ClusterConfig = ClusterConfig(),
     val audit: AuditConfig = AuditConfig(),
     val metrics: MetricsConfig = MetricsConfig(),
-    val curseforge: CurseForgeConfig = CurseForgeConfig()
+    val curseforge: CurseForgeConfig = CurseForgeConfig(),
+    val dashboard: DashboardConfig = DashboardConfig()
+)
+
+/**
+ * Dashboard-facing config — currently just the public URL used by the
+ * auth module to construct magic-link URLs. Separate from the dashboard
+ * app itself (which has its own config inside `dashboard/`).
+ */
+@Serializable
+data class DashboardConfig(
+    @SerialName("public_url")
+    val publicUrl: String = "https://dashboard.nimbuspowered.org"
 )
 
 @Serializable

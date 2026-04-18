@@ -38,12 +38,14 @@ fun Route.groupRoutes(
 
         // GET /api/groups — List all groups
         get {
+            if (!call.requirePermission("nimbus.dashboard.groups.view")) return@get
             val groups = groupManager.getAllGroups().map { it.toResponse(registry) }
             call.respond(GroupListResponse(groups, groups.size))
         }
 
         // GET /api/groups/{name} — Get group details
         get("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.groups.view")) return@get
             val name = call.parameters["name"]!!
             val group = groupManager.getGroup(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
@@ -52,6 +54,7 @@ fun Route.groupRoutes(
 
         // POST /api/groups — Create a new group
         post {
+            if (!call.requirePermission("nimbus.dashboard.groups.edit")) return@post
             val request = call.receive<CreateGroupRequest>()
 
             val errors = validateGroupRequest(request)
@@ -81,6 +84,7 @@ fun Route.groupRoutes(
 
         // PUT /api/groups/{name} — Update a group config
         put("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.groups.edit")) return@put
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
                 ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
@@ -111,6 +115,7 @@ fun Route.groupRoutes(
 
         // DELETE /api/groups/{name} — Delete a group
         delete("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.groups.edit")) return@delete
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
                 ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))

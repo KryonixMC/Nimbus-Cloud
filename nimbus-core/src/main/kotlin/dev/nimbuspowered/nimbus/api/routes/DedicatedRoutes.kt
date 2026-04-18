@@ -46,6 +46,7 @@ fun Route.dedicatedRoutes(
 
         // GET /api/dedicated — List all dedicated configs with runtime status
         get {
+            if (!call.requirePermission("nimbus.dashboard.dedicated.view")) return@get
             val responses = dedicatedServiceManager.getAllConfigs().map { config ->
                 config.toResponse(registry, dedicatedServiceManager)
             }
@@ -54,6 +55,7 @@ fun Route.dedicatedRoutes(
 
         // GET /api/dedicated/{name} — Single dedicated service detail
         get("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.dedicated.view")) return@get
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
                 ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -62,6 +64,7 @@ fun Route.dedicatedRoutes(
 
         // POST /api/dedicated — Create a new dedicated service
         post {
+            if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@post
             val request = call.receive<CreateDedicatedRequest>()
 
             val errors = validateDedicatedRequest(request)
@@ -109,6 +112,7 @@ fun Route.dedicatedRoutes(
 
         // PUT /api/dedicated/{name} — Update config (name is immutable, taken from URL)
         put("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@put
             val name = call.parameters["name"]!!
             val existing = dedicatedServiceManager.getConfig(name)
                 ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -178,6 +182,7 @@ fun Route.dedicatedRoutes(
 
         // DELETE /api/dedicated/{name} — Delete
         delete("{name}") {
+            if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@delete
             val name = call.parameters["name"]!!
             dedicatedServiceManager.getConfig(name)
                 ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -197,6 +202,7 @@ fun Route.dedicatedRoutes(
 
         // POST /api/dedicated/{name}/start — Start dedicated service
         post("{name}/start") {
+            if (!call.requirePermission("nimbus.dashboard.services.start")) return@post
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -216,6 +222,7 @@ fun Route.dedicatedRoutes(
 
         // POST /api/dedicated/{name}/stop — Stop dedicated service
         post("{name}/stop") {
+            if (!call.requirePermission("nimbus.dashboard.services.stop")) return@post
             val name = call.parameters["name"]!!
             dedicatedServiceManager.getConfig(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -235,6 +242,7 @@ fun Route.dedicatedRoutes(
 
         // POST /api/dedicated/{name}/restart — Restart dedicated service
         post("{name}/restart") {
+            if (!call.requirePermission("nimbus.dashboard.services.restart")) return@post
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
                 ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
@@ -269,6 +277,7 @@ fun Route.dedicatedRoutes(
                 // POST /api/dedicated/modpack/import — Import modpack from Modrinth/CurseForge URL or slug
                 // Body: { source, name, port, memory, proxyEnabled }
                 post("import") {
+                    if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@post
                     val request = call.receive<DedicatedModpackImportRequest>()
 
                     if (request.name.isBlank() || !request.name.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
@@ -380,6 +389,7 @@ fun Route.dedicatedRoutes(
                 // POST /api/dedicated/modpack/upload?name=X&port=P&memory=M&proxyEnabled=true&fileName=X
                 // Body: raw ZIP / .mrpack stream
                 post("upload") {
+                    if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@post
                     val name = call.request.queryParameters["name"] ?: ""
                     val port = call.request.queryParameters["port"]?.toIntOrNull() ?: 0
                     val memory = call.request.queryParameters["memory"] ?: "4G"

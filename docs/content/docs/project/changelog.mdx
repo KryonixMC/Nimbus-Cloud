@@ -17,6 +17,106 @@ All notable changes to this project are documented in this file. The format is b
 
 ---
 
+## [0.11.0] - 2026-04-19
+
+A new first-party **Auth** module: the dashboard gains real multi-user authentication backed by Minecraft accounts, with no passwords, no OAuth provider, and no per-user credential files. Operators log in by typing a 6-digit code in-game, clicking a chat link, or tapping Touch ID — sessions are then gated by a `nimbus.dashboard.*` permission tree resolved through the existing Perms module. API tokens keep working as implicit admins so every existing CLI, automation script, and CI pipeline survives untouched.
+
+### Added
+
+- **Auth module** — Dashboard authentication + RBAC, backed by the Perms module for permission resolution. Loaded as a controller module (migration range 8000+), auto-deploys its own Velocity plugin, and exposes four login paths that all issue the same shape of session.
+  - **MC-account code login.** The user types a name in the dashboard, Nimbus mints a 6-digit challenge and sends it to the online player via `/nimbus dashboard login`. The in-game command lives on the Bridge-forwarded `ModuleCommand` pathway that Punishments/Perms/Scaling already use — no separate `/dashboard` command, no custom Velocity plumbing on the module side. Caller UUID is forwarded so the command is scoped to the player typing it
+  - **Magic-link login.** Alternative to the code path: dashboard calls `POST /api/auth/deliver-magic-link`, controller fires the new `AUTH_MAGIC_LINK_DELIVERY` module event, the auth-velocity plugin subscribes and pushes a clickable chat component to the target player. One-time-use, TTL-expiring, URL contains only a random token (no PII). Rate-limited on the public delivery endpoint
+  - **Passkey / WebAuthn login.** Built on `com.yubico:webauthn-server-core:2.6.0` (shaded into the core fat JAR so per-module classloader isolation still holds). MC UUID packs into a 16-byte `userHandle` so browsers can offer discoverable credentials — no need to type a username first. After a one-time enrollment via an existing session, users authenticate with Touch ID / Windows Hello / a platform or roaming security key. Ceremony state is held in a TTL-bounded in-memory cache; registered credentials live in the new `dashboard_webauthn_credentials` table with the COSE public key, a monotonic sign counter for cloning detection, the MC name at enrollment time, and an operator-supplied label per device
+  - **TOTP 2FA + recovery codes.** RFC 6238 HMAC-SHA1 6-digit codes with a configurable `±N` step window. Secrets stored AES-GCM-encrypted with `config/modules/auth/session.key` (auto-generated, chmod 600, never rotate without invalidating every 2FA enrollment). Ten single-use recovery codes issued at setup, SHA-256 hashed at rest. Half-auth `challengeId` issued in-memory during TOTP verification so the 2FA step is crash-ephemeral by design
+  - **7-day rolling sessions.** Session tokens never land on disk as raw strings — the table stores only a SHA-256 hash of the token; the raw value lives exclusively in the dashboard's httpOnly cookie / `localStorage`. Sessions carry a permission snapshot at issuance time; the Perms module fires `PermissionsChanged` events and the Auth module refreshes affected snapshots on the fly instead of re-reading on every request
+  - **API tokens keep working as implicit admins.** Every existing bearer-token call gets `nimbus.dashboard.*` access automatically. Zero breaking changes for CLI tooling, automation, or the Remote CLI
+- **Permission model — `nimbus.dashboard.*`** nodes resolved through the Perms module. Route guards live on every admin-facing endpoint (services, groups, dedicated, config, files, modules, system, audit, cluster, players, punishments-per-action, resourcepacks, scaling, maintenance). Public endpoints (`/api/health`), SDK-telemetry endpoints, and cluster-token endpoints (`/api/cluster/*`, `/api/services/.../state/*`) are intentionally unguarded. Permission checks for the API-token principal short-circuit to `true` so nothing breaks for operators who never enable user logins
+- **Velocity plugin — `nimbus-auth-velocity.jar`.** Auto-deployed by the Auth module to every proxy on every service prepare. Does two things:
+  - Subscribes to `AUTH_MAGIC_LINK_DELIVERY` module events and pushes clickable chat components via `TextCompat.sendClickableLink` (works on Adventure-native and legacy BungeeCord-chat proxies alike)
+  - Does **not** register its own `/dashboard` command — login/sessions/logout-all live under `/nimbus dashboard ...` via the shared `ModuleCommand` → Bridge `/nimbus` pattern, consistent with every other module's in-game surface
+- **Message templates** at `config/modules/auth/messages.toml` — operator-customisable code/link/session strings with `{code}`, `{url}`, `{click}`, `{ttl}` placeholders so networks can stamp their own branding on the login prompt
+- **Self-service session management.** New user-scoped endpoints (`GET /api/auth/my-sessions`, `DELETE /api/auth/my-sessions/{id}`, `POST /api/auth/my-sessions/revoke-others`) let signed-in users see where else they're logged in and revoke individual sessions or "sign out everywhere else" without admin intervention. The existing `GET /api/auth/sessions` + `POST /api/auth/logout-all` endpoints are now SERVICE-auth only, for the in-game command path
+
+### Core changes (minimal, non-breaking)
+
+All additive — installations that don't enable the Auth module keep working in token-only mode.
+
+- `ModuleContext.getServiceByClassName(fqcn: String)` — name-based cross-classloader service lookup. Every module has its own `URLClassLoader`, so holding a compile-time `Class<?>` reference to a service registered by another module doesn't work (class identity is classloader-scoped). Existing `getService<T>()` keeps working for same-classloader lookups; the new method walks registered service classes + their supertypes to find a match by name. Needed so the Auth module's `PermissionResolver` can reach the Perms module's `PermissionManager` reflectively
+- `ModuleCommand.execute(args, output, caller: CommandCaller?)` overload. Default implementation delegates to the caller-less variant, so every existing module command keeps compiling unchanged. `CommandCaller(uuid, name)` lives in `modules/api` so modules can declare caller-scoped subcommands without depending on Velocity
+- `CommandExecuteRequest` carries an optional `caller` DTO end-to-end (Bridge → controller). `CloudCommand.executeRemoteCommand` populates it when the source is a Velocity `Player`
+- `[dashboard] public_url` field in `nimbus.toml` — canonical base URL the dashboard is reachable at. Used for magic-link construction and as the default RP origin for WebAuthn
+- `NimbusModule.requires` honoured during module load — the Auth module declares `requires = ["perms"]`. If Perms isn't installed the auth module falls back to token-only mode and logs a `WARN`; it never silently does nothing
+
+### Refactors
+
+Neither ships any behavior change on its own, but both needed to happen before v0.11 could feel clean:
+
+- **Module-owned plugins co-locate with their modules.** `plugins/` now only holds core plugins deployed on every service/proxy (`plugins/sdk`, `plugins/bridge`). Module-specific Minecraft-side code moves next to its owning module so each module + its plugin form one logical unit on disk:
+  - `plugins/perms` → `modules/perms/plugin`
+  - `plugins/display` → `modules/display/plugin`
+  - `plugins/resourcepacks` → `modules/resourcepacks/plugin`
+  - `plugins/punishments-backend` → `modules/punishments/plugin-backend`
+  - `plugins/punishments-velocity` → `modules/punishments/plugin-velocity`
+  - `plugins/auth-velocity` → `modules/auth/plugin-velocity` (new in this release)
+  
+  Pure disk-layout refactor: Gradle project names (`:nimbus-perms`, `:nimbus-auth-velocity`, ...) are unchanged — only `projectDir` mappings in `settings.gradle.kts` were updated. `PluginDeployment` resourcePaths (`plugins/nimbus-*.jar`) stay the same because they reference the shadow-jar's internal resource layout, not source paths
+- **`TextCompat.sendClickableLink` + `AdventureHelper.sendClickableLink`** added to the SDK as general-purpose cross-version helpers. Kept in the SDK rather than the Auth module because they're genuinely reusable — any module that wants to send clickable chat components from a Velocity plugin now has a one-liner
+
+### Database
+
+Four new tables under the 8000+ migration range:
+
+- `dashboard_sessions` — token hash, uuid, mc name, login method, issued/last-used timestamps, cached permission snapshot
+- `dashboard_login_challenges` — pending 6-digit codes + magic-link tokens, TTL-expired
+- `dashboard_totp` — AES-GCM-encrypted secrets + enrollment state
+- `dashboard_recovery_codes` — SHA-256 hashed, single-use
+- `dashboard_webauthn_credentials` — COSE public key, sign counter, AAGUID, label, mc name at enrollment
+
+### Configuration
+
+- New `config/modules/auth/auth.toml` — `[sessions]`, `[totp]`, `[webauthn]` blocks. RP ID and origins default to values derived from `[dashboard] public_url`, configurable for localhost / reverse-proxy setups
+- New `config/modules/auth/messages.toml` — operator-customisable in-game strings
+- New `config/modules/auth/session.key` — auto-generated 32-byte AES-GCM key, chmod 600. **Back this up** — losing it invalidates every TOTP enrollment (recovery codes still work, passkeys still work, sessions still work)
+- New `[dashboard] public_url` in `nimbus.toml` — required if you want magic-link URLs to point at the right host
+
+### API
+
+- `POST /api/auth/generate-code` (SERVICE), `POST /api/auth/consume-challenge` (public), `POST /api/auth/request-magic-link` (SERVICE), `POST /api/auth/deliver-magic-link` (public, rate-limited), `POST /api/auth/consume-magic-link` (public)
+- `GET /api/auth/me`, `POST /api/auth/logout`
+- `POST /api/auth/totp-verify` (public; accepts live TOTP or recovery codes)
+- `GET /api/profile/totp/status`, `POST /api/profile/totp/enroll|confirm|disable`
+- `POST /api/auth/passkey/{register,login}/{start,finish}`; `GET /api/auth/passkey/credentials`, `DELETE /api/auth/passkey/credentials/{id}`
+- `GET /api/auth/my-sessions`, `DELETE /api/auth/my-sessions/{sessionId}`, `POST /api/auth/my-sessions/revoke-others`
+- `GET /api/auth/sessions` (SERVICE), `POST /api/auth/logout-all` (SERVICE)
+
+### Docs
+
+- New guide: [`/docs/guide/dashboard-auth`](/docs/guide/dashboard-auth) — end-user login flow, 2FA, passkeys, permission model, recommended group templates, backwards-compat matrix, security notes
+- New reference: [`/docs/config/auth`](/docs/config/auth) — `auth.toml` field-by-field, endpoint table, `session.key` backup warning
+
+### Security hardening (pre-release review)
+
+Fixes landed on top of the phase-1 through phase-9 feature work, driven by a pre-release review pass:
+
+- **TOTP replay prevention (RFC 6238 §5.2).** New `last_used_step` column (migration `V8005`) on `dashboard_totp`; `verifyAndAdvance` atomically advances the step counter so an observed code cannot be re-accepted within the same or any earlier step inside the tolerance window
+- **TOTP window cap tightened.** Config `[totp] window` now coerces into `0..2` (was `0..10`). Default `1` = ±30 s, hard max `2` = ±60 s; paired with the replay column the effective "how long is a captured code live" dropped from potentially 5 minutes to a single 30-second step
+- **WebAuthn `CredentialRepository` is pre-fetch only.** The earlier implementation called `runBlocking { newSuspendedTransaction { … } }` from inside Yubico's synchronous callbacks, which could deadlock the Ktor IO pool under load. Each ceremony now snapshots the relevant rows into an in-memory `CredentialCache` *before* entering the library, and the in-memory repo serves lookups without doing any I/O
+- **`allowOriginPort` is operator-gated.** New `[webauthn] allow_origin_port` config key, off by default. Earlier iteration hard-coded `true` which weakened phishing-resistance (`host:443` and `host:3000` were treated as the same origin). Flip on only for local dev; production keeps strict origin binding
+- **Short-lived WebSocket tickets.** New `GET /api/auth/ws-ticket` (bearer session) mints a 30-second, single-use `wt_` token. The dashboard exchanges its bearer for a ticket before opening any WS or SSE connection, so the long-lived session token never lands in a URL query string, access log, or referrer header. `SessionValidator` transparently redeems tickets on first use
+- **Rate-limit state now DB-backed.** The per-UUID 5-per-minute quota on code + magic-link issuance is counted from `dashboard_login_challenges` rows instead of an in-memory map — a controller restart no longer resets the counter
+- **`PLAYER_OFFLINE` no longer leaks existence.** The dashboard-initiated magic-link delivery endpoint now returns a generic "Player not found — please join any Nimbus server and try again" for every negative outcome (offline, never existed, Players module absent)
+- **Permission snapshots stored as JSON.** `permissions_snapshot` is now a JSON array, so nodes containing commas round-trip cleanly. Legacy comma-joined snapshots are still readable — existing sessions survive the upgrade
+- **Session token persistence moved to `sessionStorage`.** Session bearers now survive a page refresh without moving to `localStorage` (no cross-tab reads, cleared on tab close). API tokens continue to live in-memory only
+- **Passkey login is treated as MFA-equivalent.** A WebAuthn assertion proves possession (authenticator holds the private key) + user verification (biometric or PIN), so successful passkey login doesn't additionally prompt for TOTP. Stricter requirements should be enforced via the authenticator's user-verification policy rather than stacking redundant factors. Code + magic-link logins continue to gate on TOTP
+
+### Notes
+
+- **No breaking changes for existing token-based setups.** Bearer tokens keep working identically. Upgrading from 0.10.0 is drop-in — the auth module migrations run on first boot, no operator action required
+- **Phase-1 scope for audit logging.** Auth events (login, logout, TOTP enroll/disable, passkey enroll/delete) land in the existing `audit_log` table via the standard `AuditCollector`. A dedicated Auth-module audit view is a follow-up
+- **Integration tests deferred.** The existing module test harness doesn't cover full Ktor + Perms integration; adding it properly is its own work item. The login flows have been exercised end-to-end on a local install against a real MC account with both platform and roaming authenticators
+
+---
+
 ## [0.10.0] - 2026-04-17
 
 A new first-party **Docker** module: services can opt in to running inside Docker containers instead of as bare Java processes, with hard kernel-enforced resource limits, clean cleanup, and mixed-Java-version support — all while the process path stays the untouched default for the rest of the installation.

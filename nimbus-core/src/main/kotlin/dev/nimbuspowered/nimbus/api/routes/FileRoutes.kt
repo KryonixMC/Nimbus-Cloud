@@ -35,6 +35,7 @@ fun Route.fileRoutes(
         // GET /api/files/{scope} — List root of scope
         // GET /api/files/{scope}/{path...} — List directory or read file
         get("{path...}") {
+            if (!call.requirePermission("nimbus.dashboard.services.edit_config")) return@get
             val (scopeName, resolvedPath) = resolveScopePath(call, scopeRoots)
                 ?: return@get
 
@@ -96,6 +97,7 @@ fun Route.fileRoutes(
 
         // PUT /api/files/{scope}/{path...} — Write text content to file
         put("{path...}") {
+            if (!call.requirePermission("nimbus.dashboard.services.edit_config")) return@put
             val (scopeName, resolvedPath) = resolveScopePath(call, scopeRoots)
                 ?: return@put
 
@@ -115,6 +117,7 @@ fun Route.fileRoutes(
         // POST /api/files/{scope}/{path...}?mkdir — Create directory
         // POST /api/files/{scope}/{path...} — Multipart file upload
         post("{path...}") {
+            if (!call.requirePermission("nimbus.dashboard.services.edit_config")) return@post
             val (scopeName, resolvedPath) = resolveScopePath(call, scopeRoots)
                 ?: return@post
 
@@ -179,6 +182,7 @@ fun Route.fileRoutes(
 
         // DELETE /api/files/{scope}/{path...} — Delete file or empty directory
         delete("{path...}") {
+            if (!call.requirePermission("nimbus.dashboard.services.edit_config")) return@delete
             val (scopeName, resolvedPath) = resolveScopePath(call, scopeRoots)
                 ?: return@delete
 

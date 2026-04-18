@@ -9,6 +9,7 @@
     "templates",
     "---Modules---",
     "permissions",
+    "auth",
     "display",
     "scaling",
     "punishments",

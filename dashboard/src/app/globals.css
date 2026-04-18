@@ -210,3 +210,32 @@
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: oklch(0.5 0 0 / 40%);
 }
+/* Login background — pixel sky. Stars twinkle, clouds drift. All via CSS
+   so the component is purely declarative SVG. */
+@keyframes pixel-sky-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50%      { opacity: 1;    }
+}
+.pixel-sky-stars rect {
+  animation: pixel-sky-twinkle 3.5s ease-in-out infinite;
+}
+
+@keyframes pixel-sky-drift {
+  /* Start fully off-screen left, end fully off-screen right, then reset. */
+  0%   { transform: translateX(-30%); }
+  100% { transform: translateX(130%); }
+}
+.pixel-sky-cloud {
+  animation: pixel-sky-drift linear infinite;
+  transform-box: fill-box;
+}
+
+/* Respect users who prefer reduced motion — freeze the sky to its initial
+   frame and hold the twinkle at max opacity. Keeps the aesthetic, drops
+   the motion. */
+@media (prefers-reduced-motion: reduce) {
+  .pixel-sky-stars rect,
+  .pixel-sky-cloud {
+    animation: none !important;
+  }
+}

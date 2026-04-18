@@ -1,5 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
+import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.module.ModuleManager
 import io.ktor.http.*
 import io.ktor.server.response.*
@@ -12,6 +13,7 @@ fun Route.moduleRoutes(moduleManager: ModuleManager) {
 
         // List all loaded modules
         get {
+            if (!call.requirePermission("nimbus.dashboard.admin")) return@get
             val loaded = moduleManager.getModules().map {
                 val dc = it.dashboardConfig
                 ModuleResponse(
@@ -44,6 +46,7 @@ fun Route.moduleRoutes(moduleManager: ModuleManager) {
 
         // Install a module
         post("/install/{id}") {
+            if (!call.requirePermission("nimbus.dashboard.admin")) return@post
             val id = call.parameters["id"]!!
             when (moduleManager.install(id)) {
                 ModuleManager.InstallResult.INSTALLED ->
@@ -57,6 +60,7 @@ fun Route.moduleRoutes(moduleManager: ModuleManager) {
 
         // Uninstall a module
         post("/uninstall/{id}") {
+            if (!call.requirePermission("nimbus.dashboard.admin")) return@post
             val id = call.parameters["id"]!!
             if (moduleManager.uninstall(id)) {
                 call.respond(ModuleActionResponse(true, "Module '$id' uninstalled — restart to take effect"))

@@ -21,8 +21,11 @@ fun Route.configRoutes(
     config: NimbusConfig,
     configPath: Path
 ) {
-    // GET /api/config — Read current config (token masked)
+    // GET /api/config — Read current config (token masked).
+    // No dedicated node exists; gate on admin since this exposes network/api
+    // binding details that aren't appropriate for non-admin dashboard users.
     get("/api/config") {
+        if (!call.requirePermission("nimbus.dashboard.admin")) return@get
         call.respond(ConfigResponse(
             network = ConfigNetworkResponse(config.network.name, config.network.bind),
             controller = ConfigControllerResponse(config.controller.maxMemory, config.controller.maxServices, config.controller.heartbeatInterval),
