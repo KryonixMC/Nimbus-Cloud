@@ -343,12 +343,12 @@ export function LoginForm({
         <CardHeader className="text-center">
           <div className="mb-2 flex justify-center">
             <Image
-              src="/banner.svg"
+              src="/icon.png"
               alt="Nimbus"
-              width={240}
-              height={66}
+              width={64}
+              height={64}
               priority
-              className="h-auto w-[240px]"
+              className="h-16 w-16"
             />
           </div>
           {description && <CardDescription>{description}</CardDescription>}
@@ -417,7 +417,7 @@ export function LoginForm({
               />
               <MethodCard
                 title="API Token"
-                description="Use a long-lived controller token (admin-only)."
+                description="Use a long-lived controller token."
                 icon={
                   /* Custom head from minecraft-heads.com #120843 (Command Block).
                      Rendered via mc-heads.net using the textures.minecraft.net
