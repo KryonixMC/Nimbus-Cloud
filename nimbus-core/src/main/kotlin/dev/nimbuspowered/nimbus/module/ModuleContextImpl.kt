@@ -112,6 +112,25 @@ class ModuleContextImpl(
         services[type] = instance
     }
 
+    override fun getServiceByClassName(fqcn: String): Any? {
+        // Walk registered services looking for a class-identity-independent
+        // name match. Needed because each module JAR has its own URLClassLoader
+        // and Class<?> equality is reference-based — see KDoc on the interface.
+        for ((key, value) in services) {
+            if (key.name == fqcn) return value
+            // Walk the registered type's superclasses + interfaces too, so a
+            // service registered under its concrete class is still findable
+            // by any of its declared supertype FQCNs.
+            var c: Class<*>? = key
+            while (c != null) {
+                if (c.name == fqcn) return value
+                c.interfaces.forEach { if (it.name == fqcn) return value }
+                c = c.superclass
+            }
+        }
+        return null
+    }
+
     override fun registerDoctorCheck(check: DoctorCheck) {
         _doctorChecks.add(check)
     }
