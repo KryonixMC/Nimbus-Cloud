@@ -184,7 +184,15 @@ class AuthModule : NimbusModule {
         // Passkey / WebAuthn routes — register/finish require bearer session,
         // login/start+finish are public. All validation is inline.
         context.registerRoutes(
-            block = { passkeyRoutes(webAuthnService, sessionService, permissionResolver) },
+            block = {
+                passkeyRoutes(
+                    webAuthnService,
+                    sessionService,
+                    permissionResolver,
+                    totpService,
+                    pendingTotpStore
+                )
+            },
             auth = AuthLevel.NONE
         )
 

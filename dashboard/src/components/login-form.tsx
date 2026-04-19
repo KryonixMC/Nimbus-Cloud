@@ -100,6 +100,8 @@ export function LoginForm({
   const [totpCode, setTotpCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  // Tracks which screen sent the user to totp so "back" returns there.
+  const [totpOrigin, setTotpOrigin] = useState<Screen>("code");
 
   function go(next: Screen) {
     setError("");
@@ -119,7 +121,7 @@ export function LoginForm({
         setScreen("method");
         break;
       case "totp":
-        setScreen("code");
+        setScreen(totpOrigin === "method" ? "method" : "code");
         break;
       default:
         break;
@@ -178,6 +180,7 @@ export function LoginForm({
       if (body.totpRequired && body.challengeId) {
         setChallengeId(body.challengeId);
         setTotpCode("");
+        setTotpOrigin("code");
         go("totp");
         return;
       }
@@ -199,8 +202,19 @@ export function LoginForm({
     setLoading(true);
     try {
       const res = await loginWithPasskey(resolvedUrl || host);
-      setUserSessionCredentials(resolvedUrl || host, res.token);
-      router.push("/");
+      if (res.totpRequired && res.challengeId) {
+        setChallengeId(res.challengeId);
+        setTotpCode("");
+        setTotpOrigin("method");
+        go("totp");
+        return;
+      }
+      if (res.token) {
+        setUserSessionCredentials(resolvedUrl || host, res.token);
+        router.push("/");
+        return;
+      }
+      setError("Unexpected response from controller");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Passkey login failed";
       // Abort / user-cancel = silent.

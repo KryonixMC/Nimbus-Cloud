@@ -18,10 +18,18 @@ interface StartResponse {
   publicKeyOptionsJson: JsonOptions;
 }
 
+/**
+ * Union-shape passkey login response. When the account has TOTP enabled the
+ * controller defers session issuance and returns a `challengeId` (same pattern
+ * as `/api/auth/consume-challenge`). The dashboard trades it at
+ * `/api/auth/totp-verify` for the real session.
+ */
 interface LoginFinishResponse {
-  token: string;
-  expiresAt: number;
-  user: UserInfo;
+  token?: string;
+  expiresAt?: number;
+  user?: UserInfo;
+  totpRequired?: boolean;
+  challengeId?: string;
 }
 
 interface CredentialDto {

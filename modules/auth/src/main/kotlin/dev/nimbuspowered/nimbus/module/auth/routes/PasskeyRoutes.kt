@@ -4,8 +4,10 @@ import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.auth.service.PendingTotpStore
 import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
+import dev.nimbuspowered.nimbus.module.auth.service.TotpService
 import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
 import io.ktor.http.*
 import io.ktor.server.application.ApplicationCall
@@ -53,11 +55,23 @@ data class PasskeyListResponse(val credentials: List<PasskeyCredentialDto>)
 @Serializable
 data class PasskeyStartLoginRequest(val username: String? = null)
 
+/**
+ * Union-shape login result. When the user has TOTP enabled the controller
+ * hands back a `challengeId` (same pattern as `/api/auth/consume-challenge`)
+ * instead of a session token — the dashboard then posts it with the
+ * authenticator code to `/api/auth/totp-verify` to receive the real session.
+ *
+ * Passkeys are strong authentication on their own, but TOTP is an explicit
+ * user-chosen second factor: if an operator enabled it we honour it on every
+ * login path, not just the 6-digit/magic-link one.
+ */
 @Serializable
 data class PasskeyLoginResult(
-    val token: String,
-    val expiresAt: Long,
-    val user: UserInfo
+    val token: String? = null,
+    val expiresAt: Long? = null,
+    val user: UserInfo? = null,
+    val totpRequired: Boolean = false,
+    val challengeId: String? = null
 )
 
 /**
@@ -67,7 +81,9 @@ data class PasskeyLoginResult(
 fun Route.passkeyRoutes(
     webAuthn: WebAuthnService,
     sessionService: SessionService,
-    permissionResolver: PermissionResolver
+    permissionResolver: PermissionResolver,
+    totpService: TotpService,
+    pendingTotpStore: PendingTotpStore
 ) {
     val json = Json { ignoreUnknownKeys = true }
 
@@ -173,6 +189,26 @@ fun Route.passkeyRoutes(
                 ?: return@post call.respond(HttpStatusCode.InternalServerError,
                     apiError("Invalid userHandle", ApiErrors.INTERNAL_ERROR))
             val permissions = permissionResolver.resolve(uuidStr)
+            val totpEnabled = totpService.isEnabled(uuidStr)
+
+            // Honour TOTP on the passkey path too — same half-authenticated
+            // hand-off as `/api/auth/consume-challenge`. The dashboard trades
+            // the `challengeId` at `/api/auth/totp-verify` for the real session.
+            if (totpEnabled) {
+                val pending = pendingTotpStore.create(
+                    uuid = uuid,
+                    name = name,
+                    permissions = permissions,
+                    ip = call.request.local.remoteAddress,
+                    userAgent = call.request.headers["User-Agent"],
+                    loginMethod = "passkey"
+                )
+                return@post call.respond(PasskeyLoginResult(
+                    totpRequired = true,
+                    challengeId = pending.challengeId
+                ))
+            }
+
             val issued = sessionService.issue(
                 uuid = uuid,
                 name = name,
