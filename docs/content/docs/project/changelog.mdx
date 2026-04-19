@@ -17,6 +17,28 @@ All notable changes to this project are documented in this file. The format is b
 
 ---
 
+## [0.11.1] - 2026-04-19
+
+Quick-win patch from the v0.11 production-readiness audit. Tightens the new auth surface and adds proper audit-trail coverage for dashboard logins. Fully backwards-compatible; no migration changes.
+
+### Added
+
+- **Per-IP brute-force throttle on `consume-challenge`.** New `[login_challenge] max_consume_failures_per_minute = 10` in `auth.toml`. Defends the 6-digit code's 60s TTL window — the global API limiter (120 req/min) was the only previous defence, which was too coarse for a 10⁶ search space. Set to `0` to disable
+- **Auth events on the `EventBus`** — `DashboardLoginSucceeded`, `DashboardLoginFailed`, `DashboardSessionRevoked` are now emitted on every login, failed login, and session revocation. The `AuditCollector` persists them to `audit_log` automatically — visible via the `audit` console command and `GET /api/audit`. Each event carries the source IP, affected UUID (when known), and a reason/scope tag
+- **`[console] geo_lookup_enabled = false`** in `nimbus.toml` — kill-switch for the Remote-CLI session GeoIP lookup. **Default flipped to `false`** in v0.11.1; flip on if you want city-level location strings in your CLI session log. Privacy-preserving by default
+
+### Changed
+
+- **GeoIP lookup uses HTTPS instead of cleartext HTTP.** The previous `http://ip-api.com/json/...` call leaked the connecting operator IP to passive observers on the network path. The free tier of ip-api.com may now return errors; combine with `geo_lookup_enabled = false` to disable entirely
+- **Docs — `[Auth Module]` page** now documents the API-token bypass behaviour explicitly: holding `NIMBUS_API_TOKEN` is implicit `nimbus.dashboard.admin` and bypasses TOTP. Treat the token like a root SSH key. (Behaviour unchanged from v0.11.0, but undocumented before.)
+
+### Known follow-ups (deferred)
+
+- 6 pre-existing dashboard ESLint errors (setState-in-effect / refs-during-render) blocking Vercel deployment — separate dashboard-only PR.
+- Module-level integration test harness — tracked for v1.0 readiness.
+
+---
+
 ## [0.11.0] - 2026-04-19
 
 A new first-party **Auth** module: the dashboard gains real multi-user authentication backed by Minecraft accounts, with no passwords, no OAuth provider, and no per-user credential files. Operators log in by typing a 6-digit code in-game, clicking a chat link, or tapping Touch ID — sessions are then gated by a `nimbus.dashboard.*` permission tree resolved through the existing Perms module. API tokens keep working as implicit admins so every existing CLI, automation script, and CI pipeline survives untouched.

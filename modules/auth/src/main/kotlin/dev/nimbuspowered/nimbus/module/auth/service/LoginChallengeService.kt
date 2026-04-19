@@ -16,7 +16,9 @@ import org.jetbrains.exposed.sql.update
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.ArrayDeque
 import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 
 enum class ChallengeKind(val wire: String) {
     CODE("code"),
@@ -62,6 +64,12 @@ class LoginChallengeService(
     private val secureRandom = SecureRandom()
 
     class RateLimitedException(msg: String) : RuntimeException(msg)
+
+    // Per-source-IP sliding window of failed consume timestamps. Survives only
+    // for the controller's lifetime; that's fine because the 60s window is
+    // short and a restart is itself a hard reset for an attacker.
+    private val consumeFailures = ConcurrentHashMap<String, ArrayDeque<Long>>()
+    private val consumeWindowMs = 60_000L
 
     suspend fun issueCode(uuid: String, name: String): IssuedChallenge =
         issue(uuid, name, ChallengeKind.CODE, originIp = null)
@@ -123,11 +131,21 @@ class LoginChallengeService(
     /**
      * Atomically consume a challenge by its raw secret. Returns `null` if the
      * challenge does not exist, has already been consumed, or has expired.
+     *
+     * `originIp`, when supplied, gates the call through a per-IP sliding-window
+     * brute-force throttle. After `max_consume_failures_per_minute` failed
+     * attempts within 60s the call throws [RateLimitedException] without
+     * touching the database. A successful consume clears the IP's failure
+     * window. Pass `null` (e.g. for tests) to skip the throttle.
      */
-    suspend fun consume(raw: String): ConsumedChallenge? {
-        val hash = sha256Hex(raw.trim())
+    suspend fun consume(raw: String, originIp: String? = null): ConsumedChallenge? {
         val now = System.currentTimeMillis()
-        return newSuspendedTransaction(Dispatchers.IO, db.database) {
+        if (originIp != null) {
+            val limit = config().loginChallenge.maxConsumeFailuresPerMinute
+            if (limit > 0) checkConsumeThrottle(originIp, now, limit)
+        }
+        val hash = sha256Hex(raw.trim())
+        val result = newSuspendedTransaction(Dispatchers.IO, db.database) {
             val row = DashboardLoginChallenges.selectAll()
                 .where { DashboardLoginChallenges.challengeHash eq hash }
                 .firstOrNull() ?: return@newSuspendedTransaction null
@@ -149,6 +167,33 @@ class LoginChallengeService(
                 name = row[DashboardLoginChallenges.name],
                 originIp = row[DashboardLoginChallenges.originIp]
             )
+        }
+        if (originIp != null) {
+            if (result == null) recordConsumeFailure(originIp, now)
+            else consumeFailures.remove(originIp)
+        }
+        return result
+    }
+
+    private fun checkConsumeThrottle(ip: String, now: Long, limit: Int) {
+        val deque = consumeFailures[ip] ?: return
+        synchronized(deque) {
+            while (deque.peekFirst()?.let { now - it > consumeWindowMs } == true) {
+                deque.pollFirst()
+            }
+            if (deque.size >= limit) {
+                throw RateLimitedException("Too many failed login attempts from $ip")
+            }
+        }
+    }
+
+    private fun recordConsumeFailure(ip: String, now: Long) {
+        val deque = consumeFailures.computeIfAbsent(ip) { ArrayDeque() }
+        synchronized(deque) {
+            deque.addLast(now)
+            while (deque.peekFirst()?.let { now - it > consumeWindowMs } == true) {
+                deque.pollFirst()
+            }
         }
     }
 

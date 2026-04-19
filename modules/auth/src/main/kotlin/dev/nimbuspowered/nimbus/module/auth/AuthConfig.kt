@@ -47,7 +47,16 @@ data class LoginChallengeConfig(
     @SerialName("magic_link_enabled")
     val magicLinkEnabled: Boolean = true,
     @SerialName("max_generates_per_minute")
-    val maxGeneratesPerMinute: Int = 5
+    val maxGeneratesPerMinute: Int = 5,
+    /**
+     * Per-source-IP brute-force cap on `consume-challenge`. After this many
+     * *failed* consume attempts within a 60s window from the same client IP,
+     * further attempts are rejected with HTTP 429 until the window decays.
+     * The global API limiter (120 req/min) is too coarse to defend the
+     * 6-digit code's 60s TTL on its own — see audit FINDING-02 (v0.11.1).
+     */
+    @SerialName("max_consume_failures_per_minute")
+    val maxConsumeFailuresPerMinute: Int = 10
 )
 
 @Serializable
@@ -168,6 +177,9 @@ class AuthConfigStore(private val moduleDir: Path, private val baseDir: Path) {
             magic_link_token_bytes = 32
             magic_link_enabled = true
             max_generates_per_minute = 5
+            # Per-IP cap on failed consume attempts (60s window). Defends the
+            # 6-digit code against brute-force inside its TTL.
+            max_consume_failures_per_minute = 10
 
             [dashboard]
             public_url = "https://dashboard.nimbuspowered.org"

@@ -29,6 +29,7 @@ magic_link_ttl_seconds = 60
 magic_link_token_bytes = 32
 magic_link_enabled = true
 max_generates_per_minute = 5
+max_consume_failures_per_minute = 10
 
 [dashboard]
 public_url = "https://dashboard.nimbuspowered.org"
@@ -70,6 +71,7 @@ allow_origin_port = false           # turn on only for local dev
 | `magic_link_token_bytes`    | `32`        | 256-bit URL-safe random token.                                       |
 | `magic_link_enabled`        | `true`      | Operator kill-switch — `false` forces code-only login.               |
 | `max_generates_per_minute`  | `5`         | Per-UUID rate limit on code/link issuance.                           |
+| `max_consume_failures_per_minute` | `10`  | Per-source-IP brute-force cap on `consume-challenge` (sliding 60s window). After this many failed attempts further consume calls are rejected with HTTP 429 until the window decays. Set to `0` to disable. Defends the 6-digit code's TTL window. *Added v0.11.1.* |
 
 ## `[dashboard]`
 
@@ -147,3 +149,31 @@ Passkey / WebAuthn settings. The module ships with sensible defaults — you onl
 | `DELETE /api/auth/passkey/credentials/{id}` | Bearer session          | Deletes a registered passkey.                                                                          |
 
 Service-token endpoints are called by the controller's own `/nimbus dashboard ...` `ModuleCommand` handler when a player runs the in-game command (the caller UUID is forwarded from the Bridge plugin via `CommandExecuteRequest`). The `nimbus-auth-velocity` plugin itself only subscribes to the `AUTH_MAGIC_LINK_DELIVERY` module event — it doesn't hold a service token and doesn't call these endpoints directly.
+
+## API tokens vs. dashboard sessions
+
+<Callout type="warn">
+  **The `NIMBUS_API_TOKEN` (env var or `[api] token` in `nimbus.toml`) is implicit `nimbus.dashboard.admin` and bypasses TOTP.**
+
+  This is intentional — it keeps every script, CI job, and SDK call that already uses the API token working without forcing a 2FA dance on machine-to-machine traffic. But it means anyone holding the token has full admin access without going through the MC-account login or the TOTP step.
+
+  Treat the API token like a root SSH key:
+  - Never commit it to version control.
+  - Rotate it whenever someone with access leaves or a machine is decommissioned.
+  - Don't share it across operators — give each their own MC-account session instead.
+  - If you only need read-only programmatic access, prefer issuing an MC-account session for a low-privilege user and using its bearer.
+
+  Audit events (`DashboardLoginSucceeded` etc., added in v0.11.1) are **not** emitted for API-token calls — those show up in the regular `audit_log` under the `actor` field as `api:<name>` instead.
+</Callout>
+
+## Audit events (v0.11.1+)
+
+The auth module emits `NimbusEvent.Dashboard*` events into the core `EventBus`, which the `AuditCollector` persists to the `audit_log` table:
+
+| Event                           | Triggered by                                                              |
+|---------------------------------|---------------------------------------------------------------------------|
+| `DashboardLoginSucceeded`       | Successful end-to-end login (post-TOTP if required).                      |
+| `DashboardLoginFailed`          | Invalid challenge, wrong TOTP, or rate-limited consume.                   |
+| `DashboardSessionRevoked`       | `/api/auth/logout`, sibling-revoke, `revoke-others`, `logout-all`.         |
+
+Each carries the source IP (when known), the affected UUID, and a reason/scope tag. Inspect via `audit` console command or `GET /api/audit`.

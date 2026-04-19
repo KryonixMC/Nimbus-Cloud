@@ -124,6 +124,29 @@ sealed class NimbusEvent {
     data class ApiWarning(val message: String) : NimbusEvent()
     data class ApiError(val error: String) : NimbusEvent()
 
+    // Dashboard auth (forensic — fed into AuditCollector)
+    /** A dashboard login completed end-to-end (incl. TOTP if required). */
+    data class DashboardLoginSucceeded(
+        val uuid: String,
+        val name: String,
+        val method: String,           // "code" | "magic_link" | "passkey"
+        val totpUsed: Boolean,
+        val ip: String?
+    ) : NimbusEvent()
+    /** A dashboard login attempt failed (invalid challenge, wrong TOTP, throttled, …). */
+    data class DashboardLoginFailed(
+        val reason: String,           // e.g. "invalid_challenge" | "totp_invalid" | "rate_limited"
+        val uuid: String? = null,     // populated when the attempt resolved a user (e.g. TOTP step)
+        val ip: String?
+    ) : NimbusEvent()
+    /** A dashboard session was revoked (logout, sibling-revoke, logout-all, admin action). */
+    data class DashboardSessionRevoked(
+        val uuid: String?,
+        val sessionId: String?,
+        val scope: String,            // "self" | "sibling" | "others" | "all" | "admin"
+        val count: Int = 1
+    ) : NimbusEvent()
+
     // Remote CLI sessions
     data class CliSessionConnected(
         val sessionId: Int, val remoteIp: String, val clientUsername: String,

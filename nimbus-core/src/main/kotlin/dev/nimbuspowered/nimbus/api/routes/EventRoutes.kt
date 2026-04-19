@@ -426,5 +426,28 @@ private fun NimbusEvent.toEventMessage(): EventMessage {
             timestamp = timestamp.toString(),
             data = mapOf("name" to name)
         )
+        is NimbusEvent.DashboardLoginSucceeded -> EventMessage(
+            type = "DASHBOARD_LOGIN_SUCCEEDED",
+            timestamp = timestamp.toString(),
+            data = mapOf(
+                "uuid" to uuid, "name" to name, "method" to method,
+                "totpUsed" to totpUsed.toString(), "ip" to (ip ?: "")
+            )
+        )
+        is NimbusEvent.DashboardLoginFailed -> EventMessage(
+            type = "DASHBOARD_LOGIN_FAILED",
+            timestamp = timestamp.toString(),
+            data = mapOf(
+                "reason" to reason, "uuid" to (uuid ?: ""), "ip" to (ip ?: "")
+            )
+        )
+        is NimbusEvent.DashboardSessionRevoked -> EventMessage(
+            type = "DASHBOARD_SESSION_REVOKED",
+            timestamp = timestamp.toString(),
+            data = mapOf(
+                "uuid" to (uuid ?: ""), "sessionId" to (sessionId ?: ""),
+                "scope" to scope, "count" to count.toString()
+            )
+        )
     }
 }

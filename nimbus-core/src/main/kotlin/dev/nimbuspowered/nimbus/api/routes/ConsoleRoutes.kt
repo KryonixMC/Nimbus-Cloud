@@ -36,7 +36,8 @@ fun Route.consoleRoutes(
     serviceManager: ServiceManager,
     token: String,
     serviceToken: String = "",
-    scope: CoroutineScope? = null
+    scope: CoroutineScope? = null,
+    geoLookupEnabled: Boolean = false
 ) {
     route("/api/console") {
 
@@ -128,9 +129,10 @@ fun Route.consoleRoutes(
                             clientOs = info.os
                         } catch (_: Exception) {}
 
-                        // GeoIP lookup (async, non-blocking)
+                        // GeoIP lookup (async, non-blocking). Off by default — see
+                        // ConsoleConfig.geoLookupEnabled.
                         scope?.launch {
-                            clientLocation = lookupGeoIp(remoteIp)
+                            clientLocation = if (geoLookupEnabled) lookupGeoIp(remoteIp) else ""
                             eventBus.emit(NimbusEvent.CliSessionConnected(
                                 sessionId, remoteIp, clientUsername, clientHostname, clientOs, clientLocation
                             ))
@@ -412,7 +414,10 @@ private suspend fun lookupGeoIp(ip: String): String {
 
     return withContext(Dispatchers.IO) {
         try {
-            val url = java.net.URI("http://ip-api.com/json/$ip?fields=status,city,regionName,country").toURL()
+            // ip-api.com's free tier is HTTP-only; pro tier supports HTTPS.
+            // Use HTTPS — if the operator hits the free tier they get a clear
+            // failure logged below rather than a silent cleartext leak.
+            val url = java.net.URI("https://ip-api.com/json/$ip?fields=status,city,regionName,country").toURL()
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 3000
             connection.readTimeout = 3000
