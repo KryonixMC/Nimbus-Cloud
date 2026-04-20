@@ -1,6 +1,8 @@
 package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.config.ConfigLoader
+import dev.nimbuspowered.nimbus.config.ReloadRegistry
+import dev.nimbuspowered.nimbus.config.ReloadScope
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
@@ -92,7 +94,40 @@ class ReloadCommand(
             output.success("Proxy sync config reloaded and pushed to proxies.")
         }
 
-        output.info("Note: Database, API, and cluster config changes require a full restart.")
+        // Show the reload-scope landscape so operators know what they *didn't* just reload.
+        val applied = buildSet {
+            add("groups")
+            add("dedicated")
+            if (proxySyncManager != null) {
+                add("modules.syncproxy.motd")
+                add("modules.syncproxy.tablist")
+                add("modules.syncproxy.chat")
+            }
+        }
+        val report = ReloadRegistry.buildReport(
+            success = true,
+            groupsLoaded = configs.size,
+            appliedSections = applied,
+            message = ""
+        )
+        output.text("")
+        output.info("Reload scope summary:")
+        val liveApplied = report.sections.filter { it.scope == ReloadScope.LIVE && it.applied }
+        val liveNotApplied = report.sections.filter { it.scope == ReloadScope.LIVE && !it.applied }
+        val nextPrepare = report.sections.filter { it.scope == ReloadScope.NEXT_SERVICE_PREPARE }
+        val restart = report.sections.filter { it.scope == ReloadScope.REQUIRES_RESTART }
+        if (liveApplied.isNotEmpty()) {
+            output.text("  ${ConsoleFormatter.success("●")} Applied live: ${liveApplied.joinToString(", ") { it.name }}")
+        }
+        if (liveNotApplied.isNotEmpty()) {
+            output.text("  ${ConsoleFormatter.hint("○")} Live-reloadable but not touched this run: ${liveNotApplied.joinToString(", ") { it.name }}")
+        }
+        if (nextPrepare.isNotEmpty()) {
+            output.text("  ${ConsoleFormatter.hint("◐")} Next service prepare: ${nextPrepare.joinToString(", ") { it.name }}")
+        }
+        if (restart.isNotEmpty()) {
+            output.text("  ${ConsoleFormatter.hint("⟳")} Require controller restart: ${restart.joinToString(", ") { it.name }}")
+        }
         return true
     }
 

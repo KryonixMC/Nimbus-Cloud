@@ -3,6 +3,7 @@ package dev.nimbuspowered.nimbus.api.routes
 import dev.nimbuspowered.nimbus.api.*
 import dev.nimbuspowered.nimbus.config.ConfigLoader
 import dev.nimbuspowered.nimbus.config.NimbusConfig
+import dev.nimbuspowered.nimbus.config.ReloadRegistry
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
@@ -23,22 +24,28 @@ fun Route.systemRoutes(
     scope: CoroutineScope,
     startedAt: Instant
 ) {
-    // POST /api/reload — Hot-reload group configs
+    // POST /api/reload — Hot-reload live-reloadable config sections. Returns a
+    // structured ReloadReport that names every section, its scope, whether the
+    // current reload applied it, and which sections would require a full
+    // controller restart to take effect. Backwards-compatible: ReloadReport
+    // retains the legacy `success`/`groupsLoaded`/`message` fields.
     post("/api/reload") {
         if (!call.requirePermission("nimbus.dashboard.reload")) return@post
         try {
             val configs = ConfigLoader.reloadGroupConfigs(groupsDir)
             groupManager.reloadGroups(configs)
             eventBus.emit(NimbusEvent.ConfigReloaded(configs.size))
-            call.respond(ReloadResponse(
+            call.respond(ReloadRegistry.buildReport(
                 success = true,
                 groupsLoaded = configs.size,
+                appliedSections = setOf("groups"),
                 message = "Reloaded ${configs.size} group config(s)"
             ))
         } catch (e: Exception) {
-            call.respond(ReloadResponse(
+            call.respond(ReloadRegistry.buildReport(
                 success = false,
                 groupsLoaded = 0,
+                appliedSections = emptySet(),
                 message = "Reload failed: ${e.message}"
             ))
         }
