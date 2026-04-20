@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/public/icon.png" alt="Nimbus Cloud" width="250" />
+<img src="docs/public/icon.png" alt="Nimbus Cloud" width="100" />
 
 <br />
 
