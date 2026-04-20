@@ -122,27 +122,27 @@ class ServiceTest {
     }
 
     @Test
-    fun `PREPARING to STOPPING is invalid`() {
-        assertFalse(service.transitionTo(ServiceState.STOPPING))
+    fun `PREPARING to STOPPING is valid`() {
+        assertTrue(service.transitionTo(ServiceState.STOPPING))
+        assertEquals(ServiceState.STOPPING, service.state)
+    }
+
+    @Test
+    fun `PREPARING to CRASHED is valid`() {
+        assertTrue(service.transitionTo(ServiceState.CRASHED))
+        assertEquals(ServiceState.CRASHED, service.state)
+    }
+
+    @Test
+    fun `PREPARING to PREPARING is idempotent`() {
+        assertTrue(service.transitionTo(ServiceState.PREPARING))
         assertEquals(ServiceState.PREPARING, service.state)
     }
 
     @Test
-    fun `PREPARING to CRASHED is invalid`() {
-        assertFalse(service.transitionTo(ServiceState.CRASHED))
-        assertEquals(ServiceState.PREPARING, service.state)
-    }
-
-    @Test
-    fun `PREPARING to PREPARING is invalid`() {
-        assertFalse(service.transitionTo(ServiceState.PREPARING))
-        assertEquals(ServiceState.PREPARING, service.state)
-    }
-
-    @Test
-    fun `STARTING to STARTING is invalid`() {
+    fun `STARTING to STARTING is idempotent`() {
         service.transitionTo(ServiceState.STARTING)
-        assertFalse(service.transitionTo(ServiceState.STARTING))
+        assertTrue(service.transitionTo(ServiceState.STARTING))
         assertEquals(ServiceState.STARTING, service.state)
     }
 
@@ -154,10 +154,10 @@ class ServiceTest {
     }
 
     @Test
-    fun `STARTING to STOPPING is invalid`() {
+    fun `STARTING to STOPPING is valid`() {
         service.transitionTo(ServiceState.STARTING)
-        assertFalse(service.transitionTo(ServiceState.STOPPING))
-        assertEquals(ServiceState.STARTING, service.state)
+        assertTrue(service.transitionTo(ServiceState.STOPPING))
+        assertEquals(ServiceState.STOPPING, service.state)
     }
 
     @Test
@@ -177,19 +177,19 @@ class ServiceTest {
     }
 
     @Test
-    fun `READY to READY is invalid`() {
+    fun `READY to READY is idempotent`() {
         service.transitionTo(ServiceState.STARTING)
         service.transitionTo(ServiceState.READY)
-        assertFalse(service.transitionTo(ServiceState.READY))
+        assertTrue(service.transitionTo(ServiceState.READY))
         assertEquals(ServiceState.READY, service.state)
     }
 
     @Test
-    fun `READY to STOPPED is invalid`() {
+    fun `READY to STOPPED is valid`() {
         service.transitionTo(ServiceState.STARTING)
         service.transitionTo(ServiceState.READY)
-        assertFalse(service.transitionTo(ServiceState.STOPPED))
-        assertEquals(ServiceState.READY, service.state)
+        assertTrue(service.transitionTo(ServiceState.STOPPED))
+        assertEquals(ServiceState.STOPPED, service.state)
     }
 
     @Test
@@ -202,20 +202,20 @@ class ServiceTest {
     }
 
     @Test
-    fun `STOPPING to CRASHED is invalid`() {
+    fun `STOPPING to CRASHED is valid`() {
         service.transitionTo(ServiceState.STARTING)
         service.transitionTo(ServiceState.READY)
         service.transitionTo(ServiceState.STOPPING)
-        assertFalse(service.transitionTo(ServiceState.CRASHED))
-        assertEquals(ServiceState.STOPPING, service.state)
+        assertTrue(service.transitionTo(ServiceState.CRASHED))
+        assertEquals(ServiceState.CRASHED, service.state)
     }
 
     @Test
-    fun `CRASHED to STOPPED is invalid`() {
+    fun `CRASHED to STOPPED is valid`() {
         service.transitionTo(ServiceState.STARTING)
         service.transitionTo(ServiceState.CRASHED)
-        assertFalse(service.transitionTo(ServiceState.STOPPED))
-        assertEquals(ServiceState.CRASHED, service.state)
+        assertTrue(service.transitionTo(ServiceState.STOPPED))
+        assertEquals(ServiceState.STOPPED, service.state)
     }
 
     @Test
@@ -226,14 +226,33 @@ class ServiceTest {
         assertEquals(ServiceState.CRASHED, service.state)
     }
 
-    // --- STOPPED is a dead-end ---
+    // --- STOPPED is terminal except CRASHED relabel ---
 
     @Test
-    fun `STOPPED allows no transitions`() {
+    fun `STOPPED to CRASHED is valid for ready-timeout relabel`() {
         service.transitionTo(ServiceState.STOPPED)
-        for (state in ServiceState.entries) {
-            assertFalse(service.transitionTo(state), "STOPPED should not transition to $state")
-        }
+        assertTrue(service.transitionTo(ServiceState.CRASHED))
+        assertEquals(ServiceState.CRASHED, service.state)
+    }
+
+    @Test
+    fun `STOPPED to STOPPED is idempotent`() {
+        service.transitionTo(ServiceState.STOPPED)
+        assertTrue(service.transitionTo(ServiceState.STOPPED))
+        assertEquals(ServiceState.STOPPED, service.state)
+    }
+
+    @Test
+    fun `STOPPED rejects resurrection to PREPARING`() {
+        service.transitionTo(ServiceState.STOPPED)
+        assertFalse(service.transitionTo(ServiceState.PREPARING))
+        assertEquals(ServiceState.STOPPED, service.state)
+    }
+
+    @Test
+    fun `STOPPED rejects resurrection to READY`() {
+        service.transitionTo(ServiceState.STOPPED)
+        assertFalse(service.transitionTo(ServiceState.READY))
         assertEquals(ServiceState.STOPPED, service.state)
     }
 }

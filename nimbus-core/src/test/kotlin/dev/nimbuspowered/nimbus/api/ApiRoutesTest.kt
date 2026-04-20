@@ -600,14 +600,7 @@ class ApiRoutesTest {
     }
 
     // ── Shutdown Endpoint ──────────────────────────────────────────
-
-    @Nested
-    inner class ShutdownEndpoint {
-
-        @Test
-        fun `POST shutdown returns 404 since endpoint was removed`() = setupTestApplication {
-            val response = client.post("/api/shutdown") { withAuth() }
-            assertEquals(HttpStatusCode.NotFound, response.status)
-        }
-    }
+    // Intentionally not tested: POST /api/shutdown calls System.exit(0) in a
+    // background coroutine, which would terminate the test JVM. The endpoint's
+    // auth gate is covered by the generic auth tests above.
 }

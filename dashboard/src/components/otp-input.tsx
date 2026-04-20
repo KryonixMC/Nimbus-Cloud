@@ -126,7 +126,7 @@ export function OtpInput({
       role="group"
       aria-label={ariaLabel}
       id={id}
-      className={cn("flex items-center gap-2", className)}
+      className={cn("flex w-full items-center gap-2", className)}
     >
       {digits.map((d, i) => (
         <input
@@ -147,9 +147,9 @@ export function OtpInput({
           aria-label={ariaLabel ? `${ariaLabel} digit ${i + 1}` : `Digit ${i + 1}`}
           className={cn(
             // Matches the app's Input primitive: rounded-3xl pill, bg-input/50,
-            // transparent border with focus-ring token. Fixed geometry so
-            // the row never reflows as digits are typed.
-            "h-11 w-10 shrink-0 rounded-2xl border border-transparent bg-input/50",
+            // transparent border with focus-ring token. Flexible width lets
+            // the row expand to the full card width without reflowing.
+            "h-11 min-w-0 flex-1 rounded-2xl border border-transparent bg-input/50",
             "text-center font-mono text-lg",
             "outline-none transition-[color,box-shadow,background-color]",
             "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30",

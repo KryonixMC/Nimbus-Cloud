@@ -17,6 +17,16 @@ dependencies {
     compileOnly("net.luckperms:api:5.4")
     // PacketEvents API (only present at runtime if PE installed — used for Folia name tags)
     compileOnly("com.github.retrooper.packetevents:spigot:2.3.0")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    testImplementation(project(":nimbus-sdk"))
+    testImplementation("com.google.code.gson:gson:2.11.0")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 java {
@@ -25,7 +35,7 @@ java {
     }
 }
 
-tasks.withType<JavaCompile> {
+tasks.named<JavaCompile>("compileJava") {
     options.compilerArgs.addAll(listOf("-source", "16", "-target", "16"))
 }
 

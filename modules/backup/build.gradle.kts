@@ -19,6 +19,26 @@ dependencies {
     // Native archiver — shaded into the core fat JAR; here compileOnly only
     compileOnly("com.github.luben:zstd-jni:1.5.6-4")
     compileOnly("org.apache.commons:commons-compress:1.27.1")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("io.mockk:mockk:1.13.14")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+    testImplementation("io.ktor:ktor-server-core:3.1.1")
+    testImplementation("org.jetbrains.exposed:exposed-core:0.57.0")
+    testImplementation("org.jetbrains.exposed:exposed-jdbc:0.57.0")
+    testImplementation("org.xerial:sqlite-jdbc:3.47.2.0")
+    testImplementation("com.akuleshov7:ktoml-core:0.5.2")
+    testImplementation("com.akuleshov7:ktoml-file:0.5.2")
+    testImplementation("com.github.luben:zstd-jni:1.5.6-4")
+    testImplementation("org.apache.commons:commons-compress:1.27.1")
+    testImplementation("org.slf4j:slf4j-simple:2.0.16")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 kotlin {

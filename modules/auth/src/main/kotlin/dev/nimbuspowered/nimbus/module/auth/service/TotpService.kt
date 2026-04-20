@@ -64,7 +64,9 @@ class TotpService(
         val encrypted = encrypt(secret)
 
         val recoveryCodes = List(10) { generateRecoveryCode() }
-        val recoveryHashes = recoveryCodes.map { LoginChallengeService.sha256Hex(it) }
+        // Hash the canonical (dash-stripped, uppercase) form so consumeRecoveryCode —
+        // which strips dashes from user input — produces a matching hash.
+        val recoveryHashes = recoveryCodes.map { LoginChallengeService.sha256Hex(canonicalizeRecoveryCode(it)) }
 
         newSuspendedTransaction(Dispatchers.IO, db.database) {
             // Replace any existing row — fresh enrollment wipes the slate.
@@ -245,8 +247,7 @@ class TotpService(
     // ── Recovery codes ──────────────────────────────────────────────────────
 
     private suspend fun consumeRecoveryCode(uuid: String, rawCode: String): Boolean {
-        // Accept with or without the dash the user sees (`ABCD-1234` vs `ABCD1234`).
-        val canonical = rawCode.replace("-", "").uppercase().trim()
+        val canonical = canonicalizeRecoveryCode(rawCode)
         if (canonical.length != 8) return false
         val hash = LoginChallengeService.sha256Hex(canonical)
         val now = System.currentTimeMillis()
@@ -263,6 +264,9 @@ class TotpService(
             } == 1
         }
     }
+
+    private fun canonicalizeRecoveryCode(raw: String): String =
+        raw.replace("-", "").uppercase().trim()
 
     private fun generateRecoveryCode(): String {
         // 8 base32-safe alphanumerics, printed as `ABCD-1234` for readability.

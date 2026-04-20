@@ -145,7 +145,8 @@ fun Route.authServiceRoutes(
     challengeService: LoginChallengeService,
     sessionService: SessionService,
     configSupplier: () -> AuthConfig,
-    publicUrlSupplier: () -> String
+    publicUrlSupplier: () -> String,
+    eventBus: EventBus? = null
 ) {
     route("/api/auth") {
 
@@ -242,6 +243,14 @@ fun Route.authServiceRoutes(
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
                     apiError("Invalid uuid", ApiErrors.VALIDATION_FAILED))
             val revoked = sessionService.revokeAll(uuid)
+            if (revoked > 0) {
+                eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
+                    uuid = uuid.toString(),
+                    sessionId = null,
+                    scope = "all",
+                    count = revoked
+                ))
+            }
             call.respond(LogoutAllResponse(revoked))
         }
     }
@@ -339,7 +348,8 @@ fun Route.authRoutes(
     totpService: TotpService,
     pendingTotpStore: PendingTotpStore,
     wsTicketStore: WsTicketStore,
-    configSupplier: () -> AuthConfig
+    configSupplier: () -> AuthConfig,
+    eventBus: EventBus? = null
 ) {
     route("/api/auth") {
 
@@ -354,9 +364,19 @@ fun Route.authRoutes(
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
                     apiError("challenge required", ApiErrors.VALIDATION_FAILED))
 
-            val consumed = challengeService.consume(req.challenge)
-                ?: return@post call.respond(HttpStatusCode.Unauthorized,
+            val callerIp = call.request.local.remoteAddress
+            val consumed = try {
+                challengeService.consume(req.challenge, callerIp)
+            } catch (e: LoginChallengeService.RateLimitedException) {
+                eventBus?.emit(NimbusEvent.DashboardLoginFailed(reason = "rate_limited", ip = callerIp))
+                return@post call.respond(HttpStatusCode.TooManyRequests,
+                    apiError(e.message ?: "Rate limited", AuthErrors.AUTH_RATE_LIMITED))
+            }
+            if (consumed == null) {
+                eventBus?.emit(NimbusEvent.DashboardLoginFailed(reason = "invalid_challenge", ip = callerIp))
+                return@post call.respond(HttpStatusCode.Unauthorized,
                     apiError("Invalid, expired, or already-used challenge", AuthErrors.AUTH_CHALLENGE_INVALID))
+            }
 
             val uuid = runCatching { UUID.fromString(consumed.uuid) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.InternalServerError,
@@ -393,10 +413,18 @@ fun Route.authRoutes(
                 uuid = uuid,
                 name = consumed.name,
                 permissions = permissions,
-                ip = call.request.local.remoteAddress,
+                ip = callerIp,
                 userAgent = call.request.headers["User-Agent"],
                 loginMethod = loginMethod
             )
+
+            eventBus?.emit(NimbusEvent.DashboardLoginSucceeded(
+                uuid = uuid.toString(),
+                name = consumed.name,
+                method = loginMethod,
+                totpUsed = false,
+                ip = callerIp
+            ))
 
             call.respond(ConsumeChallengeResponse(
                 token = session.rawToken,
@@ -428,6 +456,11 @@ fun Route.authRoutes(
 
             val ok = totpService.verifyForLogin(pending.uuid.toString(), req.code)
             if (!ok) {
+                eventBus?.emit(NimbusEvent.DashboardLoginFailed(
+                    reason = "totp_invalid",
+                    uuid = pending.uuid.toString(),
+                    ip = pending.ip
+                ))
                 return@post call.respond(HttpStatusCode.Unauthorized,
                     apiError("Invalid TOTP code", AuthErrors.AUTH_TOTP_INVALID))
             }
@@ -442,6 +475,14 @@ fun Route.authRoutes(
                 userAgent = pending.userAgent,
                 loginMethod = pending.loginMethod
             )
+
+            eventBus?.emit(NimbusEvent.DashboardLoginSucceeded(
+                uuid = pending.uuid.toString(),
+                name = pending.name,
+                method = pending.loginMethod,
+                totpUsed = true,
+                ip = pending.ip
+            ))
             call.respond(TotpVerifyResponse(
                 token = session.rawToken,
                 expiresAt = session.principal.expiresAt,
@@ -459,7 +500,16 @@ fun Route.authRoutes(
             val raw = extractBearerToken(call)
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
                     apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+            // Validate first so we have the principal for the audit event.
+            val principal = sessionService.validate(raw)
             val ok = sessionService.revoke(raw)
+            if (ok) {
+                eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
+                    uuid = principal?.uuid?.toString(),
+                    sessionId = principal?.sessionId,
+                    scope = "self"
+                ))
+            }
             call.respond(ApiMessage(success = ok, message = if (ok) "Session revoked" else "No such session"))
         }
 
@@ -551,6 +601,11 @@ fun Route.authRoutes(
                     apiError("sessionId required", ApiErrors.VALIDATION_FAILED))
             val revoked = sessionService.revokeOwnedSession(principal.uuid, sid)
             if (revoked) {
+                eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
+                    uuid = principal.uuid.toString(),
+                    sessionId = sid,
+                    scope = "sibling"
+                ))
                 call.respond(ApiMessage(success = true, message = "Session revoked"))
             } else {
                 call.respond(HttpStatusCode.NotFound,
@@ -571,6 +626,14 @@ fun Route.authRoutes(
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
                     apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
             val revoked = sessionService.revokeOtherSessions(principal.uuid, principal.sessionId)
+            if (revoked > 0) {
+                eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
+                    uuid = principal.uuid.toString(),
+                    sessionId = null,
+                    scope = "others",
+                    count = revoked
+                ))
+            }
             call.respond(LogoutAllResponse(revoked))
         }
     }

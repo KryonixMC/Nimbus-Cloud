@@ -108,6 +108,8 @@ class ScalingEngineTest {
             ServiceState.PREPARING -> {} // already in PREPARING
         }
         service.playerCount = playerCount
+        // Scale-down logic requires a recent player-count update (<30s old)
+        service.lastPlayerCountUpdate = Instant.now()
         return service
     }
 

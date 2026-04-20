@@ -126,6 +126,76 @@ export function LoginForm({
     }
   }
 
+  async function submitMinecraftCode(code: string) {
+    const trimmedCode = code.trim();
+    if (trimmedCode.length !== 6) return;
+
+    setError("");
+    setLoading(true);
+    try {
+      const res = await controllerFetch(
+        resolvedUrl,
+        "/api/auth/consume-challenge",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ challenge: trimmedCode }),
+        }
+      );
+      if (!res.ok) {
+        setError(await readError(res, "Login failed"));
+        return;
+      }
+      const body: ConsumeChallengeResponse = await res.json();
+      if (body.totpRequired && body.challengeId) {
+        setChallengeId(body.challengeId);
+        setTotpCode("");
+        go("totp");
+        return;
+      }
+      if (body.token) {
+        setUserSessionCredentials(resolvedUrl, body.token);
+        router.push("/");
+        return;
+      }
+      setError("Unexpected response from controller");
+    } catch (err) {
+      setError(friendlyNetworkError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitTotpCode(code: string) {
+    const trimmedCode = code.trim();
+    if (!challengeId || trimmedCode.length === 0) return;
+
+    setError("");
+    setLoading(true);
+    try {
+      const res = await controllerFetch(
+        resolvedUrl,
+        "/api/auth/totp-verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ challengeId, code: trimmedCode }),
+        }
+      );
+      if (!res.ok) {
+        setError(await readError(res, "Invalid TOTP code"));
+        return;
+      }
+      const body: TotpVerifyResponse = await res.json();
+      setUserSessionCredentials(resolvedUrl, body.token);
+      router.push("/");
+    } catch (err) {
+      setError(friendlyNetworkError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // ---- actions ---------------------------------------------------------
 
   async function handleConnect(e: React.FormEvent) {
@@ -158,40 +228,7 @@ export function LoginForm({
 
   async function handleCodeSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res = await controllerFetch(
-        resolvedUrl,
-        "/api/auth/consume-challenge",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ challenge: mcCode.trim() }),
-        }
-      );
-      if (!res.ok) {
-        setError(await readError(res, "Login failed"));
-        return;
-      }
-      const body: ConsumeChallengeResponse = await res.json();
-      if (body.totpRequired && body.challengeId) {
-        setChallengeId(body.challengeId);
-        setTotpCode("");
-        go("totp");
-        return;
-      }
-      if (body.token) {
-        setUserSessionCredentials(resolvedUrl, body.token);
-        router.push("/");
-        return;
-      }
-      setError("Unexpected response from controller");
-    } catch (err) {
-      setError(friendlyNetworkError(err));
-    } finally {
-      setLoading(false);
-    }
+    await submitMinecraftCode(mcCode);
   }
 
   async function handlePasskeyLogin() {
@@ -237,31 +274,7 @@ export function LoginForm({
 
   async function handleTotpSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!challengeId) return;
-    setError("");
-    setLoading(true);
-    try {
-      const res = await controllerFetch(
-        resolvedUrl,
-        "/api/auth/totp-verify",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ challengeId, code: totpCode.trim() }),
-        }
-      );
-      if (!res.ok) {
-        setError(await readError(res, "Invalid TOTP code"));
-        return;
-      }
-      const body: TotpVerifyResponse = await res.json();
-      setUserSessionCredentials(resolvedUrl, body.token);
-      router.push("/");
-    } catch (err) {
-      setError(friendlyNetworkError(err));
-    } finally {
-      setLoading(false);
-    }
+    await submitTotpCode(totpCode);
   }
 
   // ---- rendering -------------------------------------------------------
@@ -498,15 +511,12 @@ export function LoginForm({
                     onChange={setMcCode}
                     invalid={Boolean(error)}
                     autoFocus
-                    className="justify-center"
                     onComplete={(v) => {
                       // Auto-submit once all six digits are filled so the
                       // user doesn't need to reach for the button.
                       if (!loading) {
                         setMcCode(v);
-                        void handleCodeSubmit(
-                          new Event("submit") as unknown as React.FormEvent
-                        );
+                        void submitMinecraftCode(v);
                       }
                     }}
                   />
@@ -609,13 +619,10 @@ export function LoginForm({
                       onChange={setTotpCode}
                       invalid={Boolean(error)}
                       autoFocus
-                      className="justify-center"
                       onComplete={(v) => {
                         if (!loading) {
                           setTotpCode(v);
-                          void handleTotpSubmit(
-                            new Event("submit") as unknown as React.FormEvent
-                          );
+                          void submitTotpCode(v);
                         }
                       }}
                     />

@@ -224,7 +224,7 @@ public class NimbusResourcePacksPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    private static byte[] hexToBytes(String hex) {
+    static byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] out = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {

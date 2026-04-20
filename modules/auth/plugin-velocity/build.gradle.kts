@@ -13,6 +13,15 @@ dependencies {
     // Pull in the SDK so we can reuse NimbusClient + NimbusEventStream if needed.
     // It's shaded into the final JAR via shadowJar; we exclude Bukkit-only classes below.
     implementation(project(":nimbus-sdk"))
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 java {

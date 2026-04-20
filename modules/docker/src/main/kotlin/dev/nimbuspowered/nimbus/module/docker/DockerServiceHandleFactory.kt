@@ -145,12 +145,9 @@ class DockerServiceHandleFactory(
             }
 
         for (c in containers) {
+            if (!DockerContainerMatcher.isManagedRunning(c)) continue
             val id = c["Id"]?.jsonPrimitive?.content ?: continue
-            val state = c["State"]?.jsonPrimitive?.content ?: ""
-            if (state != "running") continue
-
-            val labels = c["Labels"]?.jsonObject ?: continue
-            val serviceName = labels["nimbus.service"]?.jsonPrimitive?.content ?: continue
+            val serviceName = DockerContainerMatcher.serviceName(c) ?: continue
             val names = c["Names"]?.let {
                 (it as? kotlinx.serialization.json.JsonArray)?.firstOrNull()?.jsonPrimitive?.content
             } ?: "nimbus-${serviceName.lowercase()}"

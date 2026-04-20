@@ -399,7 +399,7 @@ class SmartScalingManager(
     // ── Schedule Matching ───────────────────────────────
 
     /** Find the schedule rule active at the given time. */
-    private fun findActiveRule(rules: List<ScheduleRule>, now: ZonedDateTime): ScheduleRule? {
+    internal fun findActiveRule(rules: List<ScheduleRule>, now: ZonedDateTime): ScheduleRule? {
         val currentDay = now.dayOfWeek
         val currentTime = now.toLocalTime()
 
@@ -412,7 +412,7 @@ class SmartScalingManager(
      * Find a schedule rule that will become active within [leadMinutes].
      * Returns the rule if we should start warming up for it.
      */
-    private fun findWarmupRule(rules: List<ScheduleRule>, now: ZonedDateTime, leadMinutes: Int): ScheduleRule? {
+    internal fun findWarmupRule(rules: List<ScheduleRule>, now: ZonedDateTime, leadMinutes: Int): ScheduleRule? {
         val currentDay = now.dayOfWeek
         val currentTime = now.toLocalTime()
         val warmupStart = currentTime.plusMinutes(leadMinutes.toLong())

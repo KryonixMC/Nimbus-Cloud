@@ -15,6 +15,15 @@ dependencies {
     // Also provides Adventure API classes for the compat layer
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
 
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    testImplementation("com.google.code.gson:gson:2.11.0")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 java {
@@ -23,7 +32,7 @@ java {
     }
 }
 
-tasks.withType<JavaCompile> {
+tasks.named<JavaCompile>("compileJava") {
     options.compilerArgs.addAll(listOf("-source", "16", "-target", "16"))
 }
 

@@ -300,6 +300,21 @@ object ConsoleFormatter {
                 "${success("+ DEDICATED")} ${BOLD}${event.name}${RESET} created"
             is NimbusEvent.DedicatedDeleted ->
                 "${warn("- DEDICATED")} ${BOLD}${event.name}${RESET} deleted"
+            is NimbusEvent.DashboardLoginSucceeded -> {
+                val ipPart = if (!event.ip.isNullOrEmpty()) " ${DIM}from ${event.ip}${RESET}" else ""
+                val totp = if (event.totpUsed) " ${DIM}+TOTP${RESET}" else ""
+                "${success("◆ AUTH")} ${BOLD}${event.name}${RESET} logged in${totp} ${DIM}(${event.method})${RESET}$ipPart"
+            }
+            is NimbusEvent.DashboardLoginFailed -> {
+                val who = event.uuid?.take(8)?.let { " ${DIM}uuid=$it${RESET}" } ?: ""
+                val ipPart = if (!event.ip.isNullOrEmpty()) " ${DIM}from ${event.ip}${RESET}" else ""
+                "${warn("◇ AUTH")} login failed ${DIM}(${event.reason})${RESET}$who$ipPart"
+            }
+            is NimbusEvent.DashboardSessionRevoked -> {
+                val target = event.uuid?.take(8) ?: "?"
+                val cnt = if (event.count > 1) " ${DIM}(${event.count} sessions)${RESET}" else ""
+                "${info("◇ SESSION")} revoked ${DIM}scope=${event.scope}, uuid=${target}${RESET}$cnt"
+            }
         }
         return "$time $message"
     }

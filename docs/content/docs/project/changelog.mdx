@@ -17,6 +17,53 @@ All notable changes to this project are documented in this file. The format is b
 
 ---
 
+## [0.11.2] - 2026-04-19
+
+Patch release focused on internal quality: a TOTP recovery-code bug that silently broke 2FA recovery, a comprehensive test suite + JaCoCo coverage scaffolding across every Gradle subproject, and small dashboard polish for the OTP / login flow. Fully backwards-compatible; no migration changes.
+
+### Added
+
+- **Test suite + JaCoCo coverage** — JUnit 5 + MockK/Mockito wired up across all 22 Gradle subprojects (everything except the dashboard, which is a Next.js app), 880+ tests green. Per-subproject JaCoCo reports plus an aggregated root report (`./gradlew jacocoAggregatedReport`) filtered to `dev/nimbuspowered/**`. Baseline coverage: line 12.5 %, branch 7.7 %, method 14.9 %, class 15.6 %. Top-covered modules: `nimbus-protocol` 88 %, `display` 40 %, `backup` 33 %, `auth` 29 %, `resourcepacks` 29 %, `punishments` 28 %, `players` 28 %
+
+### Changed
+
+- **Dev tooling** — Java plugin subprojects now scope `-source 16 -target 16` to `compileJava` only, so `compileTestJava` can use Java 21 features. A handful of TOTP / scaling helpers were promoted from `private` to `internal` so tests can hit them without reflection. No public API change
+- **Dashboard `next.config`** — relaxed dev-server allowed origins and lifted image-quality limits, smoothing local dashboard development against a remote controller. Production build behaviour unchanged
+- **Repo housekeeping** — removed the unused `examples/` directory, gitignored `/.gradle-impl-plugins/`
+
+### Fixed
+
+- **TOTP recovery codes were never accepted.** `TotpService.enroll` hashed the display form (`ABCD-1234`, with the dash) while `consumeRecoveryCode` normalized the dash away before hashing, so every recovery code looked invalid in production. Both paths now hash the canonical (dash-stripped, uppercased) form via a shared `canonicalizeRecoveryCode` helper. **Anyone who has already lost their TOTP device and saved recovery codes from a v0.11.0 / 0.11.1 enrollment will need to re-enroll** — old hashes are unreachable. Regression tests added
+- **Dashboard login form / OTP input** — tightened the 6-digit code + recovery-code inputs (focus handling, paste behaviour, layout shift on the login card). Cosmetic only, no auth-protocol change
+
+### Notes
+
+- 15 pre-existing `nimbus-core` test failures (drifted from a permissive `ServiceState` transition model, the bounded-buffer `EventBus`, the player-count gate on the scale-down loop, and the re-introduced `/api/shutdown`) were repaired during the coverage push. No production behaviour was changed to make tests pass
+
+---
+
+## [0.11.1] - 2026-04-19
+
+Quick-win patch from the v0.11 production-readiness audit. Tightens the new auth surface and adds proper audit-trail coverage for dashboard logins. Fully backwards-compatible; no migration changes.
+
+### Added
+
+- **Per-IP brute-force throttle on `consume-challenge`.** New `[login_challenge] max_consume_failures_per_minute = 10` in `auth.toml`. Defends the 6-digit code's 60s TTL window — the global API limiter (120 req/min) was the only previous defence, which was too coarse for a 10⁶ search space. Set to `0` to disable
+- **Auth events on the `EventBus`** — `DashboardLoginSucceeded`, `DashboardLoginFailed`, `DashboardSessionRevoked` are now emitted on every login, failed login, and session revocation. The `AuditCollector` persists them to `audit_log` automatically — visible via the `audit` console command and `GET /api/audit`. Each event carries the source IP, affected UUID (when known), and a reason/scope tag
+- **`[console] geo_lookup_enabled = false`** in `nimbus.toml` — kill-switch for the Remote-CLI session GeoIP lookup. **Default flipped to `false`** in v0.11.1; flip on if you want city-level location strings in your CLI session log. Privacy-preserving by default
+
+### Changed
+
+- **GeoIP lookup uses HTTPS instead of cleartext HTTP.** The previous `http://ip-api.com/json/...` call leaked the connecting operator IP to passive observers on the network path. The free tier of ip-api.com may now return errors; combine with `geo_lookup_enabled = false` to disable entirely
+- **Docs — `[Auth Module]` page** now documents the API-token bypass behaviour explicitly: holding `NIMBUS_API_TOKEN` is implicit `nimbus.dashboard.admin` and bypasses TOTP. Treat the token like a root SSH key. (Behaviour unchanged from v0.11.0, but undocumented before.)
+
+### Known follow-ups (deferred)
+
+- 6 pre-existing dashboard ESLint errors (setState-in-effect / refs-during-render) blocking Vercel deployment — separate dashboard-only PR.
+- Module-level integration test harness — tracked for v1.0 readiness.
+
+---
+
 ## [0.11.0] - 2026-04-19
 
 A new first-party **Auth** module: the dashboard gains real multi-user authentication backed by Minecraft accounts, with no passwords, no OAuth provider, and no per-user credential files. Operators log in by typing a 6-digit code in-game, clicking a chat link, or tapping Touch ID — sessions are then gated by a `nimbus.dashboard.*` permission tree resolved through the existing Perms module. API tokens keep working as implicit admins so every existing CLI, automation script, and CI pipeline survives untouched.

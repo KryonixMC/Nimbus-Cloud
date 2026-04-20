@@ -32,9 +32,12 @@ class PortAllocatorTest {
     }
 
     @Test
-    fun `allocateBackendPort returns port starting from backendBasePort`() {
-        val port = allocator.allocateBackendPort()
-        assertEquals(30000, port)
+    fun `allocateBackendPort returns port at or above backendBasePort`() {
+        // Use a high, unlikely-to-be-in-use base port so the test is stable
+        // across dev environments where 30000 may already be bound.
+        val highAllocator = PortAllocator(backendBasePort = 52000)
+        val port = highAllocator.allocateBackendPort()
+        assertTrue(port >= 52000, "Allocated port $port should be >= 52000")
     }
 
     @Test

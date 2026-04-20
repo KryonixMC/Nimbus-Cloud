@@ -140,13 +140,10 @@ class VelocityConfigGenTest {
         configGen.regenerateServerList(tempDir)
 
         val result = tempDir.resolve("velocity.toml").readText()
-        assertTrue(result.contains("""try = ["Lobby-1"]"""))
-        // BedWars should NOT be in the try list
-        assertFalse(result.contains(""""BedWars-1"""".let { it in result.substringAfter("try = [").substringBefore("]") }.toString()))
-        // Verify BedWars is in servers section but not in try
+        // Verify Lobby is in the try list but BedWars is not
         val tryLine = result.lines().first { it.trim().startsWith("try = ") }
-        assertTrue(tryLine.contains("Lobby-1"))
-        assertFalse(tryLine.contains("BedWars-1"))
+        assertTrue(tryLine.contains("Lobby-1"), "try line should contain Lobby-1: $tryLine")
+        assertFalse(tryLine.contains("BedWars-1"), "try line should not contain BedWars-1: $tryLine")
     }
 
     @Test

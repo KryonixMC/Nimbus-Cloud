@@ -152,7 +152,7 @@ class AuthModule : NimbusModule {
         // `/sessions`, `/logout-all` — called by Bridge/SDK with the service
         // API token that they already receive via NIMBUS_API_TOKEN.
         context.registerRoutes(
-            block = { authServiceRoutes(challengeService, sessionService, configSupplier, publicUrlSupplier) },
+            block = { authServiceRoutes(challengeService, sessionService, configSupplier, publicUrlSupplier, eventBus) },
             auth = AuthLevel.SERVICE
         )
 
@@ -168,7 +168,8 @@ class AuthModule : NimbusModule {
                     totpService,
                     pendingTotpStore,
                     wsTicketStore,
-                    configSupplier
+                    configSupplier,
+                    eventBus
                 )
             },
             auth = AuthLevel.NONE

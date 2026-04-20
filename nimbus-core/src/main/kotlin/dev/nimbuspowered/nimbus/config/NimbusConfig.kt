@@ -62,7 +62,15 @@ data class ConsoleConfig(
     @SerialName("log_events")
     val logEvents: Boolean = true,
     @SerialName("history_file")
-    val historyFile: String = ".nimbus_history"
+    val historyFile: String = ".nimbus_history",
+    /**
+     * Looks up approximate geo-location for Remote-CLI session IPs via the
+     * public ip-api.com endpoint. Off by default in v0.11.1 — leaks the
+     * connecting IP to a third party and the operator gains little from
+     * "Berlin, Germany" appearing in their session log. Flip on if you want it.
+     */
+    @SerialName("geo_lookup_enabled")
+    val geoLookupEnabled: Boolean = false
 )
 
 @Serializable
