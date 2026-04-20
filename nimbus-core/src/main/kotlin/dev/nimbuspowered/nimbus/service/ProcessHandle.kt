@@ -25,6 +25,10 @@ class ProcessHandle : ServiceHandle {
     private val _stdoutLines = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 4096, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     override val stdoutLines: SharedFlow<String> = _stdoutLines.asSharedFlow()
 
+    /** Rolling tail buffer of the last [TAIL_CAPACITY] stdout lines, for crash diagnostics. */
+    private val tailBuffer = ArrayDeque<String>(TAIL_CAPACITY)
+    private val tailLock = Any()
+
     private var donePattern = Regex("""Done \(""")
 
     fun setReadyPattern(pattern: Regex) {
@@ -46,6 +50,10 @@ class ProcessHandle : ServiceHandle {
             try {
                 process!!.inputStream.bufferedReader().useLines { lines ->
                     for (line in lines) {
+                        synchronized(tailLock) {
+                            if (tailBuffer.size >= TAIL_CAPACITY) tailBuffer.removeFirst()
+                            tailBuffer.addLast(line)
+                        }
                         _stdoutLines.emit(line)
                     }
                 }
@@ -121,6 +129,8 @@ class ProcessHandle : ServiceHandle {
         }
     }
 
+    override fun snapshotTail(): List<String> = synchronized(tailLock) { tailBuffer.toList() }
+
     override fun destroy() {
         logger.info("Destroying process handle")
         scope.cancel()
@@ -130,6 +140,7 @@ class ProcessHandle : ServiceHandle {
     }
 
     companion object {
+        private const val TAIL_CAPACITY = 50
         private val adoptLogger = LoggerFactory.getLogger(ProcessHandle::class.java)
 
         /**

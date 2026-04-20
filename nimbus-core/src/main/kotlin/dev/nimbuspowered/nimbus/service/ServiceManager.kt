@@ -624,7 +624,12 @@ class ServiceManager(
                 } else {
                     logger.warn("Service '{}' did not become ready within timeout — marking as CRASHED", serviceName)
                     if (service.transitionTo(ServiceState.CRASHED)) {
-                        eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount))
+                        val tail = runCatching { handle.snapshotTail() }.getOrDefault(emptyList())
+                        val ctx = StartupDiagnostic.CrashContext.ReadyTimeout(readyTimeout.inWholeSeconds)
+                        val diag = StartupDiagnostic.diagnose(tail, ctx)
+                        service.lastCrashReport = StartupCrashReport(diag, tail, exitCode = null)
+                        logger.warn("Service '{}' crash diagnosis: {}", serviceName, diag)
+                        eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, -1, service.restartCount, diag, tail))
                     }
                 }
             } catch (_: kotlinx.coroutines.CancellationException) {
@@ -800,7 +805,16 @@ class ServiceManager(
             } else {
                 logger.warn("Service '{}' crashed with exit code {}", serviceName, exitCode)
             }
-            eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount))
+            // Classify startup crashes (wasReady=false) so the operator gets a readable hint.
+            // Runtime crashes (wasReady=true) can still benefit, but we flag them as post-ready.
+            val tail = runCatching { handle.snapshotTail() }.getOrDefault(emptyList())
+            val ctx = StartupDiagnostic.CrashContext.Exited(exitCode)
+            val diag = if (!wasReady || tail.isNotEmpty()) StartupDiagnostic.diagnose(tail, ctx) else null
+            if (diag != null) {
+                service.lastCrashReport = StartupCrashReport(diag, tail, exitCode)
+                logger.warn("Service '{}' crash diagnosis: {}", serviceName, diag)
+            }
+            eventBus.emit(NimbusEvent.ServiceCrashed(serviceName, exitCode, service.restartCount, diag, tail))
         }
 
         if (restartOnCrash && service.restartCount < maxRestarts) {
