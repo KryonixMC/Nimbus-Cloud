@@ -14,7 +14,15 @@ sealed class NimbusEvent {
     data class ServiceDraining(val serviceName: String, val groupName: String) : NimbusEvent()
     data class ServiceStopping(val serviceName: String) : NimbusEvent()
     data class ServiceStopped(val serviceName: String) : NimbusEvent()
-    data class ServiceCrashed(val serviceName: String, val exitCode: Int, val restartAttempt: Int) : NimbusEvent()
+    data class ServiceCrashed(
+        val serviceName: String,
+        val exitCode: Int,
+        val restartAttempt: Int,
+        /** Operator-readable one-liner from StartupDiagnostic. Null for non-startup crashes. */
+        val diagnosis: String? = null,
+        /** Up to ~50 tail lines of the service's stdout, oldest first. Empty when unavailable. */
+        val logTail: List<String> = emptyList()
+    ) : NimbusEvent()
     data class ServiceRecovered(val serviceName: String, val groupName: String, val pid: Long, val port: Int) : NimbusEvent()
 
     // Scaling

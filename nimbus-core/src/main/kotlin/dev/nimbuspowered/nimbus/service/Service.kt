@@ -33,7 +33,13 @@ class Service(
     /** Last time a TPS report was received from the SDK. */
     @Volatile var lastHealthReport: Instant? = null,
     var isDedicated: Boolean = false,
-    var proxyEnabled: Boolean = true
+    var proxyEnabled: Boolean = true,
+    /**
+     * Diagnostic summary of the most recent crash, set by ServiceManager when
+     * a STARTING -> CRASHED transition happens. Null while the service has
+     * never crashed or has successfully started since the last crash.
+     */
+    @Volatile var lastCrashReport: StartupCrashReport? = null
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(Service::class.java)
 

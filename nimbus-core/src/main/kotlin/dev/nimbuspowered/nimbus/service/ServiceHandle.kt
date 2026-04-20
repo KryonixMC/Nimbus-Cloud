@@ -28,4 +28,12 @@ interface ServiceHandle {
      * as `"process"`.
      */
     val kind: String get() = "process"
+
+    /**
+     * Returns up to the last ~30-50 stdout lines seen so far (oldest first).
+     * Used by [StartupDiagnostic] to classify crashes without replaying the
+     * full stdout stream. Implementations that do not buffer (remote, Docker)
+     * return an empty list.
+     */
+    fun snapshotTail(): List<String> = emptyList()
 }
