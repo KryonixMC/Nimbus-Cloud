@@ -13,6 +13,9 @@ import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.protocol.ClusterMessage
+import dev.nimbuspowered.nimbus.service.spawn.SandboxMode
+import dev.nimbuspowered.nimbus.service.spawn.SandboxResolver
+import dev.nimbuspowered.nimbus.service.spawn.SystemdRunSandbox
 import dev.nimbuspowered.nimbus.template.PerformanceOptimizer
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import dev.nimbuspowered.nimbus.template.TemplateManager
@@ -72,6 +75,7 @@ class ServiceManager(
     private val compatibilityChecker = CompatibilityChecker(groupManager, config, javaResolver)
     private val performanceOptimizer = PerformanceOptimizer()
     private val serviceDeployer = dev.nimbuspowered.nimbus.template.ServiceDeployer()
+    private val sandboxResolver = SandboxResolver(config.sandbox)
 
     internal val serviceFactory = ServiceFactory(
         config = config,
@@ -319,6 +323,20 @@ class ServiceManager(
         return startRemoteService(prepared.service, prepared, node, group)
     }
 
+    /**
+     * Resolves the sandbox mode for [service] and wraps [command] via
+     * systemd-run when MANAGED is selected. For BARE (or DOCKER, which is
+     * never routed here) the command is returned unchanged. Lookup failures
+     * fall back to BARE so a broken group config never blocks a service.
+     */
+    private fun applyManagedSandbox(service: Service, command: List<String>): List<String> {
+        val group = groupManager.getGroup(service.groupName) ?: return command
+        val groupDef = group.config.group
+        val resolved = sandboxResolver.resolve(service.name, groupDef.sandbox, groupDef.resources)
+        if (resolved.mode != SandboxMode.MANAGED) return command
+        return SystemdRunSandbox.wrapCommand(service.name, command, resolved.limits)
+    }
+
     private suspend fun startLocalService(service: Service, prepared: ServiceFactory.PreparedService): Service? {
         val workDir = prepared.workDir
         val command = prepared.command
@@ -349,7 +367,8 @@ class ServiceManager(
             } else {
                 val plain = ProcessHandle()
                 if (readyPattern != null) plain.setReadyPattern(readyPattern)
-                plain.start(workDir, command, env)
+                val effectiveCommand = applyManagedSandbox(service, command)
+                plain.start(workDir, effectiveCommand, env)
                 plain
             }
 

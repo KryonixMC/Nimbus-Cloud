@@ -22,7 +22,8 @@ data class NimbusConfig(
     val audit: AuditConfig = AuditConfig(),
     val metrics: MetricsConfig = MetricsConfig(),
     val curseforge: CurseForgeConfig = CurseForgeConfig(),
-    val dashboard: DashboardConfig = DashboardConfig()
+    val dashboard: DashboardConfig = DashboardConfig(),
+    val sandbox: GlobalSandboxConfig = GlobalSandboxConfig()
 )
 
 /**

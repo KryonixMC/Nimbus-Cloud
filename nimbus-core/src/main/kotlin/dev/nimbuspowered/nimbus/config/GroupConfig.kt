@@ -50,7 +50,8 @@ data class GroupDefinition(
     val jvm: JvmConfig = JvmConfig(),
     val placement: PlacementConfig = PlacementConfig(),
     val sync: SyncConfig = SyncConfig(),
-    val docker: DockerServiceConfig = DockerServiceConfig()
+    val docker: DockerServiceConfig = DockerServiceConfig(),
+    val sandbox: SandboxConfig = SandboxConfig()
 ) {
     /**
      * Returns the effective list of templates. If [templates] is set, it is used directly.
