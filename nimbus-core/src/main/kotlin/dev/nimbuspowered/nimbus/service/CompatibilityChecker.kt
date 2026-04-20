@@ -97,13 +97,17 @@ class CompatibilityChecker(
             ))
         }
 
-        // Forge/NeoForge without proxy mod
+        // Forge/NeoForge without proxy mod. Must stay in sync with
+        // SoftwareResolver.ensureForwardingMod: NeoForge 1.20.2+ uses NeoForwarding,
+        // older NeoForge + all Forge use Proxy-Compatible-Forge. The bungeeforge/
+        // neovelocity names are legacy aliases kept so manual installs still register.
         for (g in allGroups.filter { it.config.group.software in listOf(ServerSoftware.FORGE, ServerSoftware.NEOFORGE) }) {
             val templateDir = java.nio.file.Path.of(config.paths.templates).resolve(g.config.group.template)
             val modsDir = templateDir.resolve("mods")
             val hasProxyMod = modsDir.toFile().listFiles()?.any {
                 val name = it.name.lowercase()
-                name.contains("proxy-compatible") || name.contains("bungeeforge") || name.contains("neovelocity")
+                name.contains("proxy-compatible") || name.contains("bungeeforge")
+                    || name.contains("neovelocity") || name.contains("neoforwarding")
             } ?: false
             if (!hasProxyMod) {
                 warnings.add(CompatWarning(

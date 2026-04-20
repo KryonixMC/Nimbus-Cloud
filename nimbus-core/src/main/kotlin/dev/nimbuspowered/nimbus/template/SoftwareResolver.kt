@@ -105,6 +105,26 @@ private data class HangarVersion(val name: String, val downloads: Map<String, Ha
 @Serializable
 private data class HangarDownload(val downloadUrl: String)
 
+/**
+ * Thrown when a requested server version is not offered by the upstream API
+ * (e.g. user typed "1.99.9" for Paper). Carries the known-versions list so
+ * callers can surface a helpful message to the user.
+ */
+class UnknownServerVersionException(
+    val software: ServerSoftware,
+    val requestedVersion: String,
+    val knownVersions: List<String>
+) : RuntimeException(buildMessage(software, requestedVersion, knownVersions)) {
+    companion object {
+        private fun buildMessage(software: ServerSoftware, requested: String, known: List<String>): String {
+            val preview = known.take(10).joinToString(", ")
+            val more = if (known.size > 10) " (+${known.size - 10} more)" else ""
+            val hint = if (known.isEmpty()) "upstream API returned no versions" else "known: $preview$more"
+            return "Unknown $software version '$requested' — $hint"
+        }
+    }
+}
+
 class SoftwareResolver {
 
     private val logger = LoggerFactory.getLogger(SoftwareResolver::class.java)
@@ -782,6 +802,35 @@ class SoftwareResolver {
         }
     }
 
+    /**
+     * Verifies that [version] is offered by the upstream API for [software].
+     * Throws [UnknownServerVersionException] if not. For Pufferfish the check
+     * is against the major branch (e.g. "1.21") because that's all the CI exposes.
+     * A fetch failure (empty list) is treated as "skip validation" rather than
+     * a hard fail — offline / upstream-down shouldn't block a known-good version.
+     */
+    suspend fun verifyVersionSupported(software: ServerSoftware, version: String) {
+        val list = when (software) {
+            ServerSoftware.PAPER -> fetchPaperVersions()
+            ServerSoftware.FOLIA -> fetchFoliaVersions()
+            ServerSoftware.VELOCITY -> fetchVelocityVersions()
+            ServerSoftware.PURPUR -> fetchPurpurVersions()
+            ServerSoftware.LEAF -> fetchLeafVersions()
+            ServerSoftware.PUFFERFISH -> fetchPufferfishVersions()
+            else -> return
+        }
+        if (list.all.isEmpty()) {
+            logger.warn("Version list for {} is empty — skipping validation (upstream API unreachable?)", software)
+            return
+        }
+        val needle = if (software == ServerSoftware.PUFFERFISH) {
+            version.split(".").take(2).joinToString(".")
+        } else version
+        if (needle !in list.all) {
+            throw UnknownServerVersionException(software, version, list.all)
+        }
+    }
+
     // ── Modded server installers ──────────────────────────────────
 
     private suspend fun installForge(mcVersion: String, forgeVersion: String, targetDir: Path): Boolean {
@@ -988,6 +1037,7 @@ class SoftwareResolver {
     // ── Paper/Purpur/Velocity downloads ─────────────────────────
 
     private suspend fun downloadPaperMC(software: ServerSoftware, version: String, targetDir: Path): Path? {
+        verifyVersionSupported(software, version)
         return try {
             val project = when (software) {
                 ServerSoftware.PAPER -> "paper"
@@ -1017,6 +1067,8 @@ class SoftwareResolver {
 
             val downloadUrl = "https://api.papermc.io/v2/projects/$project/versions/$version/builds/${latestBuild.build}/downloads/${downloadEntry.name}"
             downloadFile(downloadUrl, targetDir, software, version, "build ${latestBuild.build}", expectedSha256 = downloadEntry.sha256)
+        } catch (e: UnknownServerVersionException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to download {} {}: {}", software, version, e.message, e)
             null
@@ -1024,6 +1076,7 @@ class SoftwareResolver {
     }
 
     private suspend fun downloadPurpur(version: String, targetDir: Path): Path? {
+        verifyVersionSupported(ServerSoftware.PURPUR, version)
         return try {
             val versionUrl = "https://api.purpurmc.org/v2/purpur/$version"
             val versionResponse = client.get(versionUrl)
@@ -1037,6 +1090,8 @@ class SoftwareResolver {
 
             val downloadUrl = "https://api.purpurmc.org/v2/purpur/$version/$latestBuild/download"
             downloadFile(downloadUrl, targetDir, ServerSoftware.PURPUR, version, "build $latestBuild")
+        } catch (e: UnknownServerVersionException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to download Purpur {}: {}", version, e.message, e)
             null
@@ -1044,6 +1099,7 @@ class SoftwareResolver {
     }
 
     private suspend fun downloadPufferfish(version: String, targetDir: Path): Path? {
+        verifyVersionSupported(ServerSoftware.PUFFERFISH, version)
         return try {
             // Pufferfish CI uses major version branches (1.17, 1.18, 1.19, 1.20, 1.21)
             val majorVersion = version.split(".").take(2).joinToString(".")
@@ -1077,6 +1133,8 @@ class SoftwareResolver {
             val sizeMb = String.format("%.1f", targetFile.fileSize() / 1024.0 / 1024.0)
             logger.info("Downloaded Pufferfish {} ({} MB)", artifact.fileName, sizeMb)
             targetFile
+        } catch (e: UnknownServerVersionException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to download Pufferfish {}: {}", version, e.message, e)
             null
@@ -1084,6 +1142,7 @@ class SoftwareResolver {
     }
 
     private suspend fun downloadLeaf(version: String, targetDir: Path): Path? {
+        verifyVersionSupported(ServerSoftware.LEAF, version)
         return try {
             val buildsUrl = "https://api.leafmc.one/v2/projects/leaf/versions/$version/builds"
 
@@ -1107,6 +1166,8 @@ class SoftwareResolver {
 
             val downloadUrl = "https://api.leafmc.one/v2/projects/leaf/versions/$version/builds/${latestBuild.build}/downloads/${downloadEntry.name}"
             downloadFile(downloadUrl, targetDir, ServerSoftware.LEAF, version, "build ${latestBuild.build}", expectedSha256 = downloadEntry.sha256)
+        } catch (e: UnknownServerVersionException) {
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to download Leaf {}: {}", version, e.message, e)
             null

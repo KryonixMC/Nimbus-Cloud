@@ -8,6 +8,9 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
 
 class CompatibilityCheckerTest {
 
@@ -260,6 +263,66 @@ class CompatibilityCheckerTest {
 
         val multiVersion = warnings.filter { it.title.contains("Multiple MC versions") }
         assertTrue(multiVersion.isEmpty())
+    }
+
+    // ── NeoForge / Forge proxy-forwarding-mod detection ───────
+    // Regression: the boot check must recognize NeoForwarding (NeoForge 1.20.2+),
+    // not only the older proxy-compatible-forge / bungeeforge / neovelocity names.
+
+    private fun writeModsDir(templatesRoot: Path, groupName: String, vararg modJars: String): NimbusConfig {
+        val modsDir = templatesRoot.resolve(groupName).resolve("mods")
+        Files.createDirectories(modsDir)
+        for (jar in modJars) Files.createFile(modsDir.resolve(jar))
+        return NimbusConfig(paths = PathsConfig(templates = templatesRoot.toString()))
+    }
+
+    @Test
+    fun `NeoForge 1_20_2+ with NeoForwarding jar does not warn about missing proxy mod`(@TempDir tmp: Path) {
+        val cfg = writeModsDir(tmp, "atm10", "neoforwarding-neoforge-1.21.1-1.0.0.jar")
+        val localChecker = CompatibilityChecker(groupManager, cfg, javaResolver)
+        val atm10 = makeGroup("atm10", ServerSoftware.NEOFORGE, "1.21.1")
+        every { groupManager.getAllGroups() } returns listOf(atm10)
+        every { javaResolver.requiredJavaVersion(any(), any()) } returns 21
+        every { javaResolver.maxJavaVersion(any(), any()) } returns null
+        every { javaResolver.getDetectedVersions() } returns mapOf(21 to "/usr/lib/jvm/java-21/bin/java")
+
+        val warnings = localChecker.checkCompatibility()
+
+        assertTrue(warnings.none { it.title.contains("no proxy forwarding mod") },
+            "NeoForwarding mod must be recognized — warnings=${warnings.map { it.title }}")
+    }
+
+    @Test
+    fun `NeoForge with proxy-compatible-forge jar still recognized`(@TempDir tmp: Path) {
+        val cfg = writeModsDir(tmp, "modded", "proxy-compatible-forge-2.0.1.jar")
+        val localChecker = CompatibilityChecker(groupManager, cfg, javaResolver)
+        val group = makeGroup("modded", ServerSoftware.NEOFORGE, "1.20.1")
+        every { groupManager.getAllGroups() } returns listOf(group)
+        every { javaResolver.requiredJavaVersion(any(), any()) } returns 17
+        every { javaResolver.maxJavaVersion(any(), any()) } returns null
+        every { javaResolver.getDetectedVersions() } returns mapOf(17 to "/usr/lib/jvm/java-17/bin/java")
+
+        val warnings = localChecker.checkCompatibility()
+
+        assertTrue(warnings.none { it.title.contains("no proxy forwarding mod") })
+    }
+
+    @Test
+    fun `NeoForge without any forwarding mod produces WARN`(@TempDir tmp: Path) {
+        val cfg = writeModsDir(tmp, "modded", "some-other-mod.jar")
+        val localChecker = CompatibilityChecker(groupManager, cfg, javaResolver)
+        val group = makeGroup("modded", ServerSoftware.NEOFORGE, "1.21.1")
+        every { groupManager.getAllGroups() } returns listOf(group)
+        every { javaResolver.requiredJavaVersion(any(), any()) } returns 21
+        every { javaResolver.maxJavaVersion(any(), any()) } returns null
+        every { javaResolver.getDetectedVersions() } returns mapOf(21 to "/usr/lib/jvm/java-21/bin/java")
+
+        val warnings = localChecker.checkCompatibility()
+
+        assertTrue(warnings.any {
+            it.level == CompatibilityChecker.CompatWarning.Level.WARN
+                && it.title.contains("no proxy forwarding mod")
+        }, "Expected proxy-forwarding WARN — got ${warnings.map { it.title }}")
     }
 
     @Test

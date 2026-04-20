@@ -103,6 +103,28 @@ class CreateGroupCommand(
             val allCandidates = stableVersions + snapshotVersions
             val version = prompt("Minecraft version", defaultVersion, candidates = allCandidates)
 
+            // Hard validation — if the upstream API returned a version list and the
+            // user's choice isn't in it, abort BEFORE writing TOML / downloading files.
+            // Forge/NeoForge/Fabric/Custom are skipped: their `version` is a generic MC
+            // version whose authoritative list lives elsewhere (installer, loader meta).
+            val validatesVersion = software in listOf(
+                ServerSoftware.PAPER, ServerSoftware.PURPUR, ServerSoftware.PUFFERFISH,
+                ServerSoftware.LEAF, ServerSoftware.FOLIA
+            )
+            if (validatesVersion && allCandidates.isNotEmpty()) {
+                val needle = if (software == ServerSoftware.PUFFERFISH) {
+                    version.split(".").take(2).joinToString(".")
+                } else version
+                if (needle !in allCandidates) {
+                    val preview = allCandidates.take(10).joinToString(", ")
+                    w.println()
+                    w.println(ConsoleFormatter.error("Unknown ${software.name} version '$version'."))
+                    w.println(ConsoleFormatter.hint("Known versions: $preview${if (allCandidates.size > 10) ", ..." else ""}"))
+                    w.flush()
+                    return
+                }
+            }
+
             // Folia warning
             if (software == ServerSoftware.FOLIA) {
                 w.println()
@@ -171,61 +193,80 @@ class CreateGroupCommand(
             w.println(ConsoleFormatter.colorize("Downloading files...", ConsoleFormatter.BOLD))
             w.println()
 
-            // Step 8: Download/install server
+            // Step 8: Download/install server. The core JAR download MUST succeed —
+            // without it we'd end up with a broken group config and no way to start.
+            // Companion downloads (proxy forwarding mods, Cardboard) remain best-effort.
             val templateDir = templatesDir.resolve(groupName.lowercase())
-            when (software) {
+            val coreJarOk: Boolean = when (software) {
                 ServerSoftware.CUSTOM -> {
                     w.println(ConsoleFormatter.hint("Custom software — skipping download"))
                     if (!templateDir.exists()) {
                         Files.createDirectories(templateDir)
                         w.println(ConsoleFormatter.successLine("Created template dir: templates/${groupName.lowercase()}/"))
                     }
+                    true
                 }
                 ServerSoftware.FORGE -> {
-                    download(w, "Forge $modloaderVersion for MC $version") {
+                    val ok = download(w, "Forge $modloaderVersion for MC $version") {
                         softwareResolver.ensureJarAvailable(software, version, templateDir, modloaderVersion)
                     }
-                    download(w, "Proxy forwarding mod") {
-                        softwareResolver.ensureForwardingMod(software, version, templateDir)
-                        true
-                    }
-                }
-                ServerSoftware.NEOFORGE -> {
-                    download(w, "NeoForge $modloaderVersion for MC $version") {
-                        softwareResolver.ensureJarAvailable(software, version, templateDir, modloaderVersion)
-                    }
-                    download(w, "Proxy forwarding mod") {
-                        softwareResolver.ensureForwardingMod(software, version, templateDir)
-                        true
-                    }
-                }
-                ServerSoftware.FABRIC -> {
-                    download(w, "Fabric $modloaderVersion for MC $version") {
-                        softwareResolver.ensureJarAvailable(software, version, templateDir, modloaderVersion)
-                    }
-                    download(w, "FabricProxy-Lite") {
-                        softwareResolver.ensureFabricProxyMod(templateDir, version)
-                        true
-                    }
-                    w.println()
-                    w.println("${YELLOW}[BETA] Cardboard allows running Bukkit/Paper plugins on Fabric servers.")
-                    w.println("This is experimental software — not all plugins will work correctly.$RESET")
-                    val cardboardOptions = listOf(
-                        InteractivePicker.Option("no", "No"),
-                        InteractivePicker.Option("yes", "Yes — install Cardboard (BETA)")
-                    )
-                    val cardboardIndex = InteractivePicker.pickOne(terminal, cardboardOptions, 0)
-                    if (cardboardIndex != InteractivePicker.BACK && cardboardOptions[cardboardIndex].id == "yes") {
-                        download(w, "Cardboard (BETA)") {
-                            softwareResolver.ensureCardboardMod(templateDir, version)
+                    if (ok) {
+                        download(w, "Proxy forwarding mod") {
+                            softwareResolver.ensureForwardingMod(software, version, templateDir)
+                            true
                         }
                     }
+                    ok
+                }
+                ServerSoftware.NEOFORGE -> {
+                    val ok = download(w, "NeoForge $modloaderVersion for MC $version") {
+                        softwareResolver.ensureJarAvailable(software, version, templateDir, modloaderVersion)
+                    }
+                    if (ok) {
+                        download(w, "Proxy forwarding mod") {
+                            softwareResolver.ensureForwardingMod(software, version, templateDir)
+                            true
+                        }
+                    }
+                    ok
+                }
+                ServerSoftware.FABRIC -> {
+                    val ok = download(w, "Fabric $modloaderVersion for MC $version") {
+                        softwareResolver.ensureJarAvailable(software, version, templateDir, modloaderVersion)
+                    }
+                    if (ok) {
+                        download(w, "FabricProxy-Lite") {
+                            softwareResolver.ensureFabricProxyMod(templateDir, version)
+                            true
+                        }
+                        w.println()
+                        w.println("${YELLOW}[BETA] Cardboard allows running Bukkit/Paper plugins on Fabric servers.")
+                        w.println("This is experimental software — not all plugins will work correctly.$RESET")
+                        val cardboardOptions = listOf(
+                            InteractivePicker.Option("no", "No"),
+                            InteractivePicker.Option("yes", "Yes — install Cardboard (BETA)")
+                        )
+                        val cardboardIndex = InteractivePicker.pickOne(terminal, cardboardOptions, 0)
+                        if (cardboardIndex != InteractivePicker.BACK && cardboardOptions[cardboardIndex].id == "yes") {
+                            download(w, "Cardboard (BETA)") {
+                                softwareResolver.ensureCardboardMod(templateDir, version)
+                            }
+                        }
+                    }
+                    ok
                 }
                 else -> {
                     download(w, "${software.name.lowercase().replaceFirstChar { it.uppercase() }} $version") {
                         softwareResolver.ensureJarAvailable(software, version, templateDir)
                     }
                 }
+            }
+
+            if (!coreJarOk) {
+                w.println()
+                w.println(ConsoleFormatter.error("Group '$groupName' NOT created — server JAR could not be obtained."))
+                w.flush()
+                return
             }
 
             // Step 9: Via plugins
@@ -405,17 +446,31 @@ class CreateGroupCommand(
 
     // -- Download helper -----------------------------------------------------
 
-    private suspend fun download(w: java.io.PrintWriter, label: String, action: suspend () -> Boolean) {
+    /**
+     * Runs a download step. Returns true on success, false on failure.
+     * Callers MUST check the return value and abort the wizard on false —
+     * otherwise the group TOML ends up written with no server JAR present
+     * and a broken group is registered.
+     */
+    private suspend fun download(w: java.io.PrintWriter, label: String, action: suspend () -> Boolean): Boolean {
         w.print("${ConsoleFormatter.hint("↓")} $label ")
         w.flush()
-        val success = action()
+        val success = try {
+            action()
+        } catch (e: dev.nimbuspowered.nimbus.template.UnknownServerVersionException) {
+            w.println(ConsoleFormatter.colorize("✗", ConsoleFormatter.RED))
+            w.println(ConsoleFormatter.error(e.message ?: "Unknown version"))
+            w.flush()
+            return false
+        }
         if (success) {
             w.println(ConsoleFormatter.colorize("✓", ConsoleFormatter.GREEN))
         } else {
             w.println(ConsoleFormatter.colorize("✗", ConsoleFormatter.RED))
-            w.println(ConsoleFormatter.warn("Download failed. You can place the file manually later."))
+            w.println(ConsoleFormatter.error("Download failed — aborting group creation."))
         }
         w.flush()
+        return success
     }
 
     // -- TOML writer ---------------------------------------------------------
