@@ -35,6 +35,10 @@ dependencies {
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("ch.qos.logback:logback-classic:1.5.16")
+    // Opt-in JSON log encoder — activated by logback-json.xml when
+    // NIMBUS_LOG_FORMAT=json is set at startup. Bundled into the shadowJar
+    // regardless so mode switching never fails with a ClassNotFound at boot.
+    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
 
     // HTTP client for downloading server JARs
     implementation("io.ktor:ktor-client-cio:3.1.1")
