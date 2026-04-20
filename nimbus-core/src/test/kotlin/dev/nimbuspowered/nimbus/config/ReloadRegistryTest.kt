@@ -27,19 +27,19 @@ class ReloadRegistryTest {
     }
 
     @Test
-    fun `restartRequiredFor lists exactly the REQUIRES_RESTART sections`() {
+    fun `requiresRestartIfChanged lists exactly the REQUIRES_RESTART sections`() {
         val report = ReloadRegistry.buildReport(
             success = true, groupsLoaded = 0,
             appliedSections = emptySet(),
             message = ""
         )
-        assertTrue("api" in report.restartRequiredFor)
-        assertTrue("database" in report.restartRequiredFor)
-        assertTrue("cluster" in report.restartRequiredFor)
+        assertTrue("api" in report.requiresRestartIfChanged)
+        assertTrue("database" in report.requiresRestartIfChanged)
+        assertTrue("cluster" in report.requiresRestartIfChanged)
         // LIVE and NEXT_SERVICE_PREPARE sections must not appear here.
-        assertFalse("groups" in report.restartRequiredFor)
-        assertFalse("sandbox" in report.restartRequiredFor)
-        assertFalse("modules.backup" in report.restartRequiredFor)
+        assertFalse("groups" in report.requiresRestartIfChanged)
+        assertFalse("sandbox" in report.requiresRestartIfChanged)
+        assertFalse("modules.backup" in report.requiresRestartIfChanged)
     }
 
     @Test

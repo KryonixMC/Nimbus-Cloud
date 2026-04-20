@@ -39,29 +39,29 @@ object StartupDiagnostic {
             matches = { tail, _ -> tail.anyContainsIgnoreCase("address already in use") || tail.anyContainsIgnoreCase("bindexception") },
             render = { tail, _ ->
                 val port = extractPort(tail)
-                if (port != null) "Port $port ist bereits belegt — prüfe mit `ss -tlnp | grep $port`."
-                else "Ein Port ist bereits belegt — prüfe `ss -tlnp`, ob ein anderer Prozess Nimbus-Ports hält."
+                if (port != null) "Port $port is already in use — check with `ss -tlnp | grep $port`."
+                else "A port is already in use — check `ss -tlnp` for another process holding Nimbus ports."
             }
         ),
         // JVM OOM — separate from cgroup-OOM (which shows up via exit code 137).
         Pattern(
             matches = { tail, _ -> tail.anyContainsIgnoreCase("outofmemoryerror") || tail.anyContainsIgnoreCase("java heap space") },
-            render = { _, _ -> "JVM-OOM — erhöhe `[group.resources] memory` oder prüfe auf Plugin-Speicher-Leak." }
+            render = { _, _ -> "JVM out of memory — raise `[group.resources] memory` or investigate a plugin memory leak." }
         ),
         // OOM-killed by kernel (cgroup MemoryMax hit or host OOM killer)
         Pattern(
             matches = { _, ctx -> ctx is CrashContext.Exited && ctx.exitCode == 137 },
-            render = { _, _ -> "Prozess wurde OOM-gekillt (Exit 137) — entweder `[group.sandbox] memory_limit_mb` zu niedrig oder Host hat keinen RAM mehr." }
+            render = { _, _ -> "Process OOM-killed (exit 137) — either `[group.sandbox] memory_limit_mb` is too low or the host is out of RAM." }
         ),
         // Missing JAR
         Pattern(
             matches = { tail, _ -> tail.anyContainsIgnoreCase("unable to access jarfile") || tail.anyContainsIgnoreCase("error: main class") },
-            render = { _, _ -> "Server-JAR fehlt oder ist korrupt — Template evtl. defekt, `service redeploy` versuchen." }
+            render = { _, _ -> "Server JAR missing or corrupt — template may be damaged, try `service redeploy`." }
         ),
         // EULA (shouldn't happen — Nimbus sets it automatically — but if it does it's a clear sign of a deeper issue)
         Pattern(
             matches = { tail, _ -> tail.anyContainsIgnoreCase("you need to agree to the eula") },
-            render = { _, _ -> "EULA nicht akzeptiert — Nimbus sollte das automatisch erledigen; bitte als Bug reporten." }
+            render = { _, _ -> "EULA not accepted — Nimbus should handle this automatically; please report as a bug." }
         ),
         // Java version mismatch
         Pattern(
@@ -69,19 +69,19 @@ object StartupDiagnostic {
                 tail.anyContainsIgnoreCase("unsupportedclassversionerror") ||
                         tail.anyContainsIgnoreCase("has been compiled by a more recent version")
             },
-            render = { _, _ -> "Java-Version passt nicht — der Server braucht ein neueres JDK; `[java]`-Sektion in `nimbus.toml` prüfen." }
+            render = { _, _ -> "Java version mismatch — the server needs a newer JDK; check the `[java]` section in `nimbus.toml`." }
         ),
         // Corrupt world / Paper DirectoryLock
         Pattern(
             matches = { tail, _ -> tail.anyContainsIgnoreCase("failed to acquire directory lock") || tail.anyContainsIgnoreCase("session.lock") },
-            render = { _, _ -> "Session-Lock liegt noch — ein Vorgänger-Prozess hält vermutlich das Arbeitsverzeichnis; `orphan sweep` oder Reboot." }
+            render = { _, _ -> "Session lock still held — a previous process likely has the working directory; run `orphan sweep` or reboot." }
         ),
         // Ready timeout without any of the above
         Pattern(
             matches = { _, ctx -> ctx is CrashContext.ReadyTimeout },
             render = { _, ctx ->
                 val t = (ctx as? CrashContext.ReadyTimeout)?.timeoutSeconds
-                "Service hat das READY-Pattern in ${t ?: "?"}s nicht erreicht — evtl. `[group.ready_pattern]` anpassen oder Timeout erhöhen."
+                "Service did not reach the READY pattern within ${t ?: "?"}s — adjust `[group.ready_pattern]` or raise the timeout."
             }
         )
     )
@@ -91,8 +91,8 @@ object StartupDiagnostic {
             if (p.matches(tail, ctx)) return p.render(tail, ctx)
         }
         return when (ctx) {
-            is CrashContext.Exited -> "Prozess beendet mit Exit-Code ${ctx.exitCode} — siehe angehängte Log-Zeilen."
-            is CrashContext.ReadyTimeout -> "Service ist nach dem Timeout noch nicht READY geworden — siehe angehängte Log-Zeilen."
+            is CrashContext.Exited -> "Process exited with code ${ctx.exitCode} — see the attached log lines."
+            is CrashContext.ReadyTimeout -> "Service did not become READY before the timeout — see the attached log lines."
         }
     }
 
@@ -101,7 +101,10 @@ object StartupDiagnostic {
         return any { it.lowercase().contains(lower) }
     }
 
-    private val PORT_REGEX = Regex("""(?i)(?:port|:)\s*(\d{2,5})""")
+    // Port matcher: 4–5 digit ports only. Dropping 2–3 digit ports avoids
+    // matching "[10:30]"-style timestamps and narrows to the realistic
+    // Minecraft/backend range (1024+ in practice, 25565/30000 by default).
+    private val PORT_REGEX = Regex("""(?i)(?:port|bind(?:\s+to)?|:)\s*(\d{4,5})""")
 
     private fun extractPort(tail: List<String>): Int? {
         for (line in tail.reversed()) {

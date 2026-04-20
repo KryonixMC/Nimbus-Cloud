@@ -345,7 +345,7 @@ Partial update of non-critical fields — `networkName`, `consoleColored`, `cons
 
 #### Reload report
 
-Since v0.12.0, `/api/reload` returns a structured `ReloadReport` that names every known config section, its reload scope (`LIVE` / `NEXT_SERVICE_PREPARE` / `REQUIRES_RESTART`), whether the current pass applied it, and which sections would require a full controller restart to take effect. Backwards-compatible — the legacy `success`, `groupsLoaded`, and `message` fields are retained for older dashboard versions.
+Since v0.12.0, `/api/reload` returns a structured `ReloadReport` that names every known config section, its reload scope (`LIVE` / `NEXT_SERVICE_PREPARE` / `REQUIRES_RESTART`), and whether the current pass applied it. `requiresRestartIfChanged` is a **reference list** of sections whose changes would require a full controller restart — not a per-request delta. Backwards-compatible: the legacy `success`, `groupsLoaded`, and `message` fields are retained for older dashboard versions.
 
 ```json
 {
@@ -357,7 +357,7 @@ Since v0.12.0, `/api/reload` returns a structured `ReloadReport` that names ever
     { "name": "sandbox",  "scope": "NEXT_SERVICE_PREPARE","applied": false, "description": "Global sandbox defaults..." },
     { "name": "api",      "scope": "REQUIRES_RESTART",   "applied": false, "description": "API bind/port/token/JWT/CORS..." }
   ],
-  "restartRequiredFor": ["api", "database", "cluster", "audit", "metrics", "controller", "network", "loadbalancer", "punishments", "resourcepacks", "dashboard", "console"],
+  "requiresRestartIfChanged": ["api", "database", "cluster", "audit", "metrics", "controller", "network", "loadbalancer", "punishments", "resourcepacks", "dashboard", "console"],
   "warnings": []
 }
 ```

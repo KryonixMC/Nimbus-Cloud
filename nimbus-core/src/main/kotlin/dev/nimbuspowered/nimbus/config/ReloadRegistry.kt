@@ -40,8 +40,17 @@ data class ReloadReport(
     /** Short human summary; kept for backwards compat with legacy dashboard field. */
     val message: String,
     val sections: List<ReloadSection> = emptyList(),
-    /** Sections whose changes would require a restart to take effect. */
-    val restartRequiredFor: List<String> = emptyList(),
+    /**
+     * Reference list — the names of every section whose reload scope is
+     * [ReloadScope.REQUIRES_RESTART]. **This is not a per-request delta** — it
+     * does NOT mean the operator just changed these sections, only that if they
+     * were to change them, a controller restart would be required for the new
+     * values to take effect. Useful as a lookup for dashboard tooltips and for
+     * the console `reload` command's scope summary. For a per-request "did I
+     * just touch a restart-only section" signal, diff changes and compare
+     * against this list client-side.
+     */
+    val requiresRestartIfChanged: List<String> = emptyList(),
     val warnings: List<String> = emptyList()
 )
 
@@ -127,7 +136,7 @@ object ReloadRegistry {
                 description = s.description
             )
         }
-        val restartNeeded = sections
+        val restartScopeSections = sections
             .filter { it.scope == ReloadScope.REQUIRES_RESTART }
             .map { it.name }
         return ReloadReport(
@@ -135,7 +144,7 @@ object ReloadRegistry {
             groupsLoaded = groupsLoaded,
             message = message,
             sections = sections,
-            restartRequiredFor = restartNeeded,
+            requiresRestartIfChanged = restartScopeSections,
             warnings = warnings
         )
     }

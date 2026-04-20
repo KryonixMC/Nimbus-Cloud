@@ -14,20 +14,20 @@ class StartupDiagnosticTest {
         )
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
         assertTrue(out.contains("30001"), "should mention the port; got: $out")
-        assertTrue(out.contains("belegt"))
+        assertTrue(out.contains("already in use"))
     }
 
     @Test
     fun `port conflict without a port number falls back to generic hint`() {
         val tail = listOf("java.net.BindException: Address already in use")
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
-        assertTrue(out.contains("Port"), out)
+        assertTrue(out.contains("port"), out)
     }
 
     @Test
     fun `oom exit 137 is attributed to memory cap`() {
         val out = StartupDiagnostic.diagnose(listOf("killed by signal"), StartupDiagnostic.CrashContext.Exited(137))
-        assertTrue(out.contains("OOM-gekillt"))
+        assertTrue(out.contains("OOM-killed"))
         assertTrue(out.contains("137"))
     }
 
@@ -35,14 +35,14 @@ class StartupDiagnosticTest {
     fun `jvm oom error is detected`() {
         val tail = listOf("java.lang.OutOfMemoryError: Java heap space", "at foo.bar")
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
-        assertTrue(out.contains("JVM-OOM"))
+        assertTrue(out.contains("JVM out of memory"))
     }
 
     @Test
     fun `missing jar message is recognized`() {
         val tail = listOf("Error: Unable to access jarfile paper.jar")
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
-        assertTrue(out.contains("Server-JAR fehlt"))
+        assertTrue(out.contains("Server JAR missing"))
     }
 
     @Test
@@ -51,7 +51,7 @@ class StartupDiagnosticTest {
             listOf("[INFO] Loading libraries...", "[INFO] Starting minecraft server"),
             StartupDiagnostic.CrashContext.ReadyTimeout(120)
         )
-        assertTrue(out.contains("READY-Pattern"), out)
+        assertTrue(out.contains("READY pattern"), out)
         assertTrue(out.contains("120"))
     }
 
@@ -59,14 +59,14 @@ class StartupDiagnosticTest {
     fun `java version mismatch is explained`() {
         val tail = listOf("UnsupportedClassVersionError: foo has been compiled by a more recent version of the Java Runtime")
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
-        assertTrue(out.contains("Java-Version"))
+        assertTrue(out.contains("Java version mismatch"))
     }
 
     @Test
     fun `session lock is called out`() {
         val tail = listOf("Failed to acquire directory lock: /srv/world/session.lock")
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
-        assertTrue(out.contains("Session-Lock"))
+        assertTrue(out.contains("Session lock"))
     }
 
     @Test
@@ -75,7 +75,7 @@ class StartupDiagnosticTest {
             listOf("completely random log that matches nothing"),
             StartupDiagnostic.CrashContext.Exited(42)
         )
-        assertEquals("Prozess beendet mit Exit-Code 42 — siehe angehängte Log-Zeilen.", out)
+        assertEquals("Process exited with code 42 — see the attached log lines.", out)
     }
 
     @Test
@@ -94,5 +94,18 @@ class StartupDiagnosticTest {
         )
         val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
         assertTrue(out.contains("30123"), "should prefer the most recent port; got $out")
+    }
+
+    @Test
+    fun `timestamps like square-bracketed HH colon MM do not get read as ports`() {
+        // Regression for the PORT_REGEX 2–5 digit matcher that previously caught ":30"
+        // out of "[10:30]". Ports are now constrained to 4–5 digits.
+        val tail = listOf(
+            "[10:30] Server starting...",
+            "java.net.BindException: Address already in use",
+            "[22:00:05] Failed to bind to :25565"
+        )
+        val out = StartupDiagnostic.diagnose(tail, StartupDiagnostic.CrashContext.Exited(1))
+        assertTrue(out.contains("25565"), "should extract the real port, not a timestamp digit pair; got $out")
     }
 }

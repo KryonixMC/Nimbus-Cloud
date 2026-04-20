@@ -323,18 +323,53 @@ class ServiceManager(
         return startRemoteService(prepared.service, prepared, node, group)
     }
 
+    /** Groups we've already warned about for silent-fallback sandbox edge-cases; dedupes log spam. */
+    private val sandboxFallbackWarned = ConcurrentHashMap.newKeySet<String>()
+
     /**
      * Resolves the sandbox mode for [service] and wraps [command] via
-     * systemd-run when MANAGED is selected. For BARE (or DOCKER, which is
-     * never routed here) the command is returned unchanged. Lookup failures
-     * fall back to BARE so a broken group config never blocks a service.
+     * systemd-run when MANAGED is selected. BARE returns the command
+     * unchanged. DOCKER reaching this function means the operator asked for
+     * docker sandboxing but the Docker module isn't loaded or `[group.docker]
+     * enabled = true` wasn't set — we WARN once per group and return bare,
+     * never silently. Lookup failures fall back to BARE so a broken group
+     * config never blocks a service.
      */
     private fun applyManagedSandbox(service: Service, command: List<String>): List<String> {
         val group = groupManager.getGroup(service.groupName) ?: return command
         val groupDef = group.config.group
         val resolved = sandboxResolver.resolve(service.name, groupDef.sandbox, groupDef.resources)
-        if (resolved.mode != SandboxMode.MANAGED) return command
-        return SystemdRunSandbox.wrapCommand(service.name, command, resolved.limits)
+        when (resolved.mode) {
+            SandboxMode.BARE -> return command
+            SandboxMode.DOCKER -> {
+                if (sandboxFallbackWarned.add("${service.groupName}:docker")) {
+                    logger.warn(
+                        "Group '{}' has [group.sandbox] mode = \"docker\" but the Docker module is not loaded " +
+                                "(or [group.docker] enabled = true is missing). Falling back to bare process — no kernel enforcement.",
+                        service.groupName
+                    )
+                }
+                return command
+            }
+            SandboxMode.MANAGED -> {
+                val wrapped = SystemdRunSandbox.wrapCommand(service.name, command, resolved.limits)
+                if (wrapped === command &&
+                    sandboxFallbackWarned.add("${service.groupName}:managed-no-limits")
+                ) {
+                    logger.warn(
+                        "Group '{}' resolved to sandbox mode = \"managed\" but every limit derives to 0 " +
+                                "(memory_limit_mb={}, cpu_quota={}, tasks_max={}). Spawning without systemd-run wrapping — " +
+                                "no kernel enforcement active. Check [group.resources] memory parses and the global " +
+                                "[sandbox] overhead defaults.",
+                        service.groupName,
+                        resolved.limits.memoryMb,
+                        resolved.limits.cpuQuota,
+                        resolved.limits.tasksMax
+                    )
+                }
+                return wrapped
+            }
+        }
     }
 
     private suspend fun startLocalService(service: Service, prepared: ServiceFactory.PreparedService): Service? {
