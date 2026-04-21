@@ -633,7 +633,7 @@ class ServiceFactory(
         if (software == ServerSoftware.VELOCITY) {
             if (!pluginsDir.exists()) pluginsDir.createDirectories()
             deployBridgePlugin(pluginsDir)
-            for (deployment in allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.VELOCITY }) {
+            for (deployment in allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.api.PluginTarget.VELOCITY }) {
                 deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
             }
             return
@@ -647,7 +647,7 @@ class ServiceFactory(
         // Always deploy the SDK — it's the base layer for every Nimbus-aware plugin
         deployResourcePlugin(pluginsDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
 
-        val backendDeployments = allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.BACKEND }
+        val backendDeployments = allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.api.PluginTarget.BACKEND }
         if (backendDeployments.isEmpty()) return
 
         val minor = version.split(".").getOrNull(1)?.toIntOrNull() ?: 0

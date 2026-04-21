@@ -4,7 +4,7 @@ import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 
 class HelpCommand(
     private val dispatcher: CommandDispatcher

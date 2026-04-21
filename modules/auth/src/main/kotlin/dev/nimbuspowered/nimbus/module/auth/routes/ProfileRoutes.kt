@@ -105,7 +105,7 @@ fun Route.profileRoutes(
 private suspend fun requireUserSession(
     call: ApplicationCall,
     sessionService: SessionService
-): dev.nimbuspowered.nimbus.module.AuthPrincipal.UserSession? {
+): dev.nimbuspowered.nimbus.module.api.AuthPrincipal.UserSession? {
     val raw = extractBearer(call)
     if (raw == null) {
         call.respond(HttpStatusCode.Unauthorized,

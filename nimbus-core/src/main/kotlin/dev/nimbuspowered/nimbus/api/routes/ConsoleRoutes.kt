@@ -5,7 +5,7 @@ import io.ktor.http.*
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import io.ktor.server.request.*

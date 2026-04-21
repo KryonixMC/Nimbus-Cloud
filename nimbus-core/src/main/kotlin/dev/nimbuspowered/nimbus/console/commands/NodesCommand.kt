@@ -4,7 +4,7 @@ import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 
 class NodesCommand(

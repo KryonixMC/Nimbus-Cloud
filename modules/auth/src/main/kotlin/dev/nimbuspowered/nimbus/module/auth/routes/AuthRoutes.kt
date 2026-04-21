@@ -5,7 +5,7 @@ import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import dev.nimbuspowered.nimbus.module.auth.AuthConfig
 import dev.nimbuspowered.nimbus.module.auth.service.ChallengeKind
 import dev.nimbuspowered.nimbus.module.auth.service.LoginChallengeService

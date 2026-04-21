@@ -6,11 +6,11 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.CYAN
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.DIM
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.GREEN
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.RESET
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.CompletionMeta
-import dev.nimbuspowered.nimbus.module.CompletionType
-import dev.nimbuspowered.nimbus.module.ModuleCommand
-import dev.nimbuspowered.nimbus.module.SubcommandMeta
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CompletionMeta
+import dev.nimbuspowered.nimbus.module.api.CompletionType
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.SubcommandMeta
 import dev.nimbuspowered.nimbus.module.players.PlayerTracker
 import java.time.Duration
 import java.time.Instant

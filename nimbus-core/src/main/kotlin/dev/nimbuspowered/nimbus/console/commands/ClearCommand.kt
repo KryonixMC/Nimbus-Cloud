@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.console.commands
 
 import dev.nimbuspowered.nimbus.console.Command
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import org.jline.terminal.Terminal
 
 class ClearCommand(

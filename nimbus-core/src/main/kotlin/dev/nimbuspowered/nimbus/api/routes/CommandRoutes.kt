@@ -4,8 +4,8 @@ import dev.nimbuspowered.nimbus.api.*
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
-import dev.nimbuspowered.nimbus.module.CommandCaller
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandCaller
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*

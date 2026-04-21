@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals

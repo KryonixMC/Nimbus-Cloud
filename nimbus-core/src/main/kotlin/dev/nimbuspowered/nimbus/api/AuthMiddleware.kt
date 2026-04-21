@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api
 
-import dev.nimbuspowered.nimbus.module.AuthPrincipal
-import dev.nimbuspowered.nimbus.module.hasPermission
+import dev.nimbuspowered.nimbus.module.api.AuthPrincipal
+import dev.nimbuspowered.nimbus.module.api.hasPermission
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*

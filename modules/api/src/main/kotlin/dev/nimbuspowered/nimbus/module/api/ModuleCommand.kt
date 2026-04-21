@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 /**
  * A console command registered by a module.

@@ -12,7 +12,7 @@ import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
-import dev.nimbuspowered.nimbus.module.AuthPrincipal
+import dev.nimbuspowered.nimbus.module.api.AuthPrincipal
 import dev.nimbuspowered.nimbus.module.ModuleContextImpl
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
@@ -219,8 +219,8 @@ class NimbusApi(
             val serviceToken = deriveServiceToken(apiConfig.token)
             // Session validator is published by the auth module at runtime.
             // We re-resolve on every call so modules loaded after API startup still work.
-            val sessionValidatorLookup: () -> dev.nimbuspowered.nimbus.module.SessionValidator? = {
-                moduleContext?.getService(dev.nimbuspowered.nimbus.module.SessionValidator::class.java)
+            val sessionValidatorLookup: () -> dev.nimbuspowered.nimbus.module.api.SessionValidator? = {
+                moduleContext?.getService(dev.nimbuspowered.nimbus.module.api.SessionValidator::class.java)
             }
             install(Authentication) {
                 // Full admin access — only for the master API token or JWT with admin scope
@@ -247,7 +247,7 @@ class NimbusApi(
                             // their session cookie/bearer.
                             val session = sessionValidatorLookup()?.validate(credential.token)
                             if (session != null && session.permissions.has(
-                                    dev.nimbuspowered.nimbus.module.PermissionSet.ADMIN_NODE)) {
+                                    dev.nimbuspowered.nimbus.module.api.PermissionSet.ADMIN_NODE)) {
                                 setAuthPrincipal(session)
                                 UserIdPrincipal("user:${session.uuid}")
                             } else null

@@ -4,7 +4,7 @@ import dev.nimbuspowered.nimbus.NimbusVersion
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.update.UpdateChecker
 import kotlin.io.path.Path
 

@@ -5,12 +5,12 @@ import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.module.display.routes.displayRoutes
-import dev.nimbuspowered.nimbus.module.DashboardConfig
-import dev.nimbuspowered.nimbus.module.DashboardSection
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
-import dev.nimbuspowered.nimbus.module.PluginDeployment
-import dev.nimbuspowered.nimbus.module.service
+import dev.nimbuspowered.nimbus.module.api.DashboardConfig
+import dev.nimbuspowered.nimbus.module.api.DashboardSection
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.PluginDeployment
+import dev.nimbuspowered.nimbus.module.api.service
 
 class DisplayModule : NimbusModule {
     override val id = "display"

@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.console
 
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test

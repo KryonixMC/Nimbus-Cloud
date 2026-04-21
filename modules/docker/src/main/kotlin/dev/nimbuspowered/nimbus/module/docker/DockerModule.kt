@@ -1,11 +1,11 @@
 package dev.nimbuspowered.nimbus.module.docker
 
 import dev.nimbuspowered.nimbus.NimbusVersion
-import dev.nimbuspowered.nimbus.module.AuthLevel
-import dev.nimbuspowered.nimbus.module.DashboardConfig
-import dev.nimbuspowered.nimbus.module.DashboardSection
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.AuthLevel
+import dev.nimbuspowered.nimbus.module.api.DashboardConfig
+import dev.nimbuspowered.nimbus.module.api.DashboardSection
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
 import dev.nimbuspowered.nimbus.module.docker.commands.DockerCommand
 import dev.nimbuspowered.nimbus.module.docker.routes.dockerRoutes
 import dev.nimbuspowered.nimbus.service.LocalServiceHandleFactory

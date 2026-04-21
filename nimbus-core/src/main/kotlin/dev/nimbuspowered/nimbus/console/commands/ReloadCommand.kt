@@ -9,7 +9,7 @@ import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.proxy.ProxySyncManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import java.nio.file.Path

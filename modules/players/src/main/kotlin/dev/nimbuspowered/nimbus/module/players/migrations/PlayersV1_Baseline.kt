@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.players.migrations
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import dev.nimbuspowered.nimbus.module.players.PlayerMeta
 import dev.nimbuspowered.nimbus.module.players.PlayerSessions
 import org.jetbrains.exposed.sql.SchemaUtils

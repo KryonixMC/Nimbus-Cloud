@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 /**
  * Bridge between the core API middleware and the auth module's session service.

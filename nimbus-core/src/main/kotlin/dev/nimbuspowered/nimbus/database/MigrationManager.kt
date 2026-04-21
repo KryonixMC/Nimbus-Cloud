@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.database
 
 import dev.nimbuspowered.nimbus.database.ServiceEvents
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction

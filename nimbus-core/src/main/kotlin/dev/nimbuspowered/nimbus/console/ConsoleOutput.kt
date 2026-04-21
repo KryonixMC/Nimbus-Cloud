@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.console
 
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 
 /**
  * [CommandOutput] implementation that prints to stdout with ANSI colors

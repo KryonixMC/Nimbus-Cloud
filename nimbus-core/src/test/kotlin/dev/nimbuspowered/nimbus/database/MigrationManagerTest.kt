@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.database
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Table

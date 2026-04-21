@@ -1,8 +1,8 @@
 package dev.nimbuspowered.nimbus.module.auth.service
 
 import dev.nimbuspowered.nimbus.database.DatabaseManager
-import dev.nimbuspowered.nimbus.module.AuthPrincipal
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.AuthPrincipal
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import dev.nimbuspowered.nimbus.module.auth.AuthConfig
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardSessions
 import kotlinx.coroutines.Dispatchers

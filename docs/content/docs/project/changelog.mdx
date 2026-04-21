@@ -17,6 +17,18 @@ All notable changes to this project are documented in this file. The format is b
 
 ---
 
+## [0.13.0] - unreleased
+
+### Changed
+
+- **Module-API Paket umbenannt** — alle öffentlichen Modul-API-Typen (`NimbusModule`, `ModuleContext`, `ModuleCommand`, `AuthPrincipal`, `PermissionSet`, `PluginDeployment`, `PluginTarget`, `Migration`, `DoctorCheck`, `DoctorLevel`, `DoctorFinding`, `CommandCaller`, `CommandOutput`, `SubcommandMeta`, `CompletionMeta`, `CompletionType`, `AuthLevel`, `DashboardConfig`, `DashboardSection`, `SessionValidator` sowie die Extensions `hasPermission` und `service<T>()`) sind vom Paket `dev.nimbuspowered.nimbus.module` nach `dev.nimbuspowered.nimbus.module.api` verschoben worden. Ziel der Umstellung: klarere Trennung zwischen öffentlicher Modul-API und core-internen Typen (`ModuleManager`, `ModuleContextImpl`, `ModuleInfo`).
+
+### Migration
+
+- **Drittanbieter-Module:** Die bisherigen Imports funktionieren dank Deprecated-Typealiases weiterhin, lösen aber Compiler-Warnungen aus. Bitte alle Imports der Form `dev.nimbuspowered.nimbus.module.<Typ>` auf `dev.nimbuspowered.nimbus.module.api.<Typ>` umstellen. Die Kompatibilitäts-Shim wird in Nimbus 1.0 entfernt.
+
+---
+
 ## [0.12.0] - 2026-04-20
 
 Minor release focused on **v1.0-readiness hardening**: kernel-enforced resource caps for bare-process services, operator-readable crash diagnostics, richer Prometheus metrics, a structured `/api/reload` response, opt-in JSON logging for Loki/Elastic, and a long-standing silent-fallback bug in the software resolver. All additions are additive and opt-in — existing `nimbus.toml` / `groups/*.toml` files keep working unchanged.

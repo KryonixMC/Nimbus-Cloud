@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.resourcepacks.migrations
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import dev.nimbuspowered.nimbus.module.resourcepacks.ResourcePackAssignments
 import dev.nimbuspowered.nimbus.module.resourcepacks.ResourcePacks
 import org.jetbrains.exposed.sql.SchemaUtils

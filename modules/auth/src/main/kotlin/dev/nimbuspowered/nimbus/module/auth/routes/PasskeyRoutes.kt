@@ -3,7 +3,7 @@ package dev.nimbuspowered.nimbus.module.auth.routes
 import dev.nimbuspowered.nimbus.api.ApiErrors
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
@@ -203,7 +203,7 @@ private suspend fun ApplicationCall.respondDisabled() =
 private suspend fun requireSession(
     call: ApplicationCall,
     sessionService: SessionService
-): dev.nimbuspowered.nimbus.module.AuthPrincipal.UserSession? {
+): dev.nimbuspowered.nimbus.module.api.AuthPrincipal.UserSession? {
     val header = call.request.headers["Authorization"] ?: run {
         call.respond(HttpStatusCode.Unauthorized,
             apiError("Missing session token", ApiErrors.UNAUTHORIZED))

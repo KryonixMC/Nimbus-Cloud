@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 import org.jetbrains.exposed.sql.Transaction
 

@@ -3,10 +3,10 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.CompletionMeta
-import dev.nimbuspowered.nimbus.module.CompletionType
-import dev.nimbuspowered.nimbus.module.SubcommandMeta
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CompletionMeta
+import dev.nimbuspowered.nimbus.module.api.CompletionType
+import dev.nimbuspowered.nimbus.module.api.SubcommandMeta
 import dev.nimbuspowered.nimbus.service.DedicatedServiceManager
 import dev.nimbuspowered.nimbus.service.Service
 import dev.nimbuspowered.nimbus.service.ServiceManager

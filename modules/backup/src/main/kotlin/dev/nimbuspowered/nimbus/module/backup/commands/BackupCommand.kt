@@ -2,7 +2,7 @@ package dev.nimbuspowered.nimbus.module.backup.commands
 
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.module.backup.BackupManager
 import dev.nimbuspowered.nimbus.module.backup.BackupRetention
 import dev.nimbuspowered.nimbus.module.backup.BackupScheduler

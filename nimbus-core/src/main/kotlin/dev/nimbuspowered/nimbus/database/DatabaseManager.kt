@@ -9,7 +9,7 @@ import dev.nimbuspowered.nimbus.database.migrations.V3_CliSessions
 import dev.nimbuspowered.nimbus.database.migrations.V4_ServiceMetricSamples
 import dev.nimbuspowered.nimbus.database.migrations.V5_TimestampColumnWidth
 import dev.nimbuspowered.nimbus.database.migrations.V6_IndexesAndColumnFixes
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils

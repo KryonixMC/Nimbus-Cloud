@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 import io.ktor.server.routing.Route
 import io.mockk.mockk

@@ -13,7 +13,7 @@ import dev.nimbuspowered.nimbus.console.NimbusConsole
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.DedicatedServiceManager
 import dev.nimbuspowered.nimbus.service.PortAllocator
 import dev.nimbuspowered.nimbus.service.ServiceManager
