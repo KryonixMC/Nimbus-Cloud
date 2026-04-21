@@ -11,7 +11,7 @@ import dev.nimbuspowered.nimbus.module.api.service as apiService
 //
 // The public Module API moved to `dev.nimbuspowered.nimbus.module.api` in 0.13.0.
 // These typealiases keep third-party module source code compiling for one release
-// cycle. Scheduled for removal in 0.14.0.
+// cycle. Scheduled for removal in Nimbus 1.0.
 //
 // NOTE: typealiases cannot re-export extension functions; the two extensions
 // (`service<T>()` and `AuthPrincipal.hasPermission`) are re-exported below as
