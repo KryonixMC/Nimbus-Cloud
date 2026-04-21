@@ -1,7 +1,5 @@
 package dev.nimbuspowered.nimbus.config
 
-import com.akuleshov7.ktoml.Toml
-import com.akuleshov7.ktoml.TomlInputConfig
 import kotlinx.serialization.serializer
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
@@ -13,7 +11,6 @@ import kotlin.io.path.readText
 object ConfigLoader {
 
     private val logger = LoggerFactory.getLogger(ConfigLoader::class.java)
-    private val toml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
 
     fun loadNimbusConfig(path: Path): NimbusConfig {
         if (!path.exists()) {
@@ -22,7 +19,11 @@ object ConfigLoader {
         }
         return try {
             val content = path.readText()
-            val config = toml.decodeFromString(serializer<NimbusConfig>(), content)
+            // nimbus.toml itself cannot be rejected in strict mode — it *contains* the flag.
+            // Always warn-only here; downstream configs honour the resolved flag.
+            val config = StrictToml.strictDecode(
+                serializer<NimbusConfig>(), content, "nimbus.toml", strict = false
+            )
             validateNimbusConfig(config, path)
             config
         } catch (e: ConfigException) {
@@ -33,7 +34,7 @@ object ConfigLoader {
         }
     }
 
-    fun loadGroupConfigs(groupsDir: Path): List<GroupConfig> {
+    fun loadGroupConfigs(groupsDir: Path, strict: Boolean = false): List<GroupConfig> {
         if (!groupsDir.exists() || !groupsDir.isDirectory()) {
             logger.warn("Groups directory not found at {}, returning empty list", groupsDir)
             return emptyList()
@@ -48,7 +49,9 @@ object ConfigLoader {
         for (file in files) {
             try {
                 val content = file.readText()
-                val config = toml.decodeFromString(serializer<GroupConfig>(), content)
+                val config = StrictToml.strictDecode(
+                    serializer<GroupConfig>(), content, "groups/${file.fileName}", strict
+                )
                 validateGroupConfig(config, file)
                 configs.add(config)
                 logger.info("Loaded group config '{}' from {}", config.group.name, file.fileName)
@@ -66,7 +69,7 @@ object ConfigLoader {
         return configs
     }
 
-    fun loadDedicatedConfigs(dedicatedDir: Path): List<DedicatedServiceConfig> {
+    fun loadDedicatedConfigs(dedicatedDir: Path, strict: Boolean = false): List<DedicatedServiceConfig> {
         if (!dedicatedDir.exists() || !dedicatedDir.isDirectory()) {
             logger.warn("Dedicated directory not found at {}, returning empty list", dedicatedDir)
             return emptyList()
@@ -81,7 +84,9 @@ object ConfigLoader {
         for (file in files) {
             try {
                 val content = file.readText()
-                val config = toml.decodeFromString(serializer<DedicatedServiceConfig>(), content)
+                val config = StrictToml.strictDecode(
+                    serializer<DedicatedServiceConfig>(), content, "dedicated/${file.fileName}", strict
+                )
                 validateDedicatedConfig(config, file)
                 configs.add(config)
                 logger.info("Loaded dedicated config '{}' from {}", config.dedicated.name, file.fileName)
@@ -99,9 +104,9 @@ object ConfigLoader {
         return configs
     }
 
-    fun reloadGroupConfigs(groupsDir: Path): List<GroupConfig> {
+    fun reloadGroupConfigs(groupsDir: Path, strict: Boolean = false): List<GroupConfig> {
         logger.info("Reloading group configs from {}", groupsDir)
-        return loadGroupConfigs(groupsDir)
+        return loadGroupConfigs(groupsDir, strict)
     }
 
     fun applyEnvironmentOverrides(config: NimbusConfig): NimbusConfig {

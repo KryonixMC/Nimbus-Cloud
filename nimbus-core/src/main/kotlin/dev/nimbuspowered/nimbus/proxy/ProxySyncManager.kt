@@ -1,7 +1,6 @@
 package dev.nimbuspowered.nimbus.proxy
 
-import com.akuleshov7.ktoml.Toml
-import com.akuleshov7.ktoml.TomlInputConfig
+import dev.nimbuspowered.nimbus.config.StrictToml
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,10 +24,12 @@ import kotlin.io.path.*
  *
  * Player tab overrides are ephemeral (in-memory only).
  */
-class ProxySyncManager(private val proxyDir: Path) {
+class ProxySyncManager(
+    private val proxyDir: Path,
+    private val strict: Boolean = false
+) {
 
     private val logger = LoggerFactory.getLogger(ProxySyncManager::class.java)
-    private val toml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
     private val writeLock = Any()
     private val debounceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var motdDebounceJob: Job? = null
@@ -353,7 +354,9 @@ class ProxySyncManager(private val proxyDir: Path) {
     // ── TOML Parsers (ktoml) ──────────────────────────────────────
 
     private fun parseMotdToml(content: String): MotdConfig {
-        val file = toml.decodeFromString(serializer<MotdFileConfig>(), content)
+        val file = StrictToml.strictDecode(
+            serializer<MotdFileConfig>(), content, "modules/syncproxy/motd.toml", strict
+        )
 
         // Copy maintenance state into volatile fields
         val m = file.maintenance
@@ -376,13 +379,17 @@ class ProxySyncManager(private val proxyDir: Path) {
     }
 
     private fun parseTablistToml(content: String): TabListConfig {
-        val file = toml.decodeFromString(serializer<TablistFileConfig>(), content)
+        val file = StrictToml.strictDecode(
+            serializer<TablistFileConfig>(), content, "modules/syncproxy/tablist.toml", strict
+        )
         val s = file.tablist
         return TabListConfig(s.header, s.footer, s.playerFormat, s.updateInterval)
     }
 
     private fun parseChatToml(content: String): ChatConfig {
-        val file = toml.decodeFromString(serializer<ChatFileConfig>(), content)
+        val file = StrictToml.strictDecode(
+            serializer<ChatFileConfig>(), content, "modules/syncproxy/chat.toml", strict
+        )
         return ChatConfig(file.chat.format, file.chat.enabled)
     }
 

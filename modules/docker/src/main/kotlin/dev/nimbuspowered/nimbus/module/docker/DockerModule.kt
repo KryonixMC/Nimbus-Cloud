@@ -43,7 +43,9 @@ class DockerModule : NimbusModule {
 
     override suspend fun init(context: ModuleContext) {
         val moduleDir = context.moduleConfigDir(id)
-        configManager = DockerConfigManager(moduleDir)
+        val strictConfig = context.getService(dev.nimbuspowered.nimbus.config.NimbusConfig::class.java)
+            ?.controller?.strictConfig ?: false
+        configManager = DockerConfigManager(moduleDir, strictConfig)
         configManager.load()
 
         val docker = configManager.config.docker

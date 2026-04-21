@@ -54,7 +54,13 @@ data class ControllerConfig(
     @SerialName("scaling_tick_interval")
     val scalingTickInterval: Long = 10,
     @SerialName("service_stale_timeout")
-    val serviceStaleTimeout: Long = 300  // seconds, 0 = disabled
+    val serviceStaleTimeout: Long = 300,  // seconds, 0 = disabled
+    /**
+     * When true, unknown keys in controller-owned TOML configs cause a fatal error
+     * instead of a warning. Will default to true in Nimbus 1.0.
+     */
+    @SerialName("strict_config")
+    val strictConfig: Boolean = false
 )
 
 @Serializable

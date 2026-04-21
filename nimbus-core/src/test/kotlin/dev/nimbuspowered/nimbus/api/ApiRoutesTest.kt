@@ -496,7 +496,7 @@ class ApiRoutesTest {
                 GroupConfig(group = GroupDefinition(name = "Lobby", template = "lobby")),
                 GroupConfig(group = GroupDefinition(name = "BedWars", template = "bedwars"))
             )
-            every { ConfigLoader.reloadGroupConfigs(any()) } returns configs
+            every { ConfigLoader.reloadGroupConfigs(any(), any()) } returns configs
             every { groupManager.reloadGroups(configs) } just Runs
 
             val response = client.post("/api/reload") { withAuth() }
@@ -518,7 +518,7 @@ class ApiRoutesTest {
         @Test
         fun `POST reload returns failure when exception occurs`() = setupTestApplication {
             mockkObject(ConfigLoader)
-            every { ConfigLoader.reloadGroupConfigs(any()) } throws RuntimeException("Config parse error")
+            every { ConfigLoader.reloadGroupConfigs(any(), any()) } throws RuntimeException("Config parse error")
 
             val response = client.post("/api/reload") { withAuth() }
             assertEquals(HttpStatusCode.OK, response.status)

@@ -84,9 +84,12 @@ class AuthModule : NimbusModule {
         val db = context.service<DatabaseManager>()
             ?: error("Auth module requires DatabaseManager")
 
+        val strictConfig = context.getService(dev.nimbuspowered.nimbus.config.NimbusConfig::class.java)
+            ?.controller?.strictConfig ?: false
         configStore = AuthConfigStore(
             moduleDir = context.moduleConfigDir(id),
-            baseDir = context.baseDir
+            baseDir = context.baseDir,
+            strict = strictConfig
         )
         authConfig = configStore.loadOrCreate()
         val encryptionKey = configStore.ensureKey(authConfig)
