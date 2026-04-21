@@ -99,6 +99,8 @@ object AgentConfigLoader {
     }
 
     private fun stripKey(content: String, key: String, scope: String): String? {
+        // ktoml reports the root table as scope "rootNode" — normalise to "".
+        val targetScope = if (scope == "rootNode" || scope.isEmpty()) "" else scope
         val lines = content.lines().toMutableList()
         val keyRegex = Regex("^\\s*${Regex.escape(key)}\\s*=.*$")
         var currentScope = ""
@@ -109,7 +111,7 @@ object AgentConfigLoader {
                 currentScope = section.groupValues[1]
                 continue
             }
-            if (currentScope == scope && keyRegex.matches(line)) {
+            if (currentScope == targetScope && keyRegex.matches(line)) {
                 lines[i] = ""
                 return lines.joinToString("\n")
             }
