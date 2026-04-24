@@ -84,6 +84,7 @@ fun Route.clusterRoutes(
             totalConnections = loadBalancer.totalConnections,
             activeConnections = loadBalancer.activeConnections,
             rejectedConnections = loadBalancer.rejectedConnections,
+            failedConnections = loadBalancer.failedConnections,
             backends = backends
         ))
     }
