@@ -2,6 +2,7 @@ package dev.nimbuspowered.nimbus.service
 
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.module.ModuleContextImpl
+import dev.nimbuspowered.nimbus.module.api.PluginTarget
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
@@ -24,7 +25,7 @@ internal class PluginDeploymentResolver(
         if (software == ServerSoftware.VELOCITY) {
             if (!pluginsDir.exists()) pluginsDir.createDirectories()
             deployBridgePlugin(pluginsDir)
-            for (deployment in allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.VELOCITY }) {
+            for (deployment in allDeployments.filter { it.target == PluginTarget.VELOCITY }) {
                 deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
             }
             return
@@ -37,7 +38,7 @@ internal class PluginDeploymentResolver(
 
         deployResourcePlugin(pluginsDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
 
-        val backendDeployments = allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.BACKEND }
+        val backendDeployments = allDeployments.filter { it.target == PluginTarget.BACKEND }
         if (backendDeployments.isEmpty()) return
 
         val minor = version.split(".").getOrNull(1)?.toIntOrNull() ?: 0
