@@ -639,6 +639,7 @@ data class LoadBalancerResponse(
     val totalConnections: Long,
     val activeConnections: Int,
     val rejectedConnections: Long,
+    val failedConnections: Long,
     val backends: List<LbBackendResponse>
 )
 

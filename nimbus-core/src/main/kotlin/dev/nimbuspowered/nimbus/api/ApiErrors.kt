@@ -34,6 +34,13 @@ enum class ApiError(val code: String, val defaultStatus: HttpStatusCode) {
     AUTH_MAGIC_LINK_INVALID("AUTH_MAGIC_LINK_INVALID", HttpStatusCode.Unauthorized),
     AUTH_LOGIN_CHALLENGE_EXPIRED("AUTH_LOGIN_CHALLENGE_EXPIRED", HttpStatusCode.Gone),
 
+    // ── Passkeys ────────────────────────────────────────────────
+    PASSKEY_DISABLED("PASSKEY_DISABLED", HttpStatusCode.ServiceUnavailable),
+    PASSKEY_LIMIT_REACHED("PASSKEY_LIMIT_REACHED", HttpStatusCode.Conflict),
+    PASSKEY_REGISTER_FAILED("PASSKEY_REGISTER_FAILED", HttpStatusCode.BadRequest),
+    PASSKEY_NOT_FOUND("PASSKEY_NOT_FOUND", HttpStatusCode.NotFound),
+    PASSKEY_LOGIN_FAILED("PASSKEY_LOGIN_FAILED", HttpStatusCode.Unauthorized),
+
     // ── Generic ─────────────────────────────────────────────────
     VALIDATION_FAILED("VALIDATION_FAILED", HttpStatusCode.BadRequest),
     INTERNAL_ERROR("INTERNAL_ERROR", HttpStatusCode.InternalServerError),
@@ -143,79 +150,6 @@ enum class ApiError(val code: String, val defaultStatus: HttpStatusCode) {
 fun apiError(message: String, error: ApiError) =
     ApiMessage(success = false, message = message, error = error.code)
 
-/** Legacy overload — used by the deprecated [ApiErrors] compat object and any raw callers. */
-fun apiError(message: String, error: String) =
-    ApiMessage(success = false, message = message, error = error)
-
 /** Respond with [error]'s default HTTP status and a JSON body carrying the error code. */
 suspend fun ApplicationCall.fail(error: ApiError, message: String) =
     respond(error.defaultStatus, apiError(message, error))
-
-/**
- * Backwards-compatibility facade. Existing `ApiErrors.X` call-sites keep
- * compiling against the same String codes; new code should use [ApiError].
- * Remove in 0.14.0 after all call-sites migrate.
- */
-@Deprecated("Use ApiError enum directly", ReplaceWith("ApiError"))
-object ApiErrors {
-    const val AUTH_FAILED = "AUTH_FAILED"
-    const val UNAUTHORIZED = "UNAUTHORIZED"
-    const val FORBIDDEN = "FORBIDDEN"
-    const val READ_ONLY = "READ_ONLY"
-    const val VALIDATION_FAILED = "VALIDATION_FAILED"
-    const val INTERNAL_ERROR = "INTERNAL_ERROR"
-    const val PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
-    const val NO_FIELDS_TO_UPDATE = "NO_FIELDS_TO_UPDATE"
-    const val SERVICE_NOT_FOUND = "SERVICE_NOT_FOUND"
-    const val SERVICE_NOT_READY = "SERVICE_NOT_READY"
-    const val SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
-    const val SERVICE_START_FAILED = "SERVICE_START_FAILED"
-    const val SERVICE_STOP_FAILED = "SERVICE_STOP_FAILED"
-    const val SERVICE_RESTART_FAILED = "SERVICE_RESTART_FAILED"
-    const val GROUP_NOT_FOUND = "GROUP_NOT_FOUND"
-    const val GROUP_ALREADY_EXISTS = "GROUP_ALREADY_EXISTS"
-    const val GROUP_HAS_RUNNING_INSTANCES = "GROUP_HAS_RUNNING_INSTANCES"
-    const val DEDICATED_NOT_FOUND = "DEDICATED_NOT_FOUND"
-    const val DEDICATED_ALREADY_EXISTS = "DEDICATED_ALREADY_EXISTS"
-    const val DEDICATED_ALREADY_RUNNING = "DEDICATED_ALREADY_RUNNING"
-    const val DEDICATED_DIRECTORY_NOT_FOUND = "DEDICATED_DIRECTORY_NOT_FOUND"
-    const val DEDICATED_PORT_IN_USE = "DEDICATED_PORT_IN_USE"
-    const val COMMAND_NOT_FOUND = "COMMAND_NOT_FOUND"
-    const val COMMAND_NOT_REMOTE = "COMMAND_NOT_REMOTE"
-    const val COMMAND_EXECUTION_FAILED = "COMMAND_EXECUTION_FAILED"
-    const val STRESS_ALREADY_RUNNING = "STRESS_ALREADY_RUNNING"
-    const val STRESS_NOT_RUNNING = "STRESS_NOT_RUNNING"
-    const val CLUSTER_NOT_ENABLED = "CLUSTER_NOT_ENABLED"
-    const val LOAD_BALANCER_NOT_ENABLED = "LOAD_BALANCER_NOT_ENABLED"
-    const val NODE_NOT_FOUND = "NODE_NOT_FOUND"
-    const val INVALID_SCOPE = "INVALID_SCOPE"
-    const val PATH_NOT_FOUND = "PATH_NOT_FOUND"
-    const val PATH_TRAVERSAL = "PATH_TRAVERSAL"
-    const val PROXY_NOT_AVAILABLE = "PROXY_NOT_AVAILABLE"
-    const val MODPACK_NOT_FOUND = "MODPACK_NOT_FOUND"
-    const val MODPACK_INVALID = "MODPACK_INVALID"
-    const val MODPACK_UPLOAD_FAILED = "MODPACK_UPLOAD_FAILED"
-    const val CHUNKED_UPLOAD_NOT_FOUND = "CHUNKED_UPLOAD_NOT_FOUND"
-    const val CHUNKED_UPLOAD_INVALID = "CHUNKED_UPLOAD_INVALID"
-    const val CURSEFORGE_API_KEY_MISSING = "CURSEFORGE_API_KEY_MISSING"
-    const val PUNISHMENT_NOT_FOUND = "PUNISHMENT_NOT_FOUND"
-    const val PUNISHMENT_ALREADY_REVOKED = "PUNISHMENT_ALREADY_REVOKED"
-    const val PUNISHMENT_TARGET_INVALID = "PUNISHMENT_TARGET_INVALID"
-    const val PUNISHMENT_DURATION_INVALID = "PUNISHMENT_DURATION_INVALID"
-    const val RESOURCE_PACK_NOT_FOUND = "RESOURCE_PACK_NOT_FOUND"
-    const val RESOURCE_PACK_ALREADY_EXISTS = "RESOURCE_PACK_ALREADY_EXISTS"
-    const val RESOURCE_PACK_INVALID_URL = "RESOURCE_PACK_INVALID_URL"
-    const val RESOURCE_PACK_UPLOAD_FAILED = "RESOURCE_PACK_UPLOAD_FAILED"
-    const val RESOURCE_PACK_ASSIGNMENT_NOT_FOUND = "RESOURCE_PACK_ASSIGNMENT_NOT_FOUND"
-
-    // --- Deprecated ---
-    // Wire string kept at "INVALID_INPUT" during the 0.13.x deprecation window
-    // so any lingering external caller relying on it does not break. All
-    // in-tree call-sites were migrated explicitly to ApiError.VALIDATION_FAILED.
-    @Deprecated("Use ApiError.VALIDATION_FAILED", ReplaceWith("ApiError.VALIDATION_FAILED.code"))
-    const val INVALID_INPUT = "INVALID_INPUT"
-    @Deprecated("Use a domain-specific *_NOT_FOUND code")
-    const val NOT_FOUND = "NOT_FOUND"
-    @Deprecated("No call-sites — removed in 0.14.0")
-    const val INSUFFICIENT_SCOPE = "INSUFFICIENT_SCOPE"
-}

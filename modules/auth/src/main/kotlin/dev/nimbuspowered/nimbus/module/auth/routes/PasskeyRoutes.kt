@@ -89,7 +89,7 @@ fun Route.passkeyRoutes(
                 )
             } catch (e: IllegalArgumentException) {
                 return@post call.respond(HttpStatusCode.Conflict,
-                    apiError(e.message ?: "Cannot start registration", "PASSKEY_LIMIT_REACHED"))
+                    apiError(e.message ?: "Cannot start registration", ApiError.PASSKEY_LIMIT_REACHED))
             }
             val optionsJson = json.parseToJsonElement(options.toCredentialsCreateJson())
             call.respond(PasskeyStartResponse(ceremonyId, optionsJson))
@@ -113,7 +113,7 @@ fun Route.passkeyRoutes(
             } catch (e: Exception) {
                 logger.warn("Passkey registration finish failed: {}", e.message)
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError(e.message ?: "Registration failed", "PASSKEY_REGISTER_FAILED"))
+                    apiError(e.message ?: "Registration failed", ApiError.PASSKEY_REGISTER_FAILED))
             }
         }
 
@@ -141,7 +141,7 @@ fun Route.passkeyRoutes(
             val ok = webAuthn.deleteCredential(session.uuid.toString(), credId)
             if (!ok) {
                 return@delete call.respond(HttpStatusCode.NotFound,
-                    apiError("Credential not found", "PASSKEY_NOT_FOUND"))
+                    apiError("Credential not found", ApiError.PASSKEY_NOT_FOUND))
             }
             call.respond(ApiMessage(success = true, message = "Passkey removed"))
         }
@@ -167,7 +167,7 @@ fun Route.passkeyRoutes(
             } catch (e: Exception) {
                 logger.warn("Passkey login finish failed: {}", e.message)
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Passkey verification failed", "PASSKEY_LOGIN_FAILED"))
+                    apiError("Passkey verification failed", ApiError.PASSKEY_LOGIN_FAILED))
             }
             val uuid = runCatching { UUID.fromString(uuidStr) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.InternalServerError,
@@ -198,7 +198,7 @@ fun Route.passkeyRoutes(
 
 private suspend fun ApplicationCall.respondDisabled() =
     respond(HttpStatusCode.ServiceUnavailable,
-        apiError("Passkey authentication is disabled", "PASSKEY_DISABLED"))
+        apiError("Passkey authentication is disabled", ApiError.PASSKEY_DISABLED))
 
 private suspend fun requireSession(
     call: ApplicationCall,
