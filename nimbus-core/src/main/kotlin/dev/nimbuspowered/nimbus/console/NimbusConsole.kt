@@ -115,6 +115,8 @@ class NimbusConsole(
         dispatcher.register(DoctorCommand(config, registry, databaseManager, nodeManager,
             extraChecks = { moduleContext?.doctorChecks ?: emptyList() }))
         dispatcher.register(SendCommand(serviceManager, registry, groupManager))
+        dispatcher.register(BroadcastCommand(serviceManager, registry, groupManager))
+        dispatcher.register(SetStateCommand(registry, eventBus))
         dispatcher.register(LogsCommand(serviceManager, registry))
         if (groupsDir != null) {
             dispatcher.register(ReloadCommand(groupManager, registry, groupsDir, proxySyncManager, eventBus))

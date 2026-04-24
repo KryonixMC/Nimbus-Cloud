@@ -5,7 +5,7 @@ import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
@@ -19,6 +19,7 @@ class SendCommand(
     override val name = "send"
     override val description = "Transfer a player to another service"
     override val usage = "send <player> <service>"
+    override val permission = "nimbus.cloud.send"
 
     override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.size != 2) {

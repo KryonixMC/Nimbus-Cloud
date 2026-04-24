@@ -3,9 +3,9 @@ package dev.nimbuspowered.nimbus.doctor
 import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.database.DatabaseManager
-import dev.nimbuspowered.nimbus.module.DoctorCheck
-import dev.nimbuspowered.nimbus.module.DoctorFinding
-import dev.nimbuspowered.nimbus.module.DoctorLevel
+import dev.nimbuspowered.nimbus.module.api.DoctorCheck
+import dev.nimbuspowered.nimbus.module.api.DoctorFinding
+import dev.nimbuspowered.nimbus.module.api.DoctorLevel
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
 import kotlinx.serialization.Serializable

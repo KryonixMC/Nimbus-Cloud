@@ -5,7 +5,7 @@ package dev.nimbuspowered.nimbus.service
  * about a more accurate source than `/proc/<pid>/status` (e.g. Docker stats via
  * cgroups — which accounts for everything running inside the container, not just
  * the main java PID) register themselves via
- * [dev.nimbuspowered.nimbus.module.ModuleContext.registerService] keyed by this
+ * [dev.nimbuspowered.nimbus.module.api.ModuleContext.registerService] keyed by this
  * interface. [ServiceMemoryResolver] asks every registered source before falling
  * back to `/proc`.
  *

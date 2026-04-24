@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.database.migrations
 
 import dev.nimbuspowered.nimbus.database.ServiceMetricSamples
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Transaction
 

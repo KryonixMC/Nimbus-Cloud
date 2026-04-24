@@ -10,19 +10,23 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.success
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.warn
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
-import dev.nimbuspowered.nimbus.module.DashboardConfig
-import dev.nimbuspowered.nimbus.module.DashboardSection
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
-import dev.nimbuspowered.nimbus.module.PluginDeployment
-import dev.nimbuspowered.nimbus.module.service
+import dev.nimbuspowered.nimbus.module.api.DashboardConfig
+import dev.nimbuspowered.nimbus.module.api.DashboardSection
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.PluginDeployment
+import dev.nimbuspowered.nimbus.module.api.service
 import dev.nimbuspowered.nimbus.module.perms.commands.PermsCommand
 import dev.nimbuspowered.nimbus.module.perms.routes.permissionRoutes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 
 class PermsModule : NimbusModule {
+
+    private val logger = LoggerFactory.getLogger(PermsModule::class.java)
+
     override val id = "perms"
     override val name = "Permissions"
     override val version: String get() = NimbusVersion.version
@@ -133,6 +137,8 @@ class PermsModule : NimbusModule {
         // Load data from DB (tables guaranteed to exist — migrations run between init and enable)
         permissionManager.init()
 
+        runPermissionMigrations(moduleContext.service<NimbusConfig>())
+
         // Auto-cleanup expired permission contexts every 60 seconds
         moduleContext.scope.launch {
             while (isActive) {
@@ -140,6 +146,26 @@ class PermsModule : NimbusModule {
                 try {
                     permissionManager.cleanupExpired()
                 } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private suspend fun runPermissionMigrations(config: NimbusConfig?) {
+        if (config?.permissions?.skipNodeMigrations == true) {
+            logger.debug("Permission node migrations skipped via config")
+            return
+        }
+        val renames = listOf(
+            "nimbus.players" to "nimbus.cloud.players"
+        )
+        for ((old, new) in renames) {
+            val report = permissionManager.renamePermissionInAllGroups(old, new)
+            if (!report.noop) {
+                logger.info(
+                    "Permission migration: {} → {} applied to {} group(s), {} replacement(s): {}",
+                    old, new, report.groupsUpdated.size, report.totalReplacements,
+                    report.groupsUpdated.joinToString(", ")
+                )
             }
         }
     }

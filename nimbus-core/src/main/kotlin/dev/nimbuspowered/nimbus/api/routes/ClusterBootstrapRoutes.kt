@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.NimbusApi
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.cluster.ClusterServer
@@ -32,13 +32,13 @@ fun Route.clusterBootstrapRoutes(
         if (!clusterConfig.enabled) {
             return@get call.respond(
                 HttpStatusCode.ServiceUnavailable,
-                apiError("Cluster mode is not enabled", ApiErrors.NOT_FOUND)
+                apiError("Cluster mode is not enabled", ApiError.CLUSTER_NOT_ENABLED)
             )
         }
         if (clusterConfig.token.isBlank()) {
             return@get call.respond(
                 HttpStatusCode.ServiceUnavailable,
-                apiError("No cluster token configured", ApiErrors.NOT_FOUND)
+                apiError("No cluster token configured", ApiError.CLUSTER_TOKEN_MISSING)
             )
         }
 
@@ -49,7 +49,7 @@ fun Route.clusterBootstrapRoutes(
         if (presented.isEmpty() || !NimbusApi.timingSafeEquals(presented, clusterConfig.token)) {
             return@get call.respond(
                 HttpStatusCode.Unauthorized,
-                apiError("Invalid or missing cluster token", ApiErrors.FORBIDDEN)
+                apiError("Invalid or missing cluster token", ApiError.FORBIDDEN)
             )
         }
 
@@ -59,7 +59,7 @@ fun Route.clusterBootstrapRoutes(
                 HttpStatusCode.ServiceUnavailable,
                 apiError(
                     "Cluster server not running or TLS not enabled",
-                    ApiErrors.NOT_FOUND
+                    ApiError.CLUSTER_NOT_ENABLED
                 )
             )
         }

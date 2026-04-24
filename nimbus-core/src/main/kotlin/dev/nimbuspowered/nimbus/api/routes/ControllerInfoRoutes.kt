@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.NimbusVersion
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ChangelogEntry
 import dev.nimbuspowered.nimbus.api.ChangelogResponse
 import dev.nimbuspowered.nimbus.api.ControllerInfoResponse
@@ -135,7 +135,7 @@ fun Route.controllerInfoRoutes(
                 if (response.status != HttpStatusCode.OK) {
                     return@get call.respond(
                         HttpStatusCode.BadGateway,
-                        apiError("GitHub returned ${response.status.value} fetching changelog", ApiErrors.INTERNAL_ERROR)
+                        apiError("GitHub returned ${response.status.value} fetching changelog", ApiError.INTERNAL_ERROR)
                     )
                 }
 
@@ -147,7 +147,7 @@ fun Route.controllerInfoRoutes(
             } catch (e: Exception) {
                 call.respond(
                     HttpStatusCode.BadGateway,
-                    apiError("Failed to fetch changelog: ${e.message}", ApiErrors.INTERNAL_ERROR)
+                    apiError("Failed to fetch changelog: ${e.message}", ApiError.INTERNAL_ERROR)
                 )
             }
         }

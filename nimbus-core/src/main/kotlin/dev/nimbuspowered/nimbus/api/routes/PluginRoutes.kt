@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.group.GroupManager
@@ -76,7 +76,7 @@ fun Route.pluginRoutes(
             val request = call.receive<PluginInstallRequest>()
 
             val group = groupManager.getGroup(request.group)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Group '${request.group}' not found", ApiErrors.GROUP_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Group '${request.group}' not found", ApiError.GROUP_NOT_FOUND))
 
             val searchResult = PluginSearchClient.PluginSearchResult(
                 source = PluginSearchClient.PluginSource.valueOf(request.source.uppercase()),
@@ -90,12 +90,12 @@ fun Route.pluginRoutes(
 
             val mcVersion = request.mcVersion.ifEmpty { group.config.group.version }
             val version = pluginSearchClient.fetchVersion(searchResult, mcVersion, request.platform)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("No compatible version found", ApiErrors.NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("No compatible version found", ApiError.PLUGIN_VERSION_NOT_FOUND))
 
             val templateName = group.config.group.template.ifEmpty { group.name.lowercase() }
             val pluginsDir = templatesDir.resolve(templateName).resolve("plugins")
             val downloaded = pluginSearchClient.download(version, pluginsDir)
-                ?: return@post call.respond(HttpStatusCode.InternalServerError, apiError("Download failed", ApiErrors.INTERNAL_ERROR))
+                ?: return@post call.respond(HttpStatusCode.InternalServerError, apiError("Download failed", ApiError.INTERNAL_ERROR))
 
             call.respond(ApiMessage(true, "Plugin '${version.fileName}' installed to group '${request.group}'"))
         }

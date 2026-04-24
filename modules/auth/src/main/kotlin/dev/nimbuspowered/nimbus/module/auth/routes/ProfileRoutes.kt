@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.auth.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
@@ -64,7 +64,7 @@ fun Route.profileRoutes(
             val state = totpService.state(session.uuid.toString())
             if (state.enabled) {
                 return@post call.respond(HttpStatusCode.Conflict,
-                    apiError("TOTP already enabled — disable it first", AuthErrors.AUTH_TOTP_ALREADY_ENABLED))
+                    apiError("TOTP already enabled — disable it first", ApiError.AUTH_TOTP_ALREADY_ENABLED))
             }
             val material = totpService.enroll(session.uuid.toString(), session.name)
             call.respond(TotpEnrollResponse(
@@ -78,11 +78,11 @@ fun Route.profileRoutes(
             val session = requireUserSession(call, sessionService) ?: return@post
             val req = runCatching { call.receive<TotpCodeRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("code required", ApiErrors.VALIDATION_FAILED))
+                    apiError("code required", ApiError.VALIDATION_FAILED))
             val ok = totpService.confirm(session.uuid.toString(), req.code)
             if (!ok) {
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid TOTP code", AuthErrors.AUTH_TOTP_INVALID))
+                    apiError("Invalid TOTP code", ApiError.AUTH_TOTP_INVALID))
             }
             call.respond(ApiMessage(success = true, message = "TOTP enabled"))
         }
@@ -91,11 +91,11 @@ fun Route.profileRoutes(
             val session = requireUserSession(call, sessionService) ?: return@post
             val req = runCatching { call.receive<TotpCodeRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("code required", ApiErrors.VALIDATION_FAILED))
+                    apiError("code required", ApiError.VALIDATION_FAILED))
             val ok = totpService.disable(session.uuid.toString(), req.code)
             if (!ok) {
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid TOTP code", AuthErrors.AUTH_TOTP_INVALID))
+                    apiError("Invalid TOTP code", ApiError.AUTH_TOTP_INVALID))
             }
             call.respond(ApiMessage(success = true, message = "TOTP disabled"))
         }
@@ -105,17 +105,17 @@ fun Route.profileRoutes(
 private suspend fun requireUserSession(
     call: ApplicationCall,
     sessionService: SessionService
-): dev.nimbuspowered.nimbus.module.AuthPrincipal.UserSession? {
+): dev.nimbuspowered.nimbus.module.api.AuthPrincipal.UserSession? {
     val raw = extractBearer(call)
     if (raw == null) {
         call.respond(HttpStatusCode.Unauthorized,
-            apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+            apiError("Missing session token", ApiError.UNAUTHORIZED))
         return null
     }
     val session = sessionService.validate(raw)
     if (session == null) {
         call.respond(HttpStatusCode.Unauthorized,
-            apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+            apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
         return null
     }
     return session

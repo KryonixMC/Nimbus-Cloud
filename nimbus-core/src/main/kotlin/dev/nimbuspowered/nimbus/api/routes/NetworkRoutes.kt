@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.config.ServerSoftware
@@ -97,7 +97,7 @@ fun Route.networkRoutes(
     post("/api/players/{name}/send") {
         val playerName = call.parameters["name"]!!
         if (!MINECRAFT_NAME.matches(playerName)) {
-            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiErrors.INVALID_INPUT))
+            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiError.VALIDATION_FAILED))
         }
         val request = call.receive<SendPlayerRequest>()
 
@@ -108,7 +108,7 @@ fun Route.networkRoutes(
         }
 
         if (proxyService == null) {
-            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiErrors.PROXY_NOT_AVAILABLE))
+            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiError.PROXY_NOT_AVAILABLE))
         }
 
         // Send player via Velocity's /send command
@@ -116,7 +116,7 @@ fun Route.networkRoutes(
         if (success) {
             call.respond(ApiMessage(true, "Player '$playerName' sent to '${request.targetService}'"))
         } else {
-            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to send player transfer command", ApiErrors.INTERNAL_ERROR))
+            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to send player transfer command", ApiError.INTERNAL_ERROR))
         }
     }
 
@@ -124,7 +124,7 @@ fun Route.networkRoutes(
     post("/api/players/{name}/kick") {
         val playerName = call.parameters["name"]!!
         if (!MINECRAFT_NAME.matches(playerName)) {
-            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiErrors.INVALID_INPUT))
+            return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid player name", ApiError.VALIDATION_FAILED))
         }
         val request = call.receive<KickPlayerRequest>()
 
@@ -134,7 +134,7 @@ fun Route.networkRoutes(
         }
 
         if (proxyService == null) {
-            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiErrors.PROXY_NOT_AVAILABLE))
+            return@post call.respond(HttpStatusCode.ServiceUnavailable, apiError("No Velocity proxy available", ApiError.PROXY_NOT_AVAILABLE))
         }
 
         // Velocity's /velocity kick command: velocity kick <player> <reason>
@@ -142,7 +142,7 @@ fun Route.networkRoutes(
         if (success) {
             call.respond(ApiMessage(true, "Player '$playerName' kicked from the network"))
         } else {
-            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to execute kick command", ApiErrors.INTERNAL_ERROR))
+            call.respond(HttpStatusCode.InternalServerError, apiError("Failed to execute kick command", ApiError.INTERNAL_ERROR))
         }
     }
 
@@ -158,7 +158,7 @@ fun Route.networkRoutes(
 
         if (targetServices.isEmpty()) {
             val scope = request.group?.let { "group '${it}'" } ?: "network"
-            return@post call.respond(HttpStatusCode.NotFound, apiError("No ready services found in $scope", ApiErrors.NOT_FOUND))
+            return@post call.respond(HttpStatusCode.NotFound, apiError("No ready services found in $scope", ApiError.SERVICE_NOT_FOUND))
         }
 
         var successCount = 0

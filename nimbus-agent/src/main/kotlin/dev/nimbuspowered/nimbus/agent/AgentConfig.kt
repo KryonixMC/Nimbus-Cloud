@@ -61,11 +61,62 @@ data class JavaDefinition(
 
 object AgentConfigLoader {
     private val logger = LoggerFactory.getLogger(AgentConfigLoader::class.java)
-    private val toml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
+    private val strictToml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = false))
+    private val lenientToml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
+    private val unknownKeyRegex = Regex("Unknown key received: <([^>]+)> in scope <([^>]*)>")
+    private val sectionRegex = Regex("^\\s*\\[([^\\]]+)\\]\\s*$")
 
     fun load(path: Path): AgentConfig {
         val content = path.readText()
-        return toml.decodeFromString(serializer<AgentConfig>(), content)
+        warnUnknownKeys(content, "agent.toml")
+        return lenientToml.decodeFromString(serializer<AgentConfig>(), content)
+    }
+
+    /**
+     * Warn-only unknown-key detection. Iteratively strips one unknown key per
+     * re-parse until ktoml stops complaining. Bounded to 64 iterations.
+     * Will become an error in Nimbus 1.0.
+     */
+    private fun warnUnknownKeys(content: String, label: String) {
+        var remaining = content
+        repeat(64) {
+            try {
+                strictToml.decodeFromString(serializer<AgentConfig>(), remaining)
+                return
+            } catch (e: Exception) {
+                val m = unknownKeyRegex.find(e.message ?: "") ?: return
+                val key = m.groupValues[1]
+                val scope = m.groupValues[2]
+                logger.warn(
+                    "Config [{}]: unknown key '{}' at [{}] — will be an error in Nimbus 1.0",
+                    label, key, scope
+                )
+                val stripped = stripKey(remaining, key, scope) ?: return
+                if (stripped == remaining) return
+                remaining = stripped
+            }
+        }
+    }
+
+    private fun stripKey(content: String, key: String, scope: String): String? {
+        // ktoml reports the root table as scope "rootNode" — normalise to "".
+        val targetScope = if (scope == "rootNode" || scope.isEmpty()) "" else scope
+        val lines = content.lines().toMutableList()
+        val keyRegex = Regex("^\\s*${Regex.escape(key)}\\s*=.*$")
+        var currentScope = ""
+        for (i in lines.indices) {
+            val line = lines[i]
+            val section = sectionRegex.matchEntire(line)
+            if (section != null) {
+                currentScope = section.groupValues[1]
+                continue
+            }
+            if (currentScope == targetScope && keyRegex.matches(line)) {
+                lines[i] = ""
+                return lines.joinToString("\n")
+            }
+        }
+        return null
     }
 
     fun applyEnvironmentOverrides(config: AgentConfig): AgentConfig {

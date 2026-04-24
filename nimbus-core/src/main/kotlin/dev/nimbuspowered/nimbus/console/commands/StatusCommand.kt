@@ -7,7 +7,7 @@ import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
 
@@ -22,6 +22,7 @@ class StatusCommand(
     override val name = "status"
     override val description = "Show full network status overview"
     override val usage = "status"
+    override val permission = "nimbus.cloud.status"
 
     override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         val allServices = registry.getAll()

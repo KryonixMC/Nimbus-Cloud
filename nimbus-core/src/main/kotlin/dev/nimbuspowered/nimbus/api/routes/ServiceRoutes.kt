@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.database.ServiceMetricSamples
@@ -59,7 +59,7 @@ fun Route.serviceRoutes(
                 } catch (_: IllegalArgumentException) {
                     return@get call.respond(
                         HttpStatusCode.BadRequest,
-                        apiError("Invalid state: '$stateParam'. Valid: ${ServiceState.entries.joinToString()}", ApiErrors.INVALID_INPUT)
+                        apiError("Invalid state: '$stateParam'. Valid: ${ServiceState.entries.joinToString()}", ApiError.VALIDATION_FAILED)
                     )
                 }
                 services = services.filter { it.state == stateFilter }
@@ -128,7 +128,7 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.view")) return@get
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
             call.respond(service.toResponse(groupManager, dedicatedServiceManager, stateSyncManager, serviceManager))
         }
 
@@ -142,7 +142,7 @@ fun Route.serviceRoutes(
             if (registry.get(name) == null) {
                 return@get call.respond(
                     HttpStatusCode.NotFound,
-                    apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND)
+                    apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND)
                 )
             }
             val db = databaseManager
@@ -175,14 +175,14 @@ fun Route.serviceRoutes(
             val groupName = call.parameters["name"]!!
 
             if (groupManager.getGroup(groupName) == null) {
-                return@post call.respond(HttpStatusCode.NotFound, apiError("Group '$groupName' not found", ApiErrors.GROUP_NOT_FOUND))
+                return@post call.respond(HttpStatusCode.NotFound, apiError("Group '$groupName' not found", ApiError.GROUP_NOT_FOUND))
             }
 
             val service = serviceManager.startService(groupName)
             if (service != null) {
                 call.respond(HttpStatusCode.Created, ApiMessage(true, "Service '${service.name}' starting on port ${service.port}"))
             } else {
-                call.respond(HttpStatusCode.Conflict, apiError("Failed to start service for group '$groupName' — max instances reached or JAR unavailable", ApiErrors.SERVICE_START_FAILED))
+                call.respond(HttpStatusCode.Conflict, apiError("Failed to start service for group '$groupName' — max instances reached or JAR unavailable", ApiError.SERVICE_START_FAILED))
             }
         }
 
@@ -191,13 +191,13 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.stop")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val stopped = serviceManager.stopService(name)
             if (stopped) {
                 call.respond(ApiMessage(true, "Service '$name' stopped"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to stop service '$name'", ApiErrors.SERVICE_STOP_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to stop service '$name'", ApiError.SERVICE_STOP_FAILED))
             }
         }
 
@@ -206,13 +206,13 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.restart")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val newService = serviceManager.restartService(name)
             if (newService != null) {
                 call.respond(ApiMessage(true, "Service restarted as '${newService.name}' on port ${newService.port}"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart service '$name'", ApiError.SERVICE_RESTART_FAILED))
             }
         }
 
@@ -221,12 +221,12 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.nodes.manage")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val body = try {
                 call.receive<MigrateRequest>()
             } catch (_: Exception) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid request body — expected { \"target\": \"<node>\" }", ApiErrors.INVALID_INPUT))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid request body — expected { \"target\": \"<node>\" }", ApiError.VALIDATION_FAILED))
             }
             val target = body.target?.takeIf { it.isNotBlank() }
 
@@ -234,7 +234,7 @@ fun Route.serviceRoutes(
             if (migrated != null) {
                 call.respond(ApiMessage(true, "Service '$name' migrated to node '${migrated.nodeId}'"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Migration failed for service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Migration failed for service '$name'", ApiError.SERVICE_RESTART_FAILED))
             }
         }
 
@@ -243,7 +243,7 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.console")) return@post
             val name = call.parameters["name"]!!
             registry.get(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val request = call.receive<ExecRequest>()
             val success = serviceManager.executeCommand(name, request.command)
@@ -254,10 +254,10 @@ fun Route.serviceRoutes(
         put("{name}/state") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             if (service.state != ServiceState.READY) {
-                return@put call.respond(HttpStatusCode.Conflict, apiError("Service '$name' is not READY (current: ${service.state})", ApiErrors.SERVICE_NOT_READY))
+                return@put call.respond(HttpStatusCode.Conflict, apiError("Service '$name' is not READY (current: ${service.state})", ApiError.SERVICE_NOT_READY))
             }
 
             val request = call.receive<SetCustomStateRequest>()
@@ -280,7 +280,7 @@ fun Route.serviceRoutes(
         get("{name}/state") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             call.respond(CustomStateResponse(name, service.customState))
         }
@@ -291,7 +291,7 @@ fun Route.serviceRoutes(
         put("{name}/health") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val request = call.receive<ReportHealthRequest>()
             service.updateTps(request.tps)
@@ -303,7 +303,7 @@ fun Route.serviceRoutes(
         put("{name}/players") {
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val request = call.receive<ReportPlayerCountRequest>()
             service.playerCount = request.playerCount
@@ -317,7 +317,7 @@ fun Route.serviceRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.console")) return@get
             val name = call.parameters["name"]!!
             val service = registry.get(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiErrors.SERVICE_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Service '$name' not found", ApiError.SERVICE_NOT_FOUND))
 
             val logFile = service.workingDirectory.resolve("logs/latest.log").toFile()
             if (!logFile.exists()) {
@@ -337,7 +337,7 @@ fun Route.serviceRoutes(
             // without requiring a registered service entry (the controller itself isn't a service)
             if (targetName != "controller") {
                 registry.get(targetName)
-                    ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$targetName' not found", ApiErrors.SERVICE_NOT_FOUND))
+                    ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Service '$targetName' not found", ApiError.SERVICE_NOT_FOUND))
             }
 
             val request = call.receive<SendMessageRequest>()

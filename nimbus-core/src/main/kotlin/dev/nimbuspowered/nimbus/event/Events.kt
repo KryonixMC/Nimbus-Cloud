@@ -5,7 +5,15 @@ import java.time.Instant
 sealed class NimbusEvent {
     val timestamp: Instant = Instant.now()
 
-    /** Who triggered this event. Set by console/API before emitting. */
+    /**
+     * Identifies who triggered this event.
+     *
+     * Format: either a bare type, or `<type>:<id>`.
+     * type ∈ { "system", "console", "api", "player", "agent" }
+     *
+     * Examples: "system", "console", "api:admin", "api:service",
+     *           "player:550e8400-e29b-41d4-a716-446655440000", "agent:node-1"
+     */
     open var actor: String = "system"
 
     // Service lifecycle
@@ -165,3 +173,6 @@ sealed class NimbusEvent {
         val durationSeconds: Long, val commandCount: Int
     ) : NimbusEvent()
 }
+
+/** Returns the type portion of [NimbusEvent.actor] (before the first `:`). */
+fun NimbusEvent.actorType(): String = actor.substringBefore(":")

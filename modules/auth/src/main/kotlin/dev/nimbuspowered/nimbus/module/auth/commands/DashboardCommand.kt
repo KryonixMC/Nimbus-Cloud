@@ -1,9 +1,9 @@
 package dev.nimbuspowered.nimbus.module.auth.commands
 
-import dev.nimbuspowered.nimbus.module.CommandCaller
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.ModuleCommand
-import dev.nimbuspowered.nimbus.module.SubcommandMeta
+import dev.nimbuspowered.nimbus.module.api.CommandCaller
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.SubcommandMeta
 import dev.nimbuspowered.nimbus.module.auth.AuthConfig
 import dev.nimbuspowered.nimbus.module.auth.service.LoginChallengeService
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService

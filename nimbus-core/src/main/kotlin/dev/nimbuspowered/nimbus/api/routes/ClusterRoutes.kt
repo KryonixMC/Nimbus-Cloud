@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.cluster.NodeManager
 import dev.nimbuspowered.nimbus.loadbalancer.TcpLoadBalancer
@@ -19,7 +19,7 @@ fun Route.clusterRoutes(
     get("/api/nodes") {
         if (!call.requirePermission("nimbus.dashboard.nodes.view")) return@get
         if (nodeManager == null) {
-            return@get call.respond(HttpStatusCode.NotFound, apiError("Cluster mode not enabled", ApiErrors.CLUSTER_NOT_ENABLED))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Cluster mode not enabled", ApiError.CLUSTER_NOT_ENABLED))
         }
         val nodes = nodeManager.getAllNodes().map { node ->
             val nodeServices = registry.getAll().filter { it.nodeId == node.nodeId }
@@ -61,7 +61,7 @@ fun Route.clusterRoutes(
     get("/api/loadbalancer") {
         if (!call.requirePermission("nimbus.dashboard.nodes.view")) return@get
         if (loadBalancer == null) {
-            return@get call.respond(HttpStatusCode.NotFound, apiError("Load balancer not enabled", ApiErrors.LOAD_BALANCER_NOT_ENABLED))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Load balancer not enabled", ApiError.LOAD_BALANCER_NOT_ENABLED))
         }
         val healthStates = loadBalancer.healthManager.getAll()
         val backends = healthStates.map { state ->
@@ -84,6 +84,7 @@ fun Route.clusterRoutes(
             totalConnections = loadBalancer.totalConnections,
             activeConnections = loadBalancer.activeConnections,
             rejectedConnections = loadBalancer.rejectedConnections,
+            failedConnections = loadBalancer.failedConnections,
             backends = backends
         ))
     }

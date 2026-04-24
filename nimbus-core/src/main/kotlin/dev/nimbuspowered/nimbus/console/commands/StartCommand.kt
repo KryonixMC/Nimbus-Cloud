@@ -4,7 +4,7 @@ import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 
 class StartCommand(
@@ -15,6 +15,7 @@ class StartCommand(
     override val name = "start"
     override val description = "Start a new service instance for a group"
     override val usage = "start <group>"
+    override val permission = "nimbus.cloud.start"
 
     override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.isEmpty()) {

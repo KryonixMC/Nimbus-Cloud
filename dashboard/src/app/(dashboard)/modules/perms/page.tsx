@@ -583,7 +583,7 @@ export default function PermissionsPage() {
                 <Input
                   value={newPerm}
                   onChange={(e) => setNewPerm(e.target.value)}
-                  placeholder="e.g. nimbus.admin"
+                  placeholder="e.g. nimbus.cloud.audit"
                   className="font-mono"
                   onKeyDown={(e) => e.key === "Enter" && addPerm()}
                 />

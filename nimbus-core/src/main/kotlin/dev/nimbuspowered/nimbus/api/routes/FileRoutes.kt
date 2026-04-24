@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -40,7 +40,7 @@ fun Route.fileRoutes(
                 ?: return@get
 
             if (!resolvedPath.exists()) {
-                return@get call.respond(HttpStatusCode.NotFound, apiError("Path not found", ApiErrors.PATH_NOT_FOUND))
+                return@get call.respond(HttpStatusCode.NotFound, apiError("Path not found", ApiError.PATH_NOT_FOUND))
             }
 
             if (resolvedPath.isDirectory()) {
@@ -74,7 +74,7 @@ fun Route.fileRoutes(
         get {
             val scopeName = call.parameters["scope"]!!
             val root = scopeRoots[scopeName]
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid scope '$scopeName'. Valid: ${scopeRoots.keys.joinToString()}", ApiErrors.INVALID_SCOPE))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid scope '$scopeName'. Valid: ${scopeRoots.keys.joinToString()}", ApiError.INVALID_SCOPE))
 
             if (!root.exists()) {
                 return@get call.respond(FileListResponse(scopeName, "/", emptyList(), 0))
@@ -102,7 +102,7 @@ fun Route.fileRoutes(
                 ?: return@put
 
             if (scopeName in readOnlyScopes) {
-                return@put call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiErrors.READ_ONLY))
+                return@put call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiError.READ_ONLY))
             }
 
             val request = call.receive<FileWriteRequest>()
@@ -122,7 +122,7 @@ fun Route.fileRoutes(
                 ?: return@post
 
             if (scopeName in readOnlyScopes) {
-                return@post call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiErrors.READ_ONLY))
+                return@post call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiError.READ_ONLY))
             }
 
             // mkdir operation
@@ -134,7 +134,7 @@ fun Route.fileRoutes(
             // Multipart file upload
             val contentType = call.request.contentType()
             if (!contentType.match(ContentType.MultiPart.FormData)) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Expected multipart/form-data for file upload", ApiErrors.INVALID_INPUT))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Expected multipart/form-data for file upload", ApiError.VALIDATION_FAILED))
             }
 
             val multipart = call.receiveMultipart()
@@ -159,7 +159,7 @@ fun Route.fileRoutes(
                         if (bytes.size > maxUploadBytes) {
                             part.dispose()
                             call.respond(HttpStatusCode.PayloadTooLarge,
-                                apiError("File too large (${bytes.size} bytes). Max: $maxUploadBytes bytes", ApiErrors.PAYLOAD_TOO_LARGE))
+                                apiError("File too large (${bytes.size} bytes). Max: $maxUploadBytes bytes", ApiError.PAYLOAD_TOO_LARGE))
                             return@forEachPart
                         }
 
@@ -176,7 +176,7 @@ fun Route.fileRoutes(
             if (uploaded) {
                 call.respond(HttpStatusCode.Created, FileUploadResponse(true, uploadedPath, uploadedSize))
             } else {
-                call.respond(HttpStatusCode.BadRequest, apiError("No file part found in request", ApiErrors.INVALID_INPUT))
+                call.respond(HttpStatusCode.BadRequest, apiError("No file part found in request", ApiError.VALIDATION_FAILED))
             }
         }
 
@@ -187,16 +187,16 @@ fun Route.fileRoutes(
                 ?: return@delete
 
             if (scopeName in readOnlyScopes) {
-                return@delete call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiErrors.READ_ONLY))
+                return@delete call.respond(HttpStatusCode.Forbidden, apiError("Scope '$scopeName' is read-only", ApiError.READ_ONLY))
             }
 
             if (!resolvedPath.exists()) {
-                return@delete call.respond(HttpStatusCode.NotFound, apiError("Path not found", ApiErrors.PATH_NOT_FOUND))
+                return@delete call.respond(HttpStatusCode.NotFound, apiError("Path not found", ApiError.PATH_NOT_FOUND))
             }
 
             // Prevent deleting the scope root itself
             if (resolvedPath == scopeRoots[scopeName]) {
-                return@delete call.respond(HttpStatusCode.Forbidden, apiError("Cannot delete scope root directory", ApiErrors.FORBIDDEN))
+                return@delete call.respond(HttpStatusCode.Forbidden, apiError("Cannot delete scope root directory", ApiError.FORBIDDEN))
             }
 
             if (resolvedPath.isDirectory()) {
@@ -222,7 +222,7 @@ private suspend fun resolveScopePath(
     val scopeName = call.parameters["scope"]!!
     val root = scopeRoots[scopeName]
     if (root == null) {
-        call.respond(HttpStatusCode.BadRequest, apiError("Invalid scope '$scopeName'. Valid: ${scopeRoots.keys.joinToString()}", ApiErrors.INVALID_SCOPE))
+        call.respond(HttpStatusCode.BadRequest, apiError("Invalid scope '$scopeName'. Valid: ${scopeRoots.keys.joinToString()}", ApiError.INVALID_SCOPE))
         return null
     }
 
@@ -230,7 +230,7 @@ private suspend fun resolveScopePath(
 
     // Block path traversal
     if (pathParam.contains("..")) {
-        call.respond(HttpStatusCode.Forbidden, apiError("Path traversal not allowed", ApiErrors.PATH_TRAVERSAL))
+        call.respond(HttpStatusCode.Forbidden, apiError("Path traversal not allowed", ApiError.PATH_TRAVERSAL))
         return null
     }
 
@@ -238,7 +238,7 @@ private suspend fun resolveScopePath(
 
     // Ensure resolved path is still within the scope root
     if (!resolved.startsWith(root)) {
-        call.respond(HttpStatusCode.Forbidden, apiError("Path outside of scope", ApiErrors.PATH_TRAVERSAL))
+        call.respond(HttpStatusCode.Forbidden, apiError("Path outside of scope", ApiError.PATH_TRAVERSAL))
         return null
     }
 
@@ -247,7 +247,7 @@ private suspend fun resolveScopePath(
         val realPath = resolved.toRealPath()
         val realRoot = root.toRealPath()
         if (!realPath.startsWith(realRoot)) {
-            call.respond(HttpStatusCode.Forbidden, apiError("Path outside of scope", ApiErrors.PATH_TRAVERSAL))
+            call.respond(HttpStatusCode.Forbidden, apiError("Path outside of scope", ApiError.PATH_TRAVERSAL))
             return null
         }
     }

@@ -1,8 +1,7 @@
 package dev.nimbuspowered.nimbus.module.docker
 
-import com.akuleshov7.ktoml.Toml
-import com.akuleshov7.ktoml.TomlInputConfig
 import dev.nimbuspowered.nimbus.config.DockerServiceConfig
+import dev.nimbuspowered.nimbus.config.StrictToml
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.serializer
@@ -58,10 +57,12 @@ data class EffectiveDockerConfig(
     val network: String
 )
 
-class DockerConfigManager(private val configDir: Path) {
+class DockerConfigManager(
+    private val configDir: Path,
+    private val strict: Boolean = false
+) {
 
     private val logger = LoggerFactory.getLogger(DockerConfigManager::class.java)
-    private val toml = Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
 
     @Volatile
     private var current: DockerModuleConfig = DockerModuleConfig()
@@ -78,7 +79,9 @@ class DockerConfigManager(private val configDir: Path) {
             return current
         }
         val parsed = try {
-            toml.decodeFromString(serializer<DockerModuleConfig>(), file.readText())
+            StrictToml.strictDecode(
+                serializer<DockerModuleConfig>(), file.readText(), "modules/docker/docker.toml", strict
+            )
         } catch (e: Exception) {
             logger.error("Failed to parse {}: {} — using defaults", file, e.message)
             DockerModuleConfig()

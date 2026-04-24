@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.auth.migrations
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardLoginChallenges
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardRecoveryCodes
 import dev.nimbuspowered.nimbus.module.auth.db.DashboardSessions

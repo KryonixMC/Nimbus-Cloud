@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.DockerServiceConfig
 import dev.nimbuspowered.nimbus.config.GroupConfig
@@ -48,7 +48,7 @@ fun Route.groupRoutes(
             if (!call.requirePermission("nimbus.dashboard.groups.view")) return@get
             val name = call.parameters["name"]!!
             val group = groupManager.getGroup(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiError.GROUP_NOT_FOUND))
             call.respond(group.toResponse(registry))
         }
 
@@ -59,11 +59,11 @@ fun Route.groupRoutes(
 
             val errors = validateGroupRequest(request)
             if (errors.isNotEmpty()) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiError.VALIDATION_FAILED))
             }
 
             if (groupManager.getGroup(request.name) != null) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.name}' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.name}' already exists", ApiError.GROUP_ALREADY_EXISTS))
             }
 
             val software = ServerSoftware.valueOf(request.software.uppercase())
@@ -87,13 +87,13 @@ fun Route.groupRoutes(
             if (!call.requirePermission("nimbus.dashboard.groups.edit")) return@put
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiError.GROUP_NOT_FOUND))
 
             val request = call.receive<CreateGroupRequest>()
 
             val errors = validateGroupRequest(request)
             if (errors.isNotEmpty()) {
-                return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
+                return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiError.VALIDATION_FAILED))
             }
 
             val software = ServerSoftware.valueOf(request.software.uppercase())
@@ -118,13 +118,13 @@ fun Route.groupRoutes(
             if (!call.requirePermission("nimbus.dashboard.groups.edit")) return@delete
             val name = call.parameters["name"]!!
             groupManager.getGroup(name)
-                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiErrors.GROUP_NOT_FOUND))
+                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Group '$name' not found", ApiError.GROUP_NOT_FOUND))
 
             val running = registry.getByGroup(name)
             if (running.isNotEmpty()) {
                 return@delete call.respond(
                     HttpStatusCode.Conflict,
-                    apiError("Group '$name' has ${running.size} running instance(s). Stop them first.", ApiErrors.GROUP_HAS_RUNNING_INSTANCES)
+                    apiError("Group '$name' has ${running.size} running instance(s). Stop them first.", ApiError.GROUP_HAS_RUNNING_INSTANCES)
                 )
             }
 

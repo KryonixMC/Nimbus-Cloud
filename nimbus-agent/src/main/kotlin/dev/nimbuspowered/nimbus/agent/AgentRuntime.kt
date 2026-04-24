@@ -61,6 +61,8 @@ class AgentRuntime(
     private val shutdownStarted = java.util.concurrent.atomic.AtomicBoolean(false)
     private var recoveredServices: List<LocalProcessManager.RecoveredService> = emptyList()
 
+    private class ProtocolVersionMismatchException(message: String) : RuntimeException(message)
+
     suspend fun start() {
         // Validate TLS config before doing anything expensive
         if (!validateTlsConfig()) {
@@ -98,6 +100,12 @@ class AgentRuntime(
                 connectAndRun()
                 consecutiveSslFailures = 0
                 consecutiveFailures = 0
+            } catch (e: ProtocolVersionMismatchException) {
+                logger.error("FATAL: {}", e.message)
+                logger.error("  The agent and controller are running incompatible cluster protocols.")
+                logger.error("  Update both Nimbus installations to matching versions and restart.")
+                running = false
+                break
             } catch (e: javax.net.ssl.SSLHandshakeException) {
                 wasSslFailure = true
                 consecutiveSslFailures++
@@ -173,7 +181,8 @@ class AgentRuntime(
                 publicHost = resolvePublicHost(),
                 // Authoritative list of currently-running services for post-reconnect
                 // registry reconciliation on the controller.
-                runningServices = processManager.getRunningServices().map { it.serviceName }
+                runningServices = processManager.getRunningServices().map { it.serviceName },
+                protocolVersion = ClusterMessage.CURRENT_PROTOCOL_VERSION
             )
             send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(), authRequest)))
 
@@ -181,8 +190,19 @@ class AgentRuntime(
             val authFrame = incoming.receive() as? Frame.Text
                 ?: throw Exception("Invalid auth response")
             val authResponse = clusterJson.decodeFromString(ClusterMessage.serializer(), authFrame.readText())
-            if (authResponse is ClusterMessage.AuthResponse && !authResponse.accepted) {
-                throw Exception("Auth rejected: ${authResponse.reason}")
+            if (authResponse is ClusterMessage.AuthResponse) {
+                // Primary signal: local compare of advertised protocol versions. Catches both
+                // directions (newer agent vs older controller, and vice versa) as long as the
+                // controller populated the field. Default-1 means older controllers that never
+                // set it will still compare equal when everyone is on version 1.
+                if (!authResponse.accepted && authResponse.protocolVersion != 0
+                    && authResponse.protocolVersion != ClusterMessage.CURRENT_PROTOCOL_VERSION) {
+                    throw ProtocolVersionMismatchException(
+                        "protocol version mismatch: agent=${ClusterMessage.CURRENT_PROTOCOL_VERSION}, controller=${authResponse.protocolVersion}")
+                }
+                if (!authResponse.accepted) {
+                    throw Exception("Auth rejected: ${authResponse.reason}")
+                }
             }
             logger.info("Authenticated with controller as '{}'", config.agent.nodeName)
 

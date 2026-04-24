@@ -17,13 +17,20 @@ val clusterJson = Json {
 @Serializable
 sealed class ClusterMessage {
 
+    companion object {
+        // Bump when adding/removing/changing semantics of an existing ClusterMessage field.
+        // Adding new @SerialName'd message types with sensible ignore-unknown behavior does NOT require a bump.
+        const val CURRENT_PROTOCOL_VERSION: Int = 1
+    }
+
     // ── Controller -> Agent ────────────────────────────
 
     @Serializable @SerialName("AUTH_RESPONSE")
     data class AuthResponse(
         val accepted: Boolean,
         val nodeId: String = "",
-        val reason: String = ""
+        val reason: String = "",
+        val protocolVersion: Int = 1
     ) : ClusterMessage()
 
     @Serializable @SerialName("START_SERVICE")
@@ -167,7 +174,8 @@ sealed class ClusterMessage {
          * any service pinned to this node in the controller's registry but missing
          * from this list is purged. Sending an empty list means "I have no services".
          */
-        val runningServices: List<String> = emptyList()
+        val runningServices: List<String> = emptyList(),
+        val protocolVersion: Int = 1
     ) : ClusterMessage()
 
     @Serializable @SerialName("HEARTBEAT_RESPONSE")

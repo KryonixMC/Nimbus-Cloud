@@ -1,11 +1,17 @@
 package dev.nimbuspowered.nimbus.service
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PortAllocatorTest {
@@ -102,5 +108,102 @@ class PortAllocatorTest {
     fun `custom proxy port is returned by allocateProxyPort`() {
         val customAllocator = PortAllocator(proxyPort = 19132)
         assertEquals(19132, customAllocator.allocateProxyPort())
+    }
+
+    // ── New edge-case tests ───────────────────────────────────────────────────
+
+    @Test
+    fun `allocateBedrockPort starts at bedrockBasePort when bedrockEnabled`() {
+        val bedrockAllocator = PortAllocator(bedrockEnabled = true, bedrockBasePort = 29132)
+        val port = bedrockAllocator.allocateBedrockPort()
+        assertTrue(port >= 29132, "First Bedrock port $port should be >= 29132")
+    }
+
+    @Test
+    fun `allocateBedrockPort throws when bedrockEnabled is false`() {
+        val noBedrockAllocator = PortAllocator(bedrockEnabled = false)
+        assertThrows<IllegalStateException> {
+            noBedrockAllocator.allocateBedrockPort()
+        }
+    }
+
+    @Test
+    fun `reserveIfAvailable returns true for unoccupied port and false for already-allocated port`() {
+        val highAllocator = PortAllocator(backendBasePort = 53000)
+        val port = 53500
+
+        val first = highAllocator.reserveIfAvailable(port)
+        assertTrue(first, "reserveIfAvailable should return true for a free port")
+
+        val second = highAllocator.reserveIfAvailable(port)
+        assertFalse(second, "reserveIfAvailable should return false for an already-allocated port")
+    }
+
+    @Test
+    fun `release allows the same port to be reallocated immediately`() {
+        val highAllocator = PortAllocator(backendBasePort = 54000)
+        val port = highAllocator.allocateBackendPort()
+
+        highAllocator.release(port)
+
+        val reallocated = highAllocator.allocateBackendPort()
+        assertEquals(port, reallocated, "Released port should be the next allocated port")
+    }
+
+    @Test
+    fun `releaseBedrockPort allows the same bedrock port to be reallocated`() {
+        val bedrockAllocator = PortAllocator(bedrockEnabled = true, bedrockBasePort = 29200)
+        val port = bedrockAllocator.allocateBedrockPort()
+
+        bedrockAllocator.releaseBedrockPort(port)
+
+        val reallocated = bedrockAllocator.allocateBedrockPort()
+        assertEquals(port, reallocated, "Released Bedrock port should be the next allocated Bedrock port")
+    }
+
+    @Test
+    fun `reserve marks port as used so subsequent allocateBackendPort skips it`() {
+        val highAllocator = PortAllocator(backendBasePort = 55000)
+        // Pre-reserve the first port in range
+        highAllocator.reserve(55000)
+
+        val allocated = highAllocator.allocateBackendPort()
+        assertTrue(allocated > 55000, "allocateBackendPort should skip the reserved port 55000, got $allocated")
+    }
+
+    @Test
+    fun `port exhaustion throws IllegalStateException after filling the range`() {
+        // Use a base port where 10 sequential ports are very unlikely to be in use.
+        // We allocate all 10000 allowed ports; the 10001st must throw.
+        val smallBase = 56000
+        val smallAllocator = PortAllocator(backendBasePort = smallBase)
+
+        assertThrows<IllegalStateException> {
+            for (i in 0..10000) {
+                smallAllocator.allocateBackendPort()
+            }
+        }
+    }
+
+    @Test
+    fun `concurrent allocateBackendPort 200 calls all return unique ports`() = runTest {
+        val highAllocator = PortAllocator(backendBasePort = 57000)
+        val ports = withContext(Dispatchers.Default) {
+            (1..200).map { async { highAllocator.allocateBackendPort() } }.awaitAll()
+        }
+        assertEquals(200, ports.size)
+        assertEquals(200, ports.toSet().size, "All 200 concurrently allocated ports must be unique")
+    }
+
+    @Test
+    fun `invalidateExternalCache does not crash and allocation still works`() {
+        val highAllocator = PortAllocator(backendBasePort = 58000)
+        // Allocate once to populate internal state
+        highAllocator.allocateBackendPort()
+        // Invalidate cache — must not throw
+        highAllocator.invalidateExternalCache()
+        // Allocation after cache clear must still succeed
+        val port = highAllocator.allocateBackendPort()
+        assertTrue(port >= 58000, "Port $port after cache invalidation should still be in range")
     }
 }

@@ -687,13 +687,13 @@ Valid target strings: `services`, `dedicated`, `templates`, `config`, `state_syn
 
 ## Error codes
 
-Every non-2xx body carries an `error` field. The canonical set lives in `api/ApiErrors.kt`.
+Every non-2xx body carries an `error` field. The canonical set lives in `api/ApiErrors.kt` as the [`ApiError`](https://github.com/NimbusPowered/Nimbus/blob/main/nimbus-core/src/main/kotlin/dev/nimbuspowered/nimbus/api/ApiErrors.kt) enum. Each entry is paired with a default HTTP status.
 
-**Auth** — `AUTH_FAILED`, `UNAUTHORIZED`, `INSUFFICIENT_SCOPE`
+**Auth** — `AUTH_FAILED`, `UNAUTHORIZED`, `FORBIDDEN`, `READ_ONLY`, `AUTH_CHALLENGE_INVALID`, `AUTH_RATE_LIMITED`, `AUTH_DISABLED`, `AUTH_SESSION_INVALID`, `AUTH_SESSION_EXPIRED`, `AUTH_PLAYER_OFFLINE`, `AUTH_TOTP_REQUIRED`, `AUTH_TOTP_INVALID`, `AUTH_TOTP_ALREADY_ENABLED`, `AUTH_MAGIC_LINK_INVALID`, `AUTH_LOGIN_CHALLENGE_EXPIRED`
 
-**Generic** — `NOT_FOUND`, `INVALID_INPUT`, `VALIDATION_FAILED`, `INTERNAL_ERROR`, `FORBIDDEN`, `READ_ONLY`, `PAYLOAD_TOO_LARGE`
+**Generic** — `VALIDATION_FAILED`, `INTERNAL_ERROR`, `PAYLOAD_TOO_LARGE`, `NO_FIELDS_TO_UPDATE`
 
-**Service** — `SERVICE_NOT_FOUND`, `SERVICE_NOT_READY`, `SERVICE_START_FAILED`, `SERVICE_STOP_FAILED`, `SERVICE_RESTART_FAILED`
+**Service** — `SERVICE_NOT_FOUND`, `SERVICE_NOT_READY`, `SERVICE_UNAVAILABLE`, `SERVICE_START_FAILED`, `SERVICE_STOP_FAILED`, `SERVICE_RESTART_FAILED`
 
 **Group** — `GROUP_NOT_FOUND`, `GROUP_ALREADY_EXISTS`, `GROUP_HAS_RUNNING_INSTANCES`
 
@@ -703,19 +703,37 @@ Every non-2xx body carries an `error` field. The canonical set lives in `api/Api
 
 **Stress** — `STRESS_ALREADY_RUNNING`, `STRESS_NOT_RUNNING`
 
-**Cluster / LB** — `SERVICE_UNAVAILABLE`, `CLUSTER_NOT_ENABLED`, `LOAD_BALANCER_NOT_ENABLED`, `NODE_NOT_FOUND`
+**Cluster / LB** — `CLUSTER_NOT_ENABLED`, `CLUSTER_TOKEN_MISSING`, `LOAD_BALANCER_NOT_ENABLED`, `NODE_NOT_FOUND`
 
 **Files** — `INVALID_SCOPE`, `PATH_NOT_FOUND`, `PATH_TRAVERSAL`
 
-**Config** — `NO_FIELDS_TO_UPDATE`
-
 **Proxy** — `PROXY_NOT_AVAILABLE`
 
+**Template** — `TEMPLATE_NOT_FOUND`
+
 **Modpack** — `MODPACK_NOT_FOUND`, `MODPACK_INVALID`, `MODPACK_UPLOAD_FAILED`, `CHUNKED_UPLOAD_NOT_FOUND`, `CHUNKED_UPLOAD_INVALID`, `CURSEFORGE_API_KEY_MISSING`
+
+**Plugin** — `PLUGIN_VERSION_NOT_FOUND`
+
+**Software** — `SOFTWARE_UNKNOWN`
+
+**Scaling** — `SCALING_CONFIG_NOT_FOUND`
+
+**Players** — `PLAYER_NOT_FOUND`, `PLAYER_NOT_ONLINE`
+
+**Perms** — `PERMISSION_GROUP_NOT_FOUND`, `PERMISSION_TRACK_NOT_FOUND`
+
+**Display** — `DISPLAY_CONFIG_NOT_FOUND`
 
 **Punishments** — `PUNISHMENT_NOT_FOUND`, `PUNISHMENT_ALREADY_REVOKED`, `PUNISHMENT_TARGET_INVALID`, `PUNISHMENT_DURATION_INVALID`
 
 **Resource packs** — `RESOURCE_PACK_NOT_FOUND`, `RESOURCE_PACK_ALREADY_EXISTS`, `RESOURCE_PACK_INVALID_URL`, `RESOURCE_PACK_UPLOAD_FAILED`, `RESOURCE_PACK_ASSIGNMENT_NOT_FOUND`
+
+**Backup** — `BACKUP_NOT_FOUND`, `BACKUP_ARCHIVE_MISSING`, `BACKUP_MANIFEST_MISSING`, `BACKUP_IN_PROGRESS`, `BACKUP_RESTORE_FAILED`, `BACKUP_VERIFICATION_FAILED`, `BACKUP_CONFIG_INVALID`
+
+<Callout type="info">
+  **Removed / renamed in 0.13:** `INSUFFICIENT_SCOPE` was unused and has been removed. `INVALID_INPUT` and `NOT_FOUND` are deprecated — every endpoint now returns a domain-specific code (e.g. `BACKUP_NOT_FOUND`, `PERMISSION_GROUP_NOT_FOUND`, or `VALIDATION_FAILED`). The `ApiErrors` compat facade still exposes the old string constants unchanged, so any out-of-tree caller switching on `"NOT_FOUND"` / `"INVALID_INPUT"` keeps working; the facade is removed in 0.14.
+</Callout>
 
 ---
 

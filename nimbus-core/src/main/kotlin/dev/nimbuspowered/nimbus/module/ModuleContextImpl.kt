@@ -1,5 +1,12 @@
 package dev.nimbuspowered.nimbus.module
 
+import dev.nimbuspowered.nimbus.module.api.AuthLevel
+import dev.nimbuspowered.nimbus.module.api.DoctorCheck
+import dev.nimbuspowered.nimbus.module.api.Migration
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.PluginDeployment
+import dev.nimbuspowered.nimbus.module.api.SessionValidator
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter

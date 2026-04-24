@@ -1,5 +1,7 @@
 package dev.nimbuspowered.nimbus.module.scaling.routes
 
+import dev.nimbuspowered.nimbus.api.ApiError
+import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.module.scaling.SmartScalingConfigManager
 import dev.nimbuspowered.nimbus.module.scaling.SmartScalingManager
@@ -63,7 +65,7 @@ fun Route.scalingRoutes(manager: SmartScalingManager, configManager: SmartScalin
         get("schedules/{group}") {
             val groupName = call.parameters["group"]!!
             val config = configManager.getConfig(groupName)
-                ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "No scaling config for '$groupName'"))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("No scaling config for '$groupName'", ApiError.SCALING_CONFIG_NOT_FOUND))
 
             call.respond(
                 ScheduleResponse(

@@ -1,11 +1,11 @@
 package dev.nimbuspowered.nimbus.module.auth.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import dev.nimbuspowered.nimbus.module.auth.AuthConfig
 import dev.nimbuspowered.nimbus.module.auth.service.ChallengeKind
 import dev.nimbuspowered.nimbus.module.auth.service.LoginChallengeService
@@ -20,21 +20,6 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import java.util.UUID
-
-/**
- * Error code strings local to the auth module. Added here rather than in
- * ApiErrors.kt (core) to keep the module self-contained in Phase 1.
- */
-object AuthErrors {
-    const val AUTH_CHALLENGE_INVALID = "AUTH_CHALLENGE_INVALID"
-    const val AUTH_RATE_LIMITED = "AUTH_RATE_LIMITED"
-    const val AUTH_DISABLED = "AUTH_DISABLED"
-    const val AUTH_SESSION_INVALID = "AUTH_SESSION_INVALID"
-    const val PLAYER_OFFLINE = "PLAYER_OFFLINE"
-    const val AUTH_TOTP_REQUIRED = "AUTH_TOTP_REQUIRED"
-    const val AUTH_TOTP_INVALID = "AUTH_TOTP_INVALID"
-    const val AUTH_TOTP_ALREADY_ENABLED = "AUTH_TOTP_ALREADY_ENABLED"
-}
 
 @Serializable
 data class GenerateCodeRequest(val uuid: String, val name: String)
@@ -126,7 +111,7 @@ data class WsTicketResponse(val ticket: String, val expiresAt: Long)
  * Abstraction over the online-player lookup used to resolve a dashboard-initiated
  * magic-link request to a specific in-game player. Backed by the `players` module's
  * `PlayerTracker` when present — otherwise the deliver-magic-link endpoint returns
- * 404 `PLAYER_OFFLINE` (fail-closed, consistent with the contract).
+ * 404 `AUTH_PLAYER_OFFLINE` (fail-closed, consistent with the contract).
  */
 fun interface PlayerLookup {
     /** Resolve a player name to `(uuid, service)` if currently online, else `null`. */
@@ -155,10 +140,10 @@ fun Route.authServiceRoutes(
         post("generate-code") {
             val req = runCatching { call.receive<GenerateCodeRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("uuid + name required", ApiErrors.VALIDATION_FAILED))
+                    apiError("uuid + name required", ApiError.VALIDATION_FAILED))
             val uuid = runCatching { UUID.fromString(req.uuid) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("Invalid uuid", ApiErrors.VALIDATION_FAILED))
+                    apiError("Invalid uuid", ApiError.VALIDATION_FAILED))
             val cfg = configSupplier().loginChallenge
             try {
                 val issued = challengeService.issueCode(uuid.toString(), req.name.take(16))
@@ -169,7 +154,7 @@ fun Route.authServiceRoutes(
                 ))
             } catch (e: LoginChallengeService.RateLimitedException) {
                 call.respond(HttpStatusCode.TooManyRequests,
-                    apiError(e.message ?: "Rate limited", AuthErrors.AUTH_RATE_LIMITED))
+                    apiError(e.message ?: "Rate limited", ApiError.AUTH_RATE_LIMITED))
             }
         }
 
@@ -180,14 +165,14 @@ fun Route.authServiceRoutes(
         post("request-magic-link") {
             val req = runCatching { call.receive<RequestMagicLinkRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("uuid + name required", ApiErrors.VALIDATION_FAILED))
+                    apiError("uuid + name required", ApiError.VALIDATION_FAILED))
             if (!configSupplier().loginChallenge.magicLinkEnabled) {
                 return@post call.respond(HttpStatusCode.Forbidden,
-                    apiError("Magic link login is disabled", AuthErrors.AUTH_DISABLED))
+                    apiError("Magic link login is disabled", ApiError.AUTH_DISABLED))
             }
             val uuid = runCatching { UUID.fromString(req.uuid) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("Invalid uuid", ApiErrors.VALIDATION_FAILED))
+                    apiError("Invalid uuid", ApiError.VALIDATION_FAILED))
             val ip = call.request.local.remoteAddress
             try {
                 val issued = challengeService.issueMagicLink(uuid.toString(), req.name.take(16), ip)
@@ -201,10 +186,10 @@ fun Route.authServiceRoutes(
                 ))
             } catch (e: LoginChallengeService.RateLimitedException) {
                 call.respond(HttpStatusCode.TooManyRequests,
-                    apiError(e.message ?: "Rate limited", AuthErrors.AUTH_RATE_LIMITED))
+                    apiError(e.message ?: "Rate limited", ApiError.AUTH_RATE_LIMITED))
             } catch (e: IllegalStateException) {
                 call.respond(HttpStatusCode.Forbidden,
-                    apiError(e.message ?: "Disabled", AuthErrors.AUTH_DISABLED))
+                    apiError(e.message ?: "Disabled", ApiError.AUTH_DISABLED))
             }
         }
 
@@ -215,10 +200,10 @@ fun Route.authServiceRoutes(
         get("sessions") {
             val uuidStr = call.request.queryParameters["uuid"]
                 ?: return@get call.respond(HttpStatusCode.BadRequest,
-                    apiError("uuid query param required", ApiErrors.VALIDATION_FAILED))
+                    apiError("uuid query param required", ApiError.VALIDATION_FAILED))
             val uuid = runCatching { UUID.fromString(uuidStr) }.getOrNull()
                 ?: return@get call.respond(HttpStatusCode.BadRequest,
-                    apiError("Invalid uuid", ApiErrors.VALIDATION_FAILED))
+                    apiError("Invalid uuid", ApiError.VALIDATION_FAILED))
             val summaries = sessionService.listForUser(uuid).map {
                 SessionSummaryDto(
                     sessionId = it.sessionId,
@@ -238,10 +223,10 @@ fun Route.authServiceRoutes(
         post("logout-all") {
             val uuidStr = call.request.queryParameters["uuid"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("uuid query param required", ApiErrors.VALIDATION_FAILED))
+                    apiError("uuid query param required", ApiError.VALIDATION_FAILED))
             val uuid = runCatching { UUID.fromString(uuidStr) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("Invalid uuid", ApiErrors.VALIDATION_FAILED))
+                    apiError("Invalid uuid", ApiError.VALIDATION_FAILED))
             val revoked = sessionService.revokeAll(uuid)
             if (revoked > 0) {
                 eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
@@ -264,7 +249,7 @@ fun Route.authServiceRoutes(
  * SDK plugin on the target service turns into a clickable chat component.
  *
  * All negative outcomes (player offline, name never existed, Players module
- * absent) collapse to the same 404 `PLAYER_OFFLINE` with an identical error
+ * absent) collapse to the same 404 `AUTH_PLAYER_OFFLINE` with an identical error
  * body. That way this unauthenticated surface cannot be used to probe which
  * names are registered on the network.
  */
@@ -279,12 +264,12 @@ fun Route.authPublicDeliveryRoutes(
         post("deliver-magic-link") {
             val req = runCatching { call.receive<DeliverMagicLinkRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("name required", ApiErrors.VALIDATION_FAILED))
+                    apiError("name required", ApiError.VALIDATION_FAILED))
 
             val cfg = configSupplier()
             if (!cfg.loginChallenge.magicLinkEnabled) {
                 return@post call.respond(HttpStatusCode.Forbidden,
-                    apiError("Magic link login is disabled", AuthErrors.AUTH_DISABLED))
+                    apiError("Magic link login is disabled", ApiError.AUTH_DISABLED))
             }
 
             // Uniform error message whether the player is offline, never
@@ -292,7 +277,7 @@ fun Route.authPublicDeliveryRoutes(
             // account-existence info across this unauthenticated surface.
             val genericNotFound = apiError(
                 "Player not found — please join any Nimbus server and try again.",
-                AuthErrors.PLAYER_OFFLINE
+                ApiError.AUTH_PLAYER_OFFLINE
             )
             val lookup = playerLookupSupplier()
                 ?: return@post call.respond(HttpStatusCode.NotFound, genericNotFound)
@@ -305,10 +290,10 @@ fun Route.authPublicDeliveryRoutes(
                 challengeService.issueMagicLink(uuidStr, req.name.take(16), ip)
             } catch (e: LoginChallengeService.RateLimitedException) {
                 return@post call.respond(HttpStatusCode.TooManyRequests,
-                    apiError(e.message ?: "Rate limited", AuthErrors.AUTH_RATE_LIMITED))
+                    apiError(e.message ?: "Rate limited", ApiError.AUTH_RATE_LIMITED))
             } catch (e: IllegalStateException) {
                 return@post call.respond(HttpStatusCode.Forbidden,
-                    apiError(e.message ?: "Disabled", AuthErrors.AUTH_DISABLED))
+                    apiError(e.message ?: "Disabled", ApiError.AUTH_DISABLED))
             }
 
             val base = publicUrlSupplier().trimEnd('/')
@@ -362,7 +347,7 @@ fun Route.authRoutes(
         post("consume-challenge") {
             val req = runCatching { call.receive<ConsumeChallengeRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("challenge required", ApiErrors.VALIDATION_FAILED))
+                    apiError("challenge required", ApiError.VALIDATION_FAILED))
 
             val callerIp = call.request.local.remoteAddress
             val consumed = try {
@@ -370,17 +355,17 @@ fun Route.authRoutes(
             } catch (e: LoginChallengeService.RateLimitedException) {
                 eventBus?.emit(NimbusEvent.DashboardLoginFailed(reason = "rate_limited", ip = callerIp))
                 return@post call.respond(HttpStatusCode.TooManyRequests,
-                    apiError(e.message ?: "Rate limited", AuthErrors.AUTH_RATE_LIMITED))
+                    apiError(e.message ?: "Rate limited", ApiError.AUTH_RATE_LIMITED))
             }
             if (consumed == null) {
                 eventBus?.emit(NimbusEvent.DashboardLoginFailed(reason = "invalid_challenge", ip = callerIp))
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid, expired, or already-used challenge", AuthErrors.AUTH_CHALLENGE_INVALID))
+                    apiError("Invalid, expired, or already-used challenge", ApiError.AUTH_CHALLENGE_INVALID))
             }
 
             val uuid = runCatching { UUID.fromString(consumed.uuid) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.InternalServerError,
-                    apiError("Stored challenge has invalid uuid", ApiErrors.INTERNAL_ERROR))
+                    apiError("Stored challenge has invalid uuid", ApiError.INTERNAL_ERROR))
 
             val permissions = permissionResolver.resolve(consumed.uuid)
             val loginMethod = when (consumed.kind) {
@@ -448,11 +433,11 @@ fun Route.authRoutes(
         post("totp-verify") {
             val req = runCatching { call.receive<TotpVerifyRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("challengeId + code required", ApiErrors.VALIDATION_FAILED))
+                    apiError("challengeId + code required", ApiError.VALIDATION_FAILED))
 
             val pending = pendingTotpStore.peek(req.challengeId)
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired TOTP challenge", AuthErrors.AUTH_CHALLENGE_INVALID))
+                    apiError("Invalid or expired TOTP challenge", ApiError.AUTH_CHALLENGE_INVALID))
 
             val ok = totpService.verifyForLogin(pending.uuid.toString(), req.code)
             if (!ok) {
@@ -462,7 +447,7 @@ fun Route.authRoutes(
                     ip = pending.ip
                 ))
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid TOTP code", AuthErrors.AUTH_TOTP_INVALID))
+                    apiError("Invalid TOTP code", ApiError.AUTH_TOTP_INVALID))
             }
             // Consume only on success so a typo doesn't invalidate the pending entry.
             pendingTotpStore.consume(req.challengeId)
@@ -499,7 +484,7 @@ fun Route.authRoutes(
         post("logout") {
             val raw = extractBearerToken(call)
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             // Validate first so we have the principal for the audit event.
             val principal = sessionService.validate(raw)
             val ok = sessionService.revoke(raw)
@@ -525,10 +510,10 @@ fun Route.authRoutes(
         get("ws-ticket") {
             val raw = extractBearerToken(call)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             sessionService.validate(raw)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+                    apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
             // Bind the ticket to the raw bearer, so revocation + rolling
             // refresh continue to apply when the ticket is consumed later.
             val ticket = wsTicketStore.mint(raw)
@@ -538,10 +523,10 @@ fun Route.authRoutes(
         get("me") {
             val raw = extractBearerToken(call)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             val principal = sessionService.validate(raw)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+                    apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
 
             call.respond(UserInfo(
                 uuid = principal.uuid.toString(),
@@ -561,10 +546,10 @@ fun Route.authRoutes(
         get("my-sessions") {
             val raw = extractBearerToken(call)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             val principal = sessionService.validate(raw)
                 ?: return@get call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+                    apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
 
             val currentSessionId = principal.sessionId
             val list = sessionService.listForUser(principal.uuid).map { s ->
@@ -592,13 +577,13 @@ fun Route.authRoutes(
         delete("my-sessions/{sessionId}") {
             val raw = extractBearerToken(call)
                 ?: return@delete call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             val principal = sessionService.validate(raw)
                 ?: return@delete call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+                    apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
             val sid = call.parameters["sessionId"]
                 ?: return@delete call.respond(HttpStatusCode.BadRequest,
-                    apiError("sessionId required", ApiErrors.VALIDATION_FAILED))
+                    apiError("sessionId required", ApiError.VALIDATION_FAILED))
             val revoked = sessionService.revokeOwnedSession(principal.uuid, sid)
             if (revoked) {
                 eventBus?.emit(NimbusEvent.DashboardSessionRevoked(
@@ -609,7 +594,7 @@ fun Route.authRoutes(
                 call.respond(ApiMessage(success = true, message = "Session revoked"))
             } else {
                 call.respond(HttpStatusCode.NotFound,
-                    apiError("Session not found", ApiErrors.NOT_FOUND))
+                    apiError("Session not found", ApiError.AUTH_SESSION_INVALID))
             }
         }
 
@@ -621,10 +606,10 @@ fun Route.authRoutes(
         post("my-sessions/revoke-others") {
             val raw = extractBearerToken(call)
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+                    apiError("Missing session token", ApiError.UNAUTHORIZED))
             val principal = sessionService.validate(raw)
                 ?: return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+                    apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
             val revoked = sessionService.revokeOtherSessions(principal.uuid, principal.sessionId)
             if (revoked > 0) {
                 eventBus?.emit(NimbusEvent.DashboardSessionRevoked(

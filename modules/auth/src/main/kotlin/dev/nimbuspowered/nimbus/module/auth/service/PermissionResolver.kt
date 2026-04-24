@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.module.auth.service
 
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import org.slf4j.LoggerFactory
 
 /**

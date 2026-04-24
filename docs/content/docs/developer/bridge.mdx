@@ -44,6 +44,12 @@ The bridge checks for the environment variable first, then falls back to the sys
 
 All commands require the base permission `nimbus.cloud`. The `/cloud` command is also available as `/nimbus`.
 
+<Callout type="info">
+**Dynamic command discovery** — most `/cloud` subcommands are not implemented in the Bridge itself. On startup (and on controller reconnect), the Bridge calls `GET /api/commands` to fetch all Controller commands that have a non-empty `permission` field. Each discovered command is forwarded automatically via `POST /api/commands/{name}/execute`. This means new Controller commands appear in-game without Bridge updates, and the response formatting is handled by the Controller's `CommandOutput` interface.
+
+Only `maintenance` (Velocity-local login gate) and `events` (local WebSocket subscriber list) are implemented directly in the Bridge.
+</Callout>
+
 ### Service management
 
 | Command | Permission | Description |
@@ -61,7 +67,6 @@ All commands require the base permission `nimbus.cloud`. The `/cloud` command is
 |---|---|---|
 | `/cloud players` | `nimbus.cloud.players` | List all online players and their current servers |
 | `/cloud send <player> <service>` | `nimbus.cloud.send` | Transfer a player to another service |
-| `/cloud kick <player> [reason]` | `nimbus.cloud.kick` | Kick a player from the network |
 | `/cloud broadcast [--group <g>] <msg>` | `nimbus.cloud.broadcast` | Broadcast a message to all players or a specific group |
 
 ### Network management
@@ -207,7 +212,7 @@ All proxy sync settings are updated in real-time via WebSocket events:
 
 ```text title="Directory Structure"
 NimbusBridgePlugin (entry point)
-├── CloudCommand          Uses NimbusApiClient + NimbusClient (SDK)
+├── CloudCommand          Dynamic forwarding via /api/commands; maintenance + events are Bridge-local
 ├── HubCommand            Uses ProxyServer to find lobby
 ├── ConnectionListener    Handles initial connect + kick fallback + maintenance blocking
 ├── MaintenanceHandler    Proxy-side maintenance state cache (synced via API + events)

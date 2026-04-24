@@ -1,6 +1,7 @@
 package dev.nimbuspowered.nimbus.sdk.event;
 
 import dev.nimbuspowered.nimbus.sdk.NimbusEvent;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.function.Function;
  * Maps event type strings to typed event constructors.
  * Used internally by {@link dev.nimbuspowered.nimbus.sdk.NimbusEventStream} to dispatch typed events.
  */
+@ApiStatus.Internal
 public final class EventRegistry {
 
     private static final Map<String, Function<NimbusEvent, ? extends TypedEvent>> FACTORIES = new HashMap<>();

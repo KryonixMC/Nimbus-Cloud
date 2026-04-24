@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.docker
 
-import dev.nimbuspowered.nimbus.module.DoctorLevel
+import dev.nimbuspowered.nimbus.module.api.DoctorLevel
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking

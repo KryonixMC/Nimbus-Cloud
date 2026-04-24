@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.NimbusApi
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.protocol.StateManifest
@@ -46,7 +46,7 @@ fun Route.stateRoutes(
     // Manifest: always authenticated, even if empty
     get("/api/services/{name}/state/manifest") {
         if (!validateClusterToken(call, clusterToken)) {
-            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
+            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiError.FORBIDDEN))
             return@get
         }
         val name = call.parameters["name"]!!
@@ -57,18 +57,18 @@ fun Route.stateRoutes(
     // Stream single file
     get("/api/services/{name}/state/file/{path...}") {
         if (!validateClusterToken(call, clusterToken)) {
-            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
+            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiError.FORBIDDEN))
             return@get
         }
         val name = call.parameters["name"]!!
         val path = call.parameters.getAll("path")?.joinToString("/") ?: ""
         if (path.isBlank() || ".." in path) {
-            call.respond(HttpStatusCode.BadRequest, apiError("Invalid path", ApiErrors.INVALID_INPUT))
+            call.respond(HttpStatusCode.BadRequest, apiError("Invalid path", ApiError.VALIDATION_FAILED))
             return@get
         }
         val file = stateSyncManager.openFileForRead(name, path)
         if (file == null) {
-            call.respond(HttpStatusCode.NotFound, apiError("File not found: $path", ApiErrors.NOT_FOUND))
+            call.respond(HttpStatusCode.NotFound, apiError("File not found: $path", ApiError.PATH_NOT_FOUND))
             return@get
         }
         call.respondOutputStream(contentType = ContentType.Application.OctetStream) {
@@ -86,7 +86,7 @@ fun Route.stateRoutes(
     // Atomic sync: agent posts manifest + files, controller stages + commits
     post("/api/services/{name}/state/sync") {
         if (!validateClusterToken(call, clusterToken)) {
-            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
+            call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiError.FORBIDDEN))
             return@post
         }
         val name = call.parameters["name"]!!
@@ -97,7 +97,7 @@ fun Route.stateRoutes(
         if (!stateSyncManager.tryAcquireLock(name)) {
             call.respond(
                 HttpStatusCode.Conflict,
-                apiError("Another sync for '$name' is already in progress", ApiErrors.INVALID_INPUT)
+                apiError("Another sync for '$name' is already in progress", ApiError.VALIDATION_FAILED)
             )
             return@post
         }
@@ -183,7 +183,7 @@ fun Route.stateRoutes(
             ))
             call.respond(
                 HttpStatusCode.InsufficientStorage,
-                apiError("Quota exceeded: ${e.message}", ApiErrors.INTERNAL_ERROR)
+                apiError("Quota exceeded: ${e.message}", ApiError.INTERNAL_ERROR)
             )
         } catch (e: Exception) {
             logger.error("State sync for '{}' failed: {}", name, e.message, e)
@@ -195,7 +195,7 @@ fun Route.stateRoutes(
             if (!success) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    apiError("Sync failed: ${e.message}", ApiErrors.INTERNAL_ERROR)
+                    apiError("Sync failed: ${e.message}", ApiError.INTERNAL_ERROR)
                 )
             }
         } finally {

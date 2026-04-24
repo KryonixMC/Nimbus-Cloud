@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.auth.service
 
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID

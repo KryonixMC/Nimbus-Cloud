@@ -1,4 +1,4 @@
-package dev.nimbuspowered.nimbus.module
+package dev.nimbuspowered.nimbus.module.api
 
 /**
  * Optional caller identity attached to a [ModuleCommand] invocation.

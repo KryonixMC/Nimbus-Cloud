@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.perms.migrations
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import dev.nimbuspowered.nimbus.module.perms.*
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.Transaction

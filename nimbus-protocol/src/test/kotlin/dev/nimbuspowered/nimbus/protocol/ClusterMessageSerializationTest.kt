@@ -205,4 +205,54 @@ class ClusterMessageSerializationTest {
         assertEquals("X", decoded.serviceName)
         assertEquals(5, decoded.timeoutSeconds)
     }
+
+    // ── Protocol version handshake (T1–T3) ──────────────────────────────
+
+    @Test
+    fun `T1 AuthRequest without protocolVersion decodes with default 1`() {
+        // Simulates an older agent JAR that pre-dates the field: the wire format
+        // omits protocolVersion entirely. ignoreUnknownKeys + default = 1 means
+        // the controller sees protocolVersion=1 and accepts the handshake.
+        val json = """{"type":"AUTH_REQUEST","token":"t","nodeName":"n","maxMemory":"1G","maxServices":1}"""
+        val decoded = clusterJson.decodeFromString<ClusterMessage>(json) as ClusterMessage.AuthRequest
+        assertEquals(1, decoded.protocolVersion)
+        assertEquals(ClusterMessage.CURRENT_PROTOCOL_VERSION, decoded.protocolVersion)
+    }
+
+    @Test
+    fun `T2 AuthRequest protocolVersion emitted and roundtrips`() {
+        val msg = ClusterMessage.AuthRequest(
+            token = "t",
+            nodeName = "n",
+            maxMemory = "1G",
+            maxServices = 1,
+            protocolVersion = 1
+        )
+        val encoded = clusterJson.encodeToString<ClusterMessage>(msg)
+        assertTrue(
+            encoded.contains("\"protocolVersion\":1"),
+            "expected protocolVersion in wire format: $encoded"
+        )
+        val decoded = clusterJson.decodeFromString<ClusterMessage>(encoded) as ClusterMessage.AuthRequest
+        assertEquals(msg, decoded)
+    }
+
+    @Test
+    fun `T3 AuthResponse protocolVersion default and roundtrip`() {
+        // Default case — older controller that never sets the field still yields 1.
+        val jsonNoField = """{"type":"AUTH_RESPONSE","accepted":true,"nodeId":"n1"}"""
+        val decodedDefault = clusterJson.decodeFromString<ClusterMessage>(jsonNoField) as ClusterMessage.AuthResponse
+        assertEquals(1, decodedDefault.protocolVersion)
+
+        // Round-trip with an explicit value.
+        val msg = ClusterMessage.AuthResponse(
+            accepted = false,
+            reason = "protocol version mismatch: agent=2, controller=1",
+            protocolVersion = 1
+        )
+        val encoded = clusterJson.encodeToString<ClusterMessage>(msg)
+        assertTrue(encoded.contains("\"protocolVersion\":1"), "expected protocolVersion in: $encoded")
+        val decoded = clusterJson.decodeFromString<ClusterMessage>(encoded) as ClusterMessage.AuthResponse
+        assertEquals(msg, decoded)
+    }
 }

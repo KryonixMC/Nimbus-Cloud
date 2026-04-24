@@ -1,7 +1,6 @@
 package dev.nimbuspowered.nimbus.module.auth
 
-import com.akuleshov7.ktoml.Toml
-import com.akuleshov7.ktoml.TomlInputConfig
+import dev.nimbuspowered.nimbus.config.StrictToml
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -112,7 +111,11 @@ data class WebAuthnConfig(
  * Loads or creates `config/modules/auth/auth.toml` and the companion encryption
  * key file. Returns the parsed config + the 32-byte key.
  */
-class AuthConfigStore(private val moduleDir: Path, private val baseDir: Path) {
+class AuthConfigStore(
+    private val moduleDir: Path,
+    private val baseDir: Path,
+    private val strict: Boolean = false
+) {
 
     private val logger = LoggerFactory.getLogger(AuthConfigStore::class.java)
     private val configFile: Path = moduleDir.resolve("auth.toml")
@@ -125,8 +128,9 @@ class AuthConfigStore(private val moduleDir: Path, private val baseDir: Path) {
         }
         return try {
             val text = Files.readString(configFile)
-            Toml(inputConfig = TomlInputConfig(ignoreUnknownNames = true))
-                .decodeFromString(AuthConfig.serializer(), text)
+            StrictToml.strictDecode(
+                AuthConfig.serializer(), text, "modules/auth/auth.toml", strict
+            )
         } catch (e: Exception) {
             logger.warn("Failed to parse {} — using defaults ({})", configFile, e.message)
             AuthConfig()

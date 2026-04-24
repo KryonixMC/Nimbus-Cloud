@@ -32,7 +32,7 @@ fun Route.systemRoutes(
     post("/api/reload") {
         if (!call.requirePermission("nimbus.dashboard.reload")) return@post
         try {
-            val configs = ConfigLoader.reloadGroupConfigs(groupsDir)
+            val configs = ConfigLoader.reloadGroupConfigs(groupsDir, config.controller.strictConfig)
             groupManager.reloadGroups(configs)
             eventBus.emit(NimbusEvent.ConfigReloaded(configs.size))
             call.respond(ReloadRegistry.buildReport(

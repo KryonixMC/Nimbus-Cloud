@@ -43,6 +43,23 @@ class ClusterWebSocketHandler(
                     return@webSocket
                 }
 
+                // Version-check BEFORE token-check so a wrong-version agent gets a precise
+                // diagnostic instead of a generic "Invalid auth token" when both are off.
+                val agentProto = authMsg.protocolVersion
+                val ctrlProto = ClusterMessage.CURRENT_PROTOCOL_VERSION
+                if (agentProto != ctrlProto) {
+                    val reason = "protocol version mismatch: agent=$agentProto, controller=$ctrlProto"
+                    logger.warn("Rejecting cluster handshake from '{}': {}", authMsg.nodeName, reason)
+                    send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),
+                        ClusterMessage.AuthResponse(
+                            accepted = false,
+                            reason = reason,
+                            protocolVersion = ctrlProto
+                        ))))
+                    close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Protocol mismatch"))
+                    return@webSocket
+                }
+
                 // C5 fix: reject connections when cluster token is blank
                 if (config.token.isBlank() || !NimbusApi.timingSafeEquals(authMsg.token, config.token)) {
                     send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),
@@ -97,7 +114,11 @@ class ClusterWebSocketHandler(
                 }
 
                 send(Frame.Text(clusterJson.encodeToString(ClusterMessage.serializer(),
-                    ClusterMessage.AuthResponse(true, nodeId = nodeId))))
+                    ClusterMessage.AuthResponse(
+                        accepted = true,
+                        nodeId = nodeId,
+                        protocolVersion = ClusterMessage.CURRENT_PROTOCOL_VERSION
+                    ))))
 
                 // Message loop
                 for (frame in incoming) {

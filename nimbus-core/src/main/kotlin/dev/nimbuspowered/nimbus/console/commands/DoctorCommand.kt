@@ -8,8 +8,8 @@ import dev.nimbuspowered.nimbus.console.ConsoleOutput
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.doctor.DoctorReport
 import dev.nimbuspowered.nimbus.doctor.DoctorRunner
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.DoctorCheck
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.DoctorCheck
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

@@ -224,11 +224,11 @@ fun nimbusMain() = runBlocking {
     val templateManager = TemplateManager()
     val groupManager = GroupManager(templatesDir)
 
-    val proxySyncManager = dev.nimbuspowered.nimbus.proxy.ProxySyncManager(proxyDir)
+    val proxySyncManager = dev.nimbuspowered.nimbus.proxy.ProxySyncManager(proxyDir, config.controller.strictConfig)
     proxySyncManager.init()
 
     // Load group configs (before module init, so modules can access groups)
-    val groupConfigs = ConfigLoader.loadGroupConfigs(groupsDir)
+    val groupConfigs = ConfigLoader.loadGroupConfigs(groupsDir, config.controller.strictConfig)
     if (groupConfigs.isEmpty()) {
         logger.warn("No valid group configs found in {}/ — nothing to start", groupsDir)
     }
@@ -237,7 +237,7 @@ fun nimbusMain() = runBlocking {
 
     // Load dedicated service configs
     val dedicatedServiceManager = DedicatedServiceManager(dedicatedDir, dedicatedServicesDir)
-    val dedicatedConfigs = ConfigLoader.loadDedicatedConfigs(dedicatedDir)
+    val dedicatedConfigs = ConfigLoader.loadDedicatedConfigs(dedicatedDir, config.controller.strictConfig)
     dedicatedServiceManager.loadConfigs(dedicatedConfigs)
     logger.info("Found ${dedicatedConfigs.size} dedicated service(s)")
 

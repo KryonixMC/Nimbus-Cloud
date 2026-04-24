@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.backup.migrations
 
-import dev.nimbuspowered.nimbus.module.Migration
+import dev.nimbuspowered.nimbus.module.api.Migration
 import dev.nimbuspowered.nimbus.module.backup.BackupScheduleLog
 import dev.nimbuspowered.nimbus.module.backup.Backups
 import org.jetbrains.exposed.sql.SchemaUtils

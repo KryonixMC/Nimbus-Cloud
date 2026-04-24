@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.punishments.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.api.requirePermission
@@ -68,9 +68,9 @@ fun Route.punishmentRoutes(
         get("{id}") {
             if (!call.requirePermission("nimbus.dashboard.punishments.view")) return@get
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val record = manager.getById(id)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Punishment $id not found", ApiErrors.PUNISHMENT_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Punishment $id not found", ApiError.PUNISHMENT_NOT_FOUND))
             call.respond(record.toResponse())
         }
 
@@ -122,7 +122,7 @@ fun Route.punishmentRoutes(
         post {
             val req = call.receive<IssuePunishmentRequest>()
             val type = runCatching { PunishmentType.valueOf(req.type.uppercase()) }.getOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Unknown type '${req.type}'", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Unknown type '${req.type}'", ApiError.VALIDATION_FAILED))
 
             val requiredNode = when (type) {
                 PunishmentType.WARN -> "nimbus.dashboard.punishments.warn"
@@ -136,10 +136,10 @@ fun Route.punishmentRoutes(
             if (!call.requirePermission(requiredNode)) return@post
 
             if (req.targetName.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("targetName is required", ApiErrors.PUNISHMENT_TARGET_INVALID))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("targetName is required", ApiError.PUNISHMENT_TARGET_INVALID))
             }
             if (type == PunishmentType.IPBAN && req.targetIp.isNullOrBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("IPBAN requires targetIp", ApiErrors.PUNISHMENT_TARGET_INVALID))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("IPBAN requires targetIp", ApiError.PUNISHMENT_TARGET_INVALID))
             }
 
             // Resolve UUID: explicit > looks-like-UUID > Mojang API lookup by name.
@@ -161,7 +161,7 @@ fun Route.punishmentRoutes(
                         HttpStatusCode.NotFound,
                         apiError(
                             "Could not resolve '${req.targetName}' via Mojang — check the name or pass targetUuid explicitly",
-                            ApiErrors.PUNISHMENT_TARGET_INVALID
+                            ApiError.PUNISHMENT_TARGET_INVALID
                         )
                     )
                 }
@@ -172,18 +172,18 @@ fun Route.punishmentRoutes(
             val scope = PunishmentScope.parse(req.scope)
             if (scope != PunishmentScope.NETWORK && req.scopeTarget.isNullOrBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("$scope scope requires a scopeTarget (group or service name)", ApiErrors.VALIDATION_FAILED))
+                    apiError("$scope scope requires a scopeTarget (group or service name)", ApiError.VALIDATION_FAILED))
             }
 
             val duration = try {
                 if (type.isTemporary()) {
                     val raw = req.duration ?: return@post call.respond(
                         HttpStatusCode.BadRequest,
-                        apiError("${type.name} requires duration", ApiErrors.PUNISHMENT_DURATION_INVALID)
+                        apiError("${type.name} requires duration", ApiError.PUNISHMENT_DURATION_INVALID)
                     )
                     DurationParser.parse(raw) ?: return@post call.respond(
                         HttpStatusCode.BadRequest,
-                        apiError("${type.name} cannot be permanent — use BAN/MUTE instead", ApiErrors.PUNISHMENT_DURATION_INVALID)
+                        apiError("${type.name} cannot be permanent — use BAN/MUTE instead", ApiError.PUNISHMENT_DURATION_INVALID)
                     )
                 } else if (!type.isRevocable() || req.duration == null) {
                     null
@@ -191,7 +191,7 @@ fun Route.punishmentRoutes(
                     DurationParser.parse(req.duration)
                 }
             } catch (e: IllegalArgumentException) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid duration", ApiErrors.PUNISHMENT_DURATION_INVALID))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "Invalid duration", ApiError.PUNISHMENT_DURATION_INVALID))
             }
 
             val record = manager.issue(
@@ -215,15 +215,15 @@ fun Route.punishmentRoutes(
         delete("{id}") {
             if (!call.requirePermission("nimbus.dashboard.punishments.revoke")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val req = runCatching { call.receive<RevokePunishmentRequest>() }.getOrDefault(RevokePunishmentRequest())
             val existing = manager.getById(id)
-                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Punishment $id not found", ApiErrors.PUNISHMENT_NOT_FOUND))
+                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Punishment $id not found", ApiError.PUNISHMENT_NOT_FOUND))
             if (!existing.active) {
-                return@delete call.respond(HttpStatusCode.Conflict, apiError("Already revoked or expired", ApiErrors.PUNISHMENT_ALREADY_REVOKED))
+                return@delete call.respond(HttpStatusCode.Conflict, apiError("Already revoked or expired", ApiError.PUNISHMENT_ALREADY_REVOKED))
             }
             val revoked = manager.revoke(id, req.revokedBy, req.reason.ifBlank { null })
-                ?: return@delete call.respond(HttpStatusCode.Conflict, apiError("Could not revoke", ApiErrors.PUNISHMENT_ALREADY_REVOKED))
+                ?: return@delete call.respond(HttpStatusCode.Conflict, apiError("Could not revoke", ApiError.PUNISHMENT_ALREADY_REVOKED))
             eventBus.emit(PunishmentsEvents.revoked(revoked))
             call.respond(ApiMessage(true, "Punishment ${revoked.id} revoked"))
         }

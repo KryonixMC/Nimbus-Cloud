@@ -1,8 +1,8 @@
 package dev.nimbuspowered.nimbus.module.resourcepacks
 
-import dev.nimbuspowered.nimbus.module.DoctorCheck
-import dev.nimbuspowered.nimbus.module.DoctorFinding
-import dev.nimbuspowered.nimbus.module.DoctorLevel
+import dev.nimbuspowered.nimbus.module.api.DoctorCheck
+import dev.nimbuspowered.nimbus.module.api.DoctorFinding
+import dev.nimbuspowered.nimbus.module.api.DoctorLevel
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.streams.toList

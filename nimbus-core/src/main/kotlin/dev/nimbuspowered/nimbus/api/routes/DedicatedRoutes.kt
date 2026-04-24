@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.CurseForgeConfig
 import dev.nimbuspowered.nimbus.config.DedicatedDefinition
@@ -58,7 +58,7 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.dedicated.view")) return@get
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
             call.respond(config.toResponse(registry, dedicatedServiceManager))
         }
 
@@ -69,17 +69,17 @@ fun Route.dedicatedRoutes(
 
             val errors = validateDedicatedRequest(request)
             if (errors.isNotEmpty()) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiError.VALIDATION_FAILED))
             }
 
             if (dedicatedServiceManager.getConfig(request.name) != null) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '${request.name}' already exists", ApiErrors.DEDICATED_ALREADY_EXISTS))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '${request.name}' already exists", ApiError.DEDICATED_ALREADY_EXISTS))
             }
 
             // Check if port is in use by another dedicated config
             val portConflict = dedicatedServiceManager.getAllConfigs().find { it.dedicated.port == request.port }
             if (portConflict != null) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Port ${request.port} is already used by dedicated service '${portConflict.dedicated.name}'", ApiErrors.DEDICATED_PORT_IN_USE))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Port ${request.port} is already used by dedicated service '${portConflict.dedicated.name}'", ApiError.DEDICATED_PORT_IN_USE))
             }
 
             val software = ServerSoftware.valueOf(request.software.uppercase())
@@ -115,13 +115,13 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@put
             val name = call.parameters["name"]!!
             val existing = dedicatedServiceManager.getConfig(name)
-                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@put call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
 
             val request = call.receive<CreateDedicatedRequest>().copy(name = name)
 
             val errors = validateDedicatedRequest(request)
             if (errors.isNotEmpty()) {
-                return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiErrors.VALIDATION_FAILED))
+                return@put call.respond(HttpStatusCode.BadRequest, apiError(errors.joinToString("; "), ApiError.VALIDATION_FAILED))
             }
 
             // Check for port conflict with OTHER dedicated services
@@ -129,7 +129,7 @@ fun Route.dedicatedRoutes(
                 it.dedicated.name != name && it.dedicated.port == request.port
             }
             if (portConflict != null) {
-                return@put call.respond(HttpStatusCode.Conflict, apiError("Port ${request.port} is already used by dedicated service '${portConflict.dedicated.name}'", ApiErrors.DEDICATED_PORT_IN_USE))
+                return@put call.respond(HttpStatusCode.Conflict, apiError("Port ${request.port} is already used by dedicated service '${portConflict.dedicated.name}'", ApiError.DEDICATED_PORT_IN_USE))
             }
 
             // Stop if running — user must manually restart after update
@@ -185,7 +185,7 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.dedicated.manage")) return@delete
             val name = call.parameters["name"]!!
             dedicatedServiceManager.getConfig(name)
-                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
 
             // Stop if running
             val running = registry.get(name)
@@ -205,18 +205,18 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.start")) return@post
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
 
             val existing = registry.get(name)
             if (existing != null && existing.state != ServiceState.STOPPED && existing.state != ServiceState.CRASHED) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' is already running (state: ${existing.state})", ApiErrors.DEDICATED_ALREADY_RUNNING))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' is already running (state: ${existing.state})", ApiError.DEDICATED_ALREADY_RUNNING))
             }
 
             val service = serviceManager.startDedicatedService(config.dedicated)
             if (service != null) {
                 call.respond(HttpStatusCode.Created, ApiMessage(true, "Dedicated service '${service.name}' starting on port ${service.port}"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to start dedicated service '$name'", ApiErrors.SERVICE_START_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to start dedicated service '$name'", ApiError.SERVICE_START_FAILED))
             }
         }
 
@@ -225,18 +225,18 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.stop")) return@post
             val name = call.parameters["name"]!!
             dedicatedServiceManager.getConfig(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
 
             val existing = registry.get(name)
             if (existing == null || existing.state == ServiceState.STOPPED) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' is not running", ApiErrors.SERVICE_NOT_READY))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' is not running", ApiError.SERVICE_NOT_READY))
             }
 
             val stopped = serviceManager.stopService(name)
             if (stopped) {
                 call.respond(ApiMessage(true, "Dedicated service '$name' stopped"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to stop dedicated service '$name'", ApiErrors.SERVICE_STOP_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to stop dedicated service '$name'", ApiError.SERVICE_STOP_FAILED))
             }
         }
 
@@ -245,7 +245,7 @@ fun Route.dedicatedRoutes(
             if (!call.requirePermission("nimbus.dashboard.services.restart")) return@post
             val name = call.parameters["name"]!!
             val config = dedicatedServiceManager.getConfig(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiErrors.DEDICATED_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Dedicated service '$name' not found", ApiError.DEDICATED_NOT_FOUND))
 
             // Stop if running
             val existing = registry.get(name)
@@ -257,7 +257,7 @@ fun Route.dedicatedRoutes(
             if (service != null) {
                 call.respond(ApiMessage(true, "Dedicated service '${service.name}' restarted on port ${service.port}"))
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart dedicated service '$name'", ApiErrors.SERVICE_RESTART_FAILED))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to restart dedicated service '$name'", ApiError.SERVICE_RESTART_FAILED))
             }
         }
 
@@ -281,27 +281,27 @@ fun Route.dedicatedRoutes(
                     val request = call.receive<DedicatedModpackImportRequest>()
 
                     if (request.name.isBlank() || !request.name.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid name", ApiErrors.VALIDATION_FAILED))
+                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid name", ApiError.VALIDATION_FAILED))
                     }
                     if (dedicatedServiceManager.getConfig(request.name) != null) {
-                        return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '${request.name}' already exists", ApiErrors.DEDICATED_ALREADY_EXISTS))
+                        return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '${request.name}' already exists", ApiError.DEDICATED_ALREADY_EXISTS))
                     }
                     if (request.port < 1 || request.port > 65535) {
-                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Port must be between 1 and 65535", ApiErrors.VALIDATION_FAILED))
+                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Port must be between 1 and 65535", ApiError.VALIDATION_FAILED))
                     }
 
                     val downloadDir = templatesDir.resolve(".modpack-cache")
                     Files.createDirectories(downloadDir)
 
                     val resolvedPath = installer.resolve(request.source, downloadDir)
-                        ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.MODPACK_NOT_FOUND))
+                        ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiError.MODPACK_NOT_FOUND))
 
                     val serviceDir = dedicatedServiceManager.ensureServiceDirectory(request.name)
 
                     if (installer.isServerPack(resolvedPath)) {
                         val info = installer.getServerPackInfo(resolvedPath)
                         if (info == null) {
-                            return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+                            return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiError.MODPACK_INVALID))
                         }
                         installer.extractServerPack(resolvedPath, serviceDir)
                         softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, serviceDir, info.modloaderVersion)
@@ -343,7 +343,7 @@ fun Route.dedicatedRoutes(
 
                     // Modrinth .mrpack
                     val index = installer.parseIndex(resolvedPath)
-                        ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.MODPACK_INVALID))
+                        ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiError.MODPACK_INVALID))
 
                     val info = installer.getInfo(index)
                     softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, serviceDir, info.modloaderVersion)
@@ -397,13 +397,13 @@ fun Route.dedicatedRoutes(
                     val fileName = call.request.queryParameters["fileName"] ?: "upload.zip"
 
                     if (name.isBlank() || !name.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid name", ApiErrors.VALIDATION_FAILED))
+                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid name", ApiError.VALIDATION_FAILED))
                     }
                     if (dedicatedServiceManager.getConfig(name) != null) {
-                        return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' already exists", ApiErrors.DEDICATED_ALREADY_EXISTS))
+                        return@post call.respond(HttpStatusCode.Conflict, apiError("Dedicated service '$name' already exists", ApiError.DEDICATED_ALREADY_EXISTS))
                     }
                     if (port < 1 || port > 65535) {
-                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Port must be between 1 and 65535", ApiErrors.VALIDATION_FAILED))
+                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Port must be between 1 and 65535", ApiError.VALIDATION_FAILED))
                     }
 
                     val uploadDir = templatesDir.resolve(".modpack-uploads")
@@ -423,7 +423,7 @@ fun Route.dedicatedRoutes(
                                         output.close()
                                         Files.deleteIfExists(uploadedZip)
                                         return@post call.respond(HttpStatusCode.PayloadTooLarge,
-                                            apiError("File too large (max ${maxUploadBytes / 1024 / 1024}MB)", ApiErrors.PAYLOAD_TOO_LARGE))
+                                            apiError("File too large (max ${maxUploadBytes / 1024 / 1024}MB)", ApiError.PAYLOAD_TOO_LARGE))
                                     }
                                 }
                             }
@@ -431,7 +431,7 @@ fun Route.dedicatedRoutes(
                     } catch (e: Exception) {
                         Files.deleteIfExists(uploadedZip)
                         return@post call.respond(HttpStatusCode.InternalServerError,
-                            apiError("Upload failed: ${e.message}", ApiErrors.MODPACK_UPLOAD_FAILED))
+                            apiError("Upload failed: ${e.message}", ApiError.MODPACK_UPLOAD_FAILED))
                     }
 
                     val serviceDir = dedicatedServiceManager.ensureServiceDirectory(name)
@@ -440,7 +440,7 @@ fun Route.dedicatedRoutes(
                         val info = installer.getServerPackInfo(uploadedZip)
                         if (info == null) {
                             Files.deleteIfExists(uploadedZip)
-                            return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+                            return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiError.MODPACK_INVALID))
                         }
                         installer.extractServerPack(uploadedZip, serviceDir)
                         softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, serviceDir, info.modloaderVersion)
@@ -485,7 +485,7 @@ fun Route.dedicatedRoutes(
                     val index = installer.parseIndex(uploadedZip)
                     if (index == null) {
                         Files.deleteIfExists(uploadedZip)
-                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                        return@post call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiError.MODPACK_INVALID))
                     }
                     val info = installer.getInfo(index)
                     softwareResolver.ensureJarAvailable(info.modloader, info.mcVersion, serviceDir, info.modloaderVersion)

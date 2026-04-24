@@ -1,5 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
+import dev.nimbuspowered.nimbus.api.ApiError
+import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import io.ktor.http.*
@@ -49,7 +51,7 @@ fun Route.softwareRoutes(softwareResolver: SoftwareResolver) {
         val software = try {
             ServerSoftware.valueOf(typeName)
         } catch (_: IllegalArgumentException) {
-            return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Unknown software: $typeName"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Unknown software: $typeName", ApiError.SOFTWARE_UNKNOWN))
         }
 
         val versions = when (software) {
@@ -77,12 +79,12 @@ fun Route.softwareRoutes(softwareResolver: SoftwareResolver) {
     get("/api/software/{type}/modloader-versions") {
         val typeName = call.parameters["type"]?.uppercase() ?: return@get call.respond(HttpStatusCode.BadRequest)
         val mcVersion = call.request.queryParameters["mcVersion"]
-            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "mcVersion query parameter required"))
+            ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("mcVersion query parameter required", ApiError.VALIDATION_FAILED))
 
         val software = try {
             ServerSoftware.valueOf(typeName)
         } catch (_: IllegalArgumentException) {
-            return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Unknown software: $typeName"))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Unknown software: $typeName", ApiError.SOFTWARE_UNKNOWN))
         }
 
         val versions = when (software) {

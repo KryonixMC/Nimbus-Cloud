@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.resourcepacks.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.api.requirePermission
@@ -42,9 +42,9 @@ fun Route.resourcePackAuthedRoutes(
         get("{id}") {
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.view")) return@get
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val pack = manager.getPack(id)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiErrors.RESOURCE_PACK_NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiError.RESOURCE_PACK_NOT_FOUND))
             call.respond(pack.toResponse())
         }
 
@@ -53,15 +53,15 @@ fun Route.resourcePackAuthedRoutes(
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@post
             val req = call.receive<CreateResourcePackRequest>()
             if (req.name.isBlank()) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("name is required", ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("name is required", ApiError.VALIDATION_FAILED))
             }
             if (!req.url.startsWith("http://") && !req.url.startsWith("https://")) {
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("URL must be http(s)://", ApiErrors.RESOURCE_PACK_INVALID_URL))
+                    apiError("URL must be http(s)://", ApiError.RESOURCE_PACK_INVALID_URL))
             }
             val sha1 = req.sha1Hash?.lowercase()?.takeIf { it.length == 40 && it.all { c -> c.isDigit() || c in 'a'..'f' } }
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("sha1Hash must be a 40-character hex string", ApiErrors.VALIDATION_FAILED))
+                    apiError("sha1Hash must be a 40-character hex string", ApiError.VALIDATION_FAILED))
 
             val pack = manager.createUrlPack(
                 name = req.name,
@@ -92,7 +92,7 @@ fun Route.resourcePackAuthedRoutes(
         post("upload") {
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@post
             val name = call.request.queryParameters["name"]
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("name query param is required", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("name query param is required", ApiError.VALIDATION_FAILED))
             val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() ?: false
             val prompt = call.request.queryParameters["prompt"] ?: ""
 
@@ -109,10 +109,10 @@ fun Route.resourcePackAuthedRoutes(
                 }
             } catch (e: IllegalArgumentException) {
                 return@post call.respond(HttpStatusCode.PayloadTooLarge,
-                    apiError(e.message ?: "Upload rejected", ApiErrors.PAYLOAD_TOO_LARGE))
+                    apiError(e.message ?: "Upload rejected", ApiError.PAYLOAD_TOO_LARGE))
             } catch (e: Exception) {
                 return@post call.respond(HttpStatusCode.InternalServerError,
-                    apiError("Upload failed: ${e.message}", ApiErrors.RESOURCE_PACK_UPLOAD_FAILED))
+                    apiError("Upload failed: ${e.message}", ApiError.RESOURCE_PACK_UPLOAD_FAILED))
             }
 
             eventBus.emit(ResourcePacksEvents.created(created))
@@ -123,9 +123,9 @@ fun Route.resourcePackAuthedRoutes(
         delete("{id}") {
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.manage")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val pack = manager.getPack(id)
-                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiErrors.RESOURCE_PACK_NOT_FOUND))
+                ?: return@delete call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiError.RESOURCE_PACK_NOT_FOUND))
             manager.deletePack(id)
             eventBus.emit(ResourcePacksEvents.deleted(id, pack.name))
             call.respond(ApiMessage(true, "Pack '${pack.name}' deleted"))
@@ -145,19 +145,19 @@ fun Route.resourcePackAuthedRoutes(
         post("{id}/assignments") {
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.assign")) return@post
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val req = call.receive<AssignmentRequest>()
             val scope = req.scope.uppercase()
             if (scope !in setOf("GLOBAL", "GROUP", "SERVICE")) {
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("scope must be GLOBAL, GROUP, or SERVICE", ApiErrors.VALIDATION_FAILED))
+                    apiError("scope must be GLOBAL, GROUP, or SERVICE", ApiError.VALIDATION_FAILED))
             }
             if (scope != "GLOBAL" && req.target.isBlank()) {
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("target is required for scope $scope", ApiErrors.VALIDATION_FAILED))
+                    apiError("target is required for scope $scope", ApiError.VALIDATION_FAILED))
             }
             val assignment = manager.createAssignment(id, scope, if (scope == "GLOBAL") "" else req.target, req.priority)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiErrors.RESOURCE_PACK_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Pack not found", ApiError.RESOURCE_PACK_NOT_FOUND))
             eventBus.emit(ResourcePacksEvents.assigned(id, scope, assignment.target))
             call.respond(HttpStatusCode.Created, assignment.toResponse())
         }
@@ -166,11 +166,11 @@ fun Route.resourcePackAuthedRoutes(
         delete("assignments/{id}") {
             if (!call.requirePermission("nimbus.dashboard.resourcepacks.assign")) return@delete
             val id = call.parameters["id"]?.toIntOrNull()
-                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val deleted = manager.deleteAssignment(id)
             if (!deleted) {
                 return@delete call.respond(HttpStatusCode.NotFound,
-                    apiError("Assignment not found", ApiErrors.RESOURCE_PACK_ASSIGNMENT_NOT_FOUND))
+                    apiError("Assignment not found", ApiError.RESOURCE_PACK_ASSIGNMENT_NOT_FOUND))
             }
             call.respond(ApiMessage(true, "Assignment removed"))
         }
@@ -209,10 +209,10 @@ fun Route.resourcePackPublicRoutes(manager: ResourcePackManager) {
         val packUuid = filename.removeSuffix(".zip")
         // Guard against traversal
         if (packUuid.contains('/') || packUuid.contains('\\') || packUuid.contains("..")) {
-            return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid pack name", ApiErrors.PATH_TRAVERSAL))
+            return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid pack name", ApiError.PATH_TRAVERSAL))
         }
         val file = manager.localPackFile(packUuid)
-            ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Pack file not found", ApiErrors.RESOURCE_PACK_NOT_FOUND))
+            ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Pack file not found", ApiError.RESOURCE_PACK_NOT_FOUND))
 
         call.response.header(HttpHeaders.ContentType, "application/zip")
         call.response.header(HttpHeaders.ContentLength, Files.size(file).toString())

@@ -1,5 +1,7 @@
 package dev.nimbuspowered.nimbus.module.players.routes
 
+import dev.nimbuspowered.nimbus.api.ApiError
+import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.api.requirePermission
 import dev.nimbuspowered.nimbus.module.players.PlayerTracker
 import io.ktor.http.*
@@ -63,7 +65,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
             if (player != null) {
                 call.respond(OnlinePlayer(player.uuid, player.name, player.currentService, player.currentGroup, player.connectedAt.toString()))
             } else {
-                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Player not online"))
+                call.respond(HttpStatusCode.NotFound, apiError("Player not online", ApiError.PLAYER_NOT_ONLINE))
             }
         }
 
@@ -100,7 +102,7 @@ fun Route.playerRoutes(tracker: PlayerTracker) {
                     currentService = online?.currentService
                 ))
             } else {
-                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Player not found"))
+                call.respond(HttpStatusCode.NotFound, apiError("Player not found", ApiError.PLAYER_NOT_FOUND))
             }
         }
 

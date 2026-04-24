@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.NimbusConfig
 import io.ktor.http.*
@@ -46,7 +46,7 @@ fun Route.configRoutes(
         val request = call.receive<ConfigUpdateRequest>()
 
         if (request.networkName == null && request.consoleColored == null && request.consoleLogEvents == null) {
-            return@patch call.respond(HttpStatusCode.BadRequest, apiError("No fields to update", ApiErrors.NO_FIELDS_TO_UPDATE))
+            return@patch call.respond(HttpStatusCode.BadRequest, apiError("No fields to update", ApiError.NO_FIELDS_TO_UPDATE))
         }
 
         // Read current TOML, apply changes via string replacement
@@ -54,7 +54,7 @@ fun Route.configRoutes(
 
         request.networkName?.let { newName ->
             if (newName.isBlank()) {
-                return@patch call.respond(HttpStatusCode.BadRequest, apiError("network.name must not be blank", ApiErrors.VALIDATION_FAILED))
+                return@patch call.respond(HttpStatusCode.BadRequest, apiError("network.name must not be blank", ApiError.VALIDATION_FAILED))
             }
             toml = replaceTomlValue(toml, "name", "\"${escapeToml(newName)}\"", section = "[network]")
         }

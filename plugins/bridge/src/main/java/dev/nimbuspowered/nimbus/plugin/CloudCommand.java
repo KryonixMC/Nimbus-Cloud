@@ -13,18 +13,11 @@ import net.kyori.adventure.text.format.TextDecoration;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
+import java.util.LinkedHashMap;
 
 /**
  * /cloud command — In-game bridge to Nimbus Core REST API.
@@ -35,40 +28,22 @@ public class CloudCommand implements SimpleCommand {
     private final NimbusApiClient api;
     private final dev.nimbuspowered.nimbus.sdk.NimbusClient sdkClient;
 
-    // Core subcommand permissions (always available)
-    private static final Map<String, String> CORE_SUBCOMMAND_PERMISSIONS = Map.ofEntries(
-            Map.entry("help",        "nimbus.cloud"),
-            Map.entry("list",        "nimbus.cloud.list"),
-            Map.entry("status",      "nimbus.cloud.status"),
-            Map.entry("start",       "nimbus.cloud.start"),
-            Map.entry("stop",        "nimbus.cloud.stop"),
-            Map.entry("restart",     "nimbus.cloud.restart"),
-            Map.entry("exec",        "nimbus.cloud.exec"),
-            Map.entry("players",     "nimbus.cloud.players"),
-            Map.entry("send",        "nimbus.cloud.send"),
-            Map.entry("kick",        "nimbus.cloud.kick"),
-            Map.entry("broadcast",   "nimbus.cloud.broadcast"),
-            Map.entry("groups",      "nimbus.cloud.groups"),
-            Map.entry("info",        "nimbus.cloud.info"),
-            Map.entry("setstate",    "nimbus.cloud.setstate"),
-            Map.entry("reload",      "nimbus.cloud.reload"),
-            Map.entry("maintenance", "nimbus.cloud.maintenance"),
-            Map.entry("stress",      "nimbus.cloud.stress"),
-            Map.entry("events",      "nimbus.cloud.events")
+    // Core subcommand permissions (proxy-local commands only)
+    private static final Map<String, String> CORE_SUBCOMMAND_PERMISSIONS = Map.of(
+            "help",        "nimbus.cloud",
+            "maintenance", "nimbus.cloud.maintenance",
+            "events",      "nimbus.cloud.events"
     );
 
     private static final List<String> CORE_SUBCOMMANDS = List.of(
-            "help", "list", "status", "start", "stop", "restart",
-            "exec", "players", "send", "kick", "broadcast", "groups", "info", "setstate", "reload", "maintenance", "stress", "events"
+            "help", "maintenance", "events"
     );
-
-    private static final List<String> STRESS_SUBCMDS = List.of("status", "start", "stop", "ramp");
 
     private static final List<String> MAINTENANCE_SUBCMDS = List.of(
             "status", "on", "off", "list", "add", "remove"
     );
 
-    // Dynamic remote commands discovered from Controller (module commands like perms)
+    // Dynamic remote commands discovered from Controller (core + module commands)
     private volatile Map<String, RemoteCommandMeta> remoteCommands = Map.of();
 
     /** Metadata for a remote command discovered from the Controller. */
@@ -92,7 +67,7 @@ public class CloudCommand implements SimpleCommand {
 
     private final com.velocitypowered.api.proxy.ProxyServer proxyServer;
     private volatile MaintenanceHandler maintenanceHandler;
-    private final Set<UUID> eventSubscribers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> eventSubscribers = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public CloudCommand(NimbusApiClient api, dev.nimbuspowered.nimbus.sdk.NimbusClient sdkClient, com.velocitypowered.api.proxy.ProxyServer proxyServer) {
         this.api = api;
@@ -161,30 +136,15 @@ public class CloudCommand implements SimpleCommand {
             return;
         }
 
-        // Check if this is a remote command (module command from Controller)
+        // Check if this is a remote command (core or module command from Controller)
         if (remoteCommands.containsKey(sub)) {
             executeRemoteCommand(source, sub, args);
             return;
         }
 
         switch (sub) {
-            case "help"    -> sendHelp(invocation);
-            case "list"    -> handleList(invocation);
-            case "status"  -> handleStatus(invocation);
-            case "start"   -> handleStart(invocation, args);
-            case "stop"    -> handleStop(invocation, args);
-            case "restart" -> handleRestart(invocation, args);
-            case "exec"    -> handleExec(invocation, args);
-            case "players" -> handlePlayers(invocation);
-            case "send"    -> handleSend(invocation, args);
-            case "kick"    -> handleKick(invocation, args);
-            case "broadcast" -> handleBroadcast(invocation, args);
-            case "groups"  -> handleGroups(invocation);
-            case "info"    -> handleInfo(invocation, args);
-            case "setstate"-> handleSetState(invocation, args);
-            case "reload"  -> handleReload(invocation);
+            case "help"        -> sendHelp(invocation);
             case "maintenance" -> handleMaintenance(invocation, args);
-            case "stress"      -> handleStress(invocation, args);
             case "events"      -> handleEvents(invocation);
         }
     }
@@ -215,7 +175,7 @@ public class CloudCommand implements SimpleCommand {
 
         String sub = args[0].toLowerCase();
 
-        // Remote command tab completion (module commands from Controller)
+        // Remote command tab completion (core + module commands from Controller)
         RemoteCommandMeta remoteMeta = remoteCommands.get(sub);
         if (remoteMeta != null && invocation.source().hasPermission(remoteMeta.permission())) {
             return suggestRemoteCommand(remoteMeta, args);
@@ -226,37 +186,6 @@ public class CloudCommand implements SimpleCommand {
             return suggestMaintenance(args);
         }
 
-        // Stress subcommand tab completion
-        if (sub.equals("stress") && invocation.source().hasPermission("nimbus.cloud.stress")) {
-            if (args.length == 2) {
-                String partial = args[1].toLowerCase();
-                return STRESS_SUBCMDS.stream().filter(s -> s.startsWith(partial)).toList();
-            }
-            return List.of();
-        }
-
-        // Broadcast --group tab completion
-        if (sub.equals("broadcast") && invocation.source().hasPermission("nimbus.cloud.broadcast")) {
-            if (args.length == 2) {
-                String partial = args[1].toLowerCase();
-                return Stream.of("--group").filter(s -> s.startsWith(partial)).toList();
-            }
-            return List.of();
-        }
-
-        // Kick: suggest online player names
-        if (sub.equals("kick") && invocation.source().hasPermission("nimbus.cloud.kick")) {
-            if (args.length == 2) {
-                String partial = args[1].toLowerCase();
-                return proxyServer.getAllPlayers().stream()
-                        .map(Player::getUsername)
-                        .filter(name -> name.toLowerCase().startsWith(partial))
-                        .toList();
-            }
-            return List.of();
-        }
-
-        // For other subcommands that take service/group names
         return List.of();
     }
 
@@ -268,628 +197,28 @@ public class CloudCommand implements SimpleCommand {
         source.sendMessage(Component.text("  Nimbus Cloud Commands", NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
         source.sendMessage(Component.empty());
 
-        record HelpEntry(String cmd, String desc, String perm) {}
-        var entries = List.of(
-                new HelpEntry("/cloud list",                  "List running services",     "nimbus.cloud.list"),
-                new HelpEntry("/cloud status",                "Cluster overview",          "nimbus.cloud.status"),
-                new HelpEntry("/cloud groups",                "List all groups",           "nimbus.cloud.groups"),
-                new HelpEntry("/cloud info <group>",          "Group details",             "nimbus.cloud.info"),
-                new HelpEntry("/cloud start <group>",         "Start a new instance",      "nimbus.cloud.start"),
-                new HelpEntry("/cloud stop <service>",        "Stop a service",            "nimbus.cloud.stop"),
-                new HelpEntry("/cloud restart <service>",     "Restart a service",         "nimbus.cloud.restart"),
-                new HelpEntry("/cloud exec <service> <cmd>",  "Execute command on service","nimbus.cloud.exec"),
-                new HelpEntry("/cloud players",               "List online players",       "nimbus.cloud.players"),
-                new HelpEntry("/cloud send <player> <target>","Transfer a player",         "nimbus.cloud.send"),
-                new HelpEntry("/cloud kick <player> [reason]", "Kick player from network",  "nimbus.cloud.kick"),
-                new HelpEntry("/cloud broadcast [--group] <msg>","Broadcast to all players", "nimbus.cloud.broadcast"),
-                new HelpEntry("/cloud setstate <svc> <state>", "Set custom state on service","nimbus.cloud.setstate"),
-                new HelpEntry("/cloud maintenance",           "Toggle maintenance mode",   "nimbus.cloud.maintenance"),
-                new HelpEntry("/cloud stress",                "Simulate player load",      "nimbus.cloud.stress"),
-                new HelpEntry("/cloud reload",                "Reload group configs",      "nimbus.cloud.reload"),
-                new HelpEntry("/cloud events",                "Toggle live event feed",    "nimbus.cloud.events")
-        );
-
-        for (var entry : entries) {
-            if (source.hasPermission(entry.perm())) {
-                source.sendMessage(
-                        Component.text("  " + entry.cmd(), NamedTextColor.WHITE)
-                                .clickEvent(ClickEvent.suggestCommand(entry.cmd().split(" <")[0]))
-                                .append(Component.text(" — " + entry.desc(), NamedTextColor.GRAY))
-                );
-            }
+        // Proxy-local commands (not in remoteCommands)
+        if (source.hasPermission("nimbus.cloud.maintenance")) {
+            source.sendMessage(Component.text("  /cloud maintenance", NamedTextColor.WHITE)
+                .clickEvent(ClickEvent.suggestCommand("/cloud maintenance"))
+                .append(Component.text(" — Toggle maintenance mode", NamedTextColor.GRAY)));
+        }
+        if (source.hasPermission("nimbus.cloud.events")) {
+            source.sendMessage(Component.text("  /cloud events", NamedTextColor.WHITE)
+                .clickEvent(ClickEvent.suggestCommand("/cloud events"))
+                .append(Component.text(" — Toggle live event feed", NamedTextColor.GRAY)));
         }
 
-        // Dynamic remote commands (modules)
+        // Remote commands (core + module commands from Controller)
         for (var remote : remoteCommands.values()) {
             if (source.hasPermission(remote.permission())) {
-                source.sendMessage(
-                        Component.text("  /cloud " + remote.name(), NamedTextColor.WHITE)
-                                .clickEvent(ClickEvent.suggestCommand("/cloud " + remote.name()))
-                                .append(Component.text(" — " + remote.description(), NamedTextColor.GRAY))
-                );
+                source.sendMessage(Component.text("  /cloud " + remote.name(), NamedTextColor.WHITE)
+                    .clickEvent(ClickEvent.suggestCommand("/cloud " + remote.name()))
+                    .append(Component.text(" — " + remote.description(), NamedTextColor.GRAY)));
             }
         }
         source.sendMessage(Component.empty());
     }
-
-    private void handleList(Invocation invocation) {
-        var source = invocation.source();
-        api.get("/api/services").thenAccept(result -> {
-            if (!result.isSuccess()) {
-                source.sendMessage(apiError(result));
-                return;
-            }
-            JsonObject json = result.asJson();
-            JsonArray services = json.getAsJsonArray("services");
-            int count = json.get("count").getAsInt();
-
-            source.sendMessage(Component.text("Services (" + count + ")", NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
-
-            if (count == 0) {
-                source.sendMessage(Component.text("  No services running.", NamedTextColor.GRAY));
-                return;
-            }
-
-            for (JsonElement el : services) {
-                JsonObject svc = el.getAsJsonObject();
-                String name = svc.get("name").getAsString();
-                String state = svc.get("state").getAsString();
-                int players = svc.get("playerCount").getAsInt();
-                int port = svc.get("port").getAsInt();
-                String customState = svc.has("customState") && !svc.get("customState").isJsonNull()
-                        ? svc.get("customState").getAsString() : null;
-
-                NamedTextColor stateColor = switch (state) {
-                    case "READY" -> NamedTextColor.GREEN;
-                    case "STARTING" -> NamedTextColor.YELLOW;
-                    case "STOPPING" -> NamedTextColor.RED;
-                    default -> NamedTextColor.GRAY;
-                };
-
-                var line = Component.text("  " + name, NamedTextColor.WHITE)
-                        .append(Component.text(" [" + state + "]", stateColor));
-
-                if (customState != null) {
-                    NamedTextColor csColor = switch (customState) {
-                        case "WAITING" -> NamedTextColor.AQUA;
-                        case "INGAME" -> NamedTextColor.GOLD;
-                        case "ENDING" -> NamedTextColor.LIGHT_PURPLE;
-                        default -> NamedTextColor.YELLOW;
-                    };
-                    line = line.append(Component.text(" [" + customState + "]", csColor));
-                }
-
-                source.sendMessage(
-                        line.append(Component.text(" " + players + " players", NamedTextColor.GRAY))
-                                .append(Component.text(" :" + port, NamedTextColor.DARK_GRAY))
-                );
-            }
-        });
-    }
-
-    private void handleStatus(Invocation invocation) {
-        var source = invocation.source();
-        api.get("/api/status").thenAccept(result -> {
-            if (!result.isSuccess()) {
-                source.sendMessage(apiError(result));
-                return;
-            }
-            JsonObject json = result.asJson();
-
-            String network = json.get("networkName").getAsString();
-            boolean online = json.get("online").getAsBoolean();
-            int totalServices = json.get("totalServices").getAsInt();
-            int totalPlayers = json.get("totalPlayers").getAsInt();
-            long uptime = json.get("uptimeSeconds").getAsLong();
-
-            source.sendMessage(Component.empty());
-            source.sendMessage(
-                    Component.text("  " + network, NamedTextColor.AQUA).decorate(TextDecoration.BOLD)
-                            .append(Component.text(online ? " ONLINE" : " OFFLINE", online ? NamedTextColor.GREEN : NamedTextColor.RED).decorate(TextDecoration.BOLD))
-            );
-            source.sendMessage(Component.text("  Services: ", NamedTextColor.GRAY).append(Component.text(totalServices, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Players:  ", NamedTextColor.GRAY).append(Component.text(totalPlayers, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Uptime:   ", NamedTextColor.GRAY).append(Component.text(formatUptime(uptime), NamedTextColor.WHITE)));
-
-            JsonArray groups = json.getAsJsonArray("groups");
-            if (groups != null && !groups.isEmpty()) {
-                source.sendMessage(Component.empty());
-                for (JsonElement el : groups) {
-                    JsonObject g = el.getAsJsonObject();
-                    String name = g.get("name").getAsString();
-                    int instances = g.get("instances").getAsInt();
-                    int maxInst = g.get("maxInstances").getAsInt();
-                    int players = g.get("players").getAsInt();
-
-                    source.sendMessage(
-                            Component.text("  " + name, NamedTextColor.WHITE)
-                                    .append(Component.text(" " + instances + "/" + maxInst + " instances", NamedTextColor.GRAY))
-                                    .append(Component.text(" " + players + " players", NamedTextColor.GRAY))
-                    );
-                }
-            }
-            source.sendMessage(Component.empty());
-        });
-    }
-
-    private void handleStart(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud start <group>", NamedTextColor.RED));
-            return;
-        }
-        String group = args[1];
-        source.sendMessage(Component.text("Starting instance of " + group + "...", NamedTextColor.GRAY));
-        api.post("/api/services/" + enc(group) + "/start").thenAccept(result -> {
-            if (result.isSuccess()) {
-                String msg = result.asJson().get("message").getAsString();
-                source.sendMessage(Component.text(msg, NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleStop(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud stop <service>", NamedTextColor.RED));
-            return;
-        }
-        String service = args[1];
-        source.sendMessage(Component.text("Stopping " + service + "...", NamedTextColor.GRAY));
-        api.post("/api/services/" + enc(service) + "/stop").thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(Component.text("Service '" + service + "' stopped.", NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleRestart(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud restart <service>", NamedTextColor.RED));
-            return;
-        }
-        String service = args[1];
-        source.sendMessage(Component.text("Restarting " + service + "...", NamedTextColor.GRAY));
-        api.post("/api/services/" + enc(service) + "/restart").thenAccept(result -> {
-            if (result.isSuccess()) {
-                String msg = result.asJson().get("message").getAsString();
-                source.sendMessage(Component.text(msg, NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleExec(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 3) {
-            source.sendMessage(Component.text("Usage: /cloud exec <service> <command...>", NamedTextColor.RED));
-            return;
-        }
-        String service = args[1];
-        String command = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
-
-        JsonObject body = new JsonObject();
-        body.addProperty("command", command);
-
-        api.post("/api/services/" + enc(service) + "/exec", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(
-                        Component.text("Executed on " + service + ": ", NamedTextColor.GREEN)
-                                .append(Component.text(command, NamedTextColor.WHITE))
-                );
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handlePlayers(Invocation invocation) {
-        var source = invocation.source();
-        api.get("/api/players").thenAccept(result -> {
-            if (!result.isSuccess()) {
-                source.sendMessage(apiError(result));
-                return;
-            }
-            JsonObject json = result.asJson();
-            JsonArray players = json.getAsJsonArray("players");
-            int count = json.get("count").getAsInt();
-
-            source.sendMessage(Component.text("Players (" + count + ")", NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
-
-            if (count == 0) {
-                source.sendMessage(Component.text("  No players online.", NamedTextColor.GRAY));
-                return;
-            }
-
-            for (JsonElement el : players) {
-                JsonObject p = el.getAsJsonObject();
-                String name = p.get("name").getAsString();
-                String server = p.get("server").getAsString();
-
-                source.sendMessage(
-                        Component.text("  " + name, NamedTextColor.WHITE)
-                                .append(Component.text(" @ " + server, NamedTextColor.GRAY))
-                );
-            }
-        });
-    }
-
-    private void handleSend(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 3) {
-            source.sendMessage(Component.text("Usage: /cloud send <player> <target>", NamedTextColor.RED));
-            return;
-        }
-        String player = args[1];
-        String target = args[2];
-
-        JsonObject body = new JsonObject();
-        body.addProperty("targetService", target);
-
-        api.post("/api/players/" + enc(player) + "/send", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(
-                        Component.text("Sent " + player + " to " + target, NamedTextColor.GREEN)
-                );
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleKick(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud kick <player> [reason...]", NamedTextColor.RED));
-            return;
-        }
-        String player = args[1];
-        String reason = args.length > 2
-                ? String.join(" ", Arrays.copyOfRange(args, 2, args.length))
-                : "You have been kicked from the network.";
-
-        JsonObject body = new JsonObject();
-        body.addProperty("reason", reason);
-
-        source.sendMessage(Component.text("Kicking " + player + "...", NamedTextColor.GRAY));
-        api.post("/api/players/" + enc(player) + "/kick", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(
-                        Component.text("Kicked ", NamedTextColor.GREEN)
-                                .append(Component.text(player, NamedTextColor.WHITE))
-                                .append(Component.text(" from the network.", NamedTextColor.GREEN))
-                );
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleBroadcast(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud broadcast [--group <group>] <message...>", NamedTextColor.RED));
-            return;
-        }
-
-        String group = null;
-        int messageStart = 1;
-
-        // Parse optional --group flag
-        if (args[1].equalsIgnoreCase("--group") || args[1].equalsIgnoreCase("-g")) {
-            if (args.length < 4) {
-                source.sendMessage(Component.text("Usage: /cloud broadcast --group <group> <message...>", NamedTextColor.RED));
-                return;
-            }
-            group = args[2];
-            messageStart = 3;
-        }
-
-        String message = String.join(" ", Arrays.copyOfRange(args, messageStart, args.length));
-
-        JsonObject body = new JsonObject();
-        body.addProperty("message", message);
-        if (group != null) {
-            body.addProperty("group", group);
-        }
-
-        String scope = group != null ? "group " + group : "network";
-        source.sendMessage(Component.text("Broadcasting to " + scope + "...", NamedTextColor.GRAY));
-        api.post("/api/broadcast", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                JsonObject json = result.asJson();
-                int services = json.get("services").getAsInt();
-                source.sendMessage(
-                        Component.text("Broadcast sent to " + services + " service(s).", NamedTextColor.GREEN)
-                );
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleGroups(Invocation invocation) {
-        var source = invocation.source();
-        api.get("/api/groups").thenAccept(result -> {
-            if (!result.isSuccess()) {
-                source.sendMessage(apiError(result));
-                return;
-            }
-            JsonArray groups = result.asJson().getAsJsonArray("groups");
-
-            source.sendMessage(Component.text("Groups (" + groups.size() + ")", NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
-
-            for (JsonElement el : groups) {
-                JsonObject g = el.getAsJsonObject();
-                String name = g.get("name").getAsString();
-                String software = g.get("software").getAsString();
-                String version = g.get("version").getAsString();
-
-                source.sendMessage(
-                        Component.text("  " + name, NamedTextColor.WHITE)
-                                .clickEvent(ClickEvent.runCommand("/cloud info " + name))
-                                .append(Component.text(" " + software + " " + version, NamedTextColor.GRAY))
-                );
-            }
-        });
-    }
-
-    private void handleInfo(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 2) {
-            source.sendMessage(Component.text("Usage: /cloud info <group>", NamedTextColor.RED));
-            return;
-        }
-        String group = args[1];
-        api.get("/api/groups/" + enc(group)).thenAccept(result -> {
-            if (!result.isSuccess()) {
-                source.sendMessage(apiError(result));
-                return;
-            }
-            JsonObject g = result.asJson();
-            String name = g.get("name").getAsString();
-            String software = g.get("software").getAsString();
-            String version = g.get("version").getAsString();
-            int minInst = g.get("minInstances").getAsInt();
-            int maxInst = g.get("maxInstances").getAsInt();
-            boolean isStatic = g.get("static").getAsBoolean();
-
-            JsonObject resources = g.getAsJsonObject("resources");
-            String memory = resources.get("memory").getAsString();
-            int maxPlayers = resources.get("maxPlayers").getAsInt();
-
-            source.sendMessage(Component.empty());
-            source.sendMessage(Component.text("  " + name, NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
-            source.sendMessage(Component.text("  Software:  ", NamedTextColor.GRAY).append(Component.text(software + " " + version, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Instances: ", NamedTextColor.GRAY).append(Component.text(minInst + "-" + maxInst, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Memory:    ", NamedTextColor.GRAY).append(Component.text(memory, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Max slots: ", NamedTextColor.GRAY).append(Component.text(maxPlayers, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Static:    ", NamedTextColor.GRAY).append(Component.text(isStatic ? "Yes" : "No", NamedTextColor.WHITE)));
-            source.sendMessage(Component.empty());
-        });
-    }
-
-    private void handleSetState(Invocation invocation, String[] args) {
-        var source = invocation.source();
-        if (args.length < 3) {
-            source.sendMessage(Component.text("Usage: /cloud setstate <service> <state|clear>", NamedTextColor.RED));
-            return;
-        }
-        String service = args[1];
-        String state = args[2];
-
-        if (state.equalsIgnoreCase("clear") || state.equalsIgnoreCase("null")) {
-            sdkClient.clearCustomState(service).thenRun(() -> {
-                source.sendMessage(Component.text("Cleared custom state on " + service, NamedTextColor.GREEN));
-            }).exceptionally(e -> {
-                source.sendMessage(Component.text("Error: " + e.getMessage(), NamedTextColor.RED));
-                return null;
-            });
-        } else {
-            sdkClient.setCustomState(service, state.toUpperCase()).thenRun(() -> {
-                source.sendMessage(
-                        Component.text("Set custom state on " + service + ": ", NamedTextColor.GREEN)
-                                .append(Component.text(state.toUpperCase(), NamedTextColor.WHITE))
-                );
-            }).exceptionally(e -> {
-                source.sendMessage(Component.text("Error: " + e.getMessage(), NamedTextColor.RED));
-                return null;
-            });
-        }
-    }
-
-    private void handleReload(Invocation invocation) {
-        var source = invocation.source();
-        source.sendMessage(Component.text("Reloading group configs...", NamedTextColor.GRAY));
-        api.post("/api/reload").thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(Component.text("Configs reloaded.", NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    // ── Stress Test ────────────────────────────────────────────────────
-
-    private void handleStress(Invocation invocation, String[] args) {
-        var source = invocation.source();
-
-        if (args.length < 2) {
-            sendStressHelp(source);
-            return;
-        }
-
-        String action = args[1].toLowerCase();
-        switch (action) {
-            case "status" -> handleStressStatus(source);
-            case "start" -> handleStressStart(source, args);
-            case "stop" -> handleStressStop(source);
-            case "ramp" -> handleStressRamp(source, args);
-            default -> sendStressHelp(source);
-        }
-    }
-
-    private void handleStressStatus(com.velocitypowered.api.command.CommandSource source) {
-        api.get("/api/stress").thenAccept(result -> {
-            if (!result.isSuccess()) { source.sendMessage(apiError(result)); return; }
-            JsonObject json = result.asJson();
-            boolean active = json.get("active").getAsBoolean();
-
-            source.sendMessage(Component.empty());
-            source.sendMessage(Component.text("  Stress Test", NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD));
-            source.sendMessage(Component.empty());
-
-            if (!active) {
-                source.sendMessage(Component.text("  No stress test running.", NamedTextColor.GRAY));
-                source.sendMessage(Component.text("  Start one with: /cloud stress start <players> [group]", NamedTextColor.GRAY));
-                return;
-            }
-
-            String group = json.has("group") && !json.get("group").isJsonNull()
-                    ? json.get("group").getAsString() : "all groups";
-            int current = json.get("currentPlayers").getAsInt();
-            int target = json.get("targetPlayers").getAsInt();
-            int capacity = json.get("totalCapacity").getAsInt();
-            int overflow = json.get("overflow").getAsInt();
-            long elapsed = json.get("elapsedSeconds").getAsLong();
-
-            source.sendMessage(Component.text("  Target:   ", NamedTextColor.GRAY).append(Component.text(group, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Players:  ", NamedTextColor.GRAY)
-                    .append(Component.text(current, NamedTextColor.WHITE))
-                    .append(Component.text(" / " + target, NamedTextColor.GRAY)));
-            source.sendMessage(Component.text("  Capacity: ", NamedTextColor.GRAY).append(Component.text(capacity, NamedTextColor.WHITE)));
-            source.sendMessage(Component.text("  Elapsed:  ", NamedTextColor.GRAY).append(Component.text(formatUptime(elapsed), NamedTextColor.WHITE)));
-
-            if (overflow > 0) {
-                source.sendMessage(Component.text("  Overflow: ", NamedTextColor.GRAY)
-                        .append(Component.text(overflow + " over capacity", NamedTextColor.RED)));
-            }
-
-            // Per-service breakdown
-            JsonObject services = json.getAsJsonObject("services");
-            if (services != null && !services.entrySet().isEmpty()) {
-                source.sendMessage(Component.empty());
-                for (var entry : services.entrySet()) {
-                    source.sendMessage(Component.text("  " + entry.getKey(), NamedTextColor.WHITE)
-                            .append(Component.text(" " + entry.getValue().getAsInt() + " players", NamedTextColor.GRAY)));
-                }
-            }
-            source.sendMessage(Component.empty());
-        });
-    }
-
-    private void handleStressStart(com.velocitypowered.api.command.CommandSource source, String[] args) {
-        // /cloud stress start <players> [group] [rampSeconds]
-        if (args.length < 3) {
-            source.sendMessage(Component.text("Usage: /cloud stress start <players> [group] [rampSeconds]", NamedTextColor.RED));
-            return;
-        }
-
-        int players;
-        try { players = Integer.parseInt(args[2]); } catch (NumberFormatException e) {
-            source.sendMessage(Component.text("Invalid player count: " + args[2], NamedTextColor.RED));
-            return;
-        }
-
-        String group = args.length >= 4 ? args[3] : null;
-        long rampSeconds = 0;
-        if (args.length >= 5) {
-            try { rampSeconds = Long.parseLong(args[4]); } catch (NumberFormatException ignored) {}
-        }
-        // If group looks like a number and no explicit ramp, treat it as ramp
-        if (group != null && rampSeconds == 0) {
-            try {
-                rampSeconds = Long.parseLong(group);
-                group = null;
-            } catch (NumberFormatException ignored) {}
-        }
-
-        String body = "{\"players\":" + players
-                + (group != null ? ",\"group\":\"" + group + "\"" : "")
-                + ",\"rampSeconds\":" + rampSeconds + "}";
-
-        source.sendMessage(Component.text("Starting stress test...", NamedTextColor.GRAY));
-        api.postJson("/api/stress/start", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                String msg = result.asJson().get("message").getAsString();
-                source.sendMessage(Component.text(msg, NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleStressStop(com.velocitypowered.api.command.CommandSource source) {
-        source.sendMessage(Component.text("Stopping stress test...", NamedTextColor.GRAY));
-        api.post("/api/stress/stop").thenAccept(result -> {
-            if (result.isSuccess()) {
-                source.sendMessage(Component.text("Stress test stopped.", NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void handleStressRamp(com.velocitypowered.api.command.CommandSource source, String[] args) {
-        // /cloud stress ramp <players> [durationSeconds]
-        if (args.length < 3) {
-            source.sendMessage(Component.text("Usage: /cloud stress ramp <players> [durationSeconds]", NamedTextColor.RED));
-            return;
-        }
-
-        int players;
-        try { players = Integer.parseInt(args[2]); } catch (NumberFormatException e) {
-            source.sendMessage(Component.text("Invalid player count: " + args[2], NamedTextColor.RED));
-            return;
-        }
-
-        long duration = 30;
-        if (args.length >= 4) {
-            try { duration = Long.parseLong(args[3]); } catch (NumberFormatException ignored) {}
-        }
-
-        String body = "{\"players\":" + players + ",\"durationSeconds\":" + duration + "}";
-        api.postJson("/api/stress/ramp", body).thenAccept(result -> {
-            if (result.isSuccess()) {
-                String msg = result.asJson().get("message").getAsString();
-                source.sendMessage(Component.text(msg, NamedTextColor.GREEN));
-            } else {
-                source.sendMessage(apiError(result));
-            }
-        });
-    }
-
-    private void sendStressHelp(com.velocitypowered.api.command.CommandSource source) {
-        source.sendMessage(Component.empty());
-        source.sendMessage(Component.text("  Stress Test Commands", NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD));
-        source.sendMessage(Component.empty());
-
-        record Entry(String cmd, String desc) {}
-        var entries = List.of(
-                new Entry("/cloud stress status",                       "Show stress test status"),
-                new Entry("/cloud stress start <players> [group]",      "Start a stress test"),
-                new Entry("/cloud stress stop",                         "Stop the stress test"),
-                new Entry("/cloud stress ramp <players> [duration]",    "Adjust target mid-test")
-        );
-
-        for (var entry : entries) {
-            source.sendMessage(
-                    Component.text("  " + entry.cmd(), NamedTextColor.WHITE)
-                            .clickEvent(ClickEvent.suggestCommand(entry.cmd().split(" <")[0]))
-                            .append(Component.text(" — " + entry.desc(), NamedTextColor.GRAY))
-            );
-        }
-        source.sendMessage(Component.empty());
-    }
-
-    // ── Remote Commands (dynamic module commands from Controller) ────
 
     // ── Maintenance ────────────────────────────────────────────────────
 
@@ -1113,8 +442,6 @@ public class CloudCommand implements SimpleCommand {
 
             if (sub.equals("on") || sub.equals("off")) {
                 // Suggest group names for /cloud maintenance on|off <group>
-                MaintenanceHandler mh = maintenanceHandler;
-                // We could fetch groups from API, but for now suggest from proxy registered servers
                 return proxyServer.getAllServers().stream()
                         .map(s -> deriveGroupName(s.getServerInfo().getName()))
                         .distinct()
@@ -1304,7 +631,7 @@ public class CloudCommand implements SimpleCommand {
 
     /**
      * Fetches available remote commands from the Controller's /api/commands endpoint.
-     * Called on startup and periodically to discover module commands like perms.
+     * Called on startup and periodically to discover core + module commands.
      */
     public void refreshRemoteCommands() {
         api.get("/api/commands").thenAccept(result -> {
@@ -1503,14 +830,5 @@ public class CloudCommand implements SimpleCommand {
     /** URL-encodes a path segment to prevent path traversal and injection. */
     private static String enc(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    private static String formatUptime(long seconds) {
-        long hours = seconds / 3600;
-        long minutes = (seconds % 3600) / 60;
-        long secs = seconds % 60;
-        if (hours > 0) return hours + "h " + minutes + "m " + secs + "s";
-        if (minutes > 0) return minutes + "m " + secs + "s";
-        return secs + "s";
     }
 }

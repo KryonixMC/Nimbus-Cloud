@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.event.EventBus
@@ -27,32 +27,32 @@ fun Route.proxyEventRoutes(eventBus: EventBus) {
             try {
                 java.util.UUID.fromString(raw).toString()
             } catch (_: IllegalArgumentException) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid UUID format: '$raw'", ApiErrors.INVALID_INPUT))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid UUID format: '$raw'", ApiError.VALIDATION_FAILED))
             }
         }
 
         when (request.type.uppercase()) {
             "PLAYER_CONNECTED" -> {
-                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiErrors.INVALID_INPUT))
-                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiErrors.INVALID_INPUT))
-                val service = request.service ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'service'", ApiErrors.INVALID_INPUT))
+                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiError.VALIDATION_FAILED))
+                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiError.VALIDATION_FAILED))
+                val service = request.service ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'service'", ApiError.VALIDATION_FAILED))
                 eventBus.emit(NimbusEvent.PlayerConnected(player, uuid, service))
             }
             "PLAYER_DISCONNECTED" -> {
-                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiErrors.INVALID_INPUT))
-                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiErrors.INVALID_INPUT))
-                val service = request.service ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'service'", ApiErrors.INVALID_INPUT))
+                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiError.VALIDATION_FAILED))
+                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiError.VALIDATION_FAILED))
+                val service = request.service ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'service'", ApiError.VALIDATION_FAILED))
                 eventBus.emit(NimbusEvent.PlayerDisconnected(player, uuid, service))
             }
             "PLAYER_SERVER_SWITCH" -> {
-                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiErrors.INVALID_INPUT))
-                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiErrors.INVALID_INPUT))
-                val from = request.fromService ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'fromService'", ApiErrors.INVALID_INPUT))
-                val to = request.toService ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'toService'", ApiErrors.INVALID_INPUT))
+                val player = request.player ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'player'", ApiError.VALIDATION_FAILED))
+                val uuid = validatedUuid ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'uuid'", ApiError.VALIDATION_FAILED))
+                val from = request.fromService ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'fromService'", ApiError.VALIDATION_FAILED))
+                val to = request.toService ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing 'toService'", ApiError.VALIDATION_FAILED))
                 eventBus.emit(NimbusEvent.PlayerServerSwitch(player, uuid, from, to))
             }
             else -> {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Unknown event type: ${request.type}", ApiErrors.INVALID_INPUT))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Unknown event type: ${request.type}", ApiError.VALIDATION_FAILED))
             }
         }
         call.respond(ApiMessage(true, "Event received"))

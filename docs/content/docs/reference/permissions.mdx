@@ -1,0 +1,119 @@
+---
+title: Permission Nodes
+description: Complete registry of Nimbus permission nodes — cloud admin, dashboard/REST, and gameplay.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+<Callout type="info">
+  **0.13 migration** — `nimbus.players` was renamed to `nimbus.cloud.players`. Existing permission groups are migrated automatically on first boot — no action required. To skip the migration (e.g. during a rollback test), set `[permissions] skip_node_migrations = true` in `nimbus.toml`.
+</Callout>
+
+Nimbus permission nodes follow three families:
+
+1. **`nimbus.cloud.<action>`** — Console or in-game `/cloud` admin actions that manipulate the cluster.
+2. **`nimbus.dashboard.<resource>.<verb>`** — Web dashboard and REST API access. Umbrella nodes (`admin`, `view`, `reload`, `shutdown`) sit at the 2-segment level.
+3. **`nimbus.<module>.<behavior>`** — Player-facing bypasses or features enforced by module plugins inside Minecraft.
+
+### Wildcards and negation
+
+- The seeded `Admin` group holds `*` — it grants every permission across the three families.
+- Grant a family-level wildcard with `nimbus.dashboard.*` or `nimbus.cloud.*`.
+- Prefix a node with `-` to negate it: `-nimbus.cloud.shutdown` removes the permission even if a parent group grants it.
+- API tokens (`Authorization: Bearer …`) are treated as implicit `nimbus.dashboard.admin` for full backwards compatibility.
+
+## Cloud Admin (`nimbus.cloud.*`)
+
+Gate the whole `/cloud` surface with `nimbus.cloud`, then grant individual actions as needed.
+
+| Node | Scope | Default Groups | Description |
+| --- | --- | --- | --- |
+| `nimbus.cloud` | cloud | Admin | Root gate for `/cloud` commands. |
+| `nimbus.cloud.audit` | cloud | Admin | View audit log entries. |
+| `nimbus.cloud.broadcast` | cloud | Admin | Send network-wide broadcasts. |
+| `nimbus.cloud.dashboard` | cloud | Admin | Issue dashboard magic-links from chat. |
+| `nimbus.cloud.doctor` | cloud | Admin | Run cluster health diagnostics. |
+| `nimbus.cloud.events` | cloud | Admin | Subscribe to live cluster events. |
+| `nimbus.cloud.exec` | cloud | Admin | Execute a raw command on a service. |
+| `nimbus.cloud.groups` | cloud | Admin | List / inspect server groups. |
+| `nimbus.cloud.health` | cloud | Admin | Read aggregated health summary. |
+| `nimbus.cloud.info` | cloud | Admin | Show controller info. |
+| `nimbus.cloud.list` | cloud | Admin+Mod | List services or players. |
+| `nimbus.cloud.maintenance` | cloud | Admin | Toggle maintenance mode. |
+| `nimbus.cloud.perms` | cloud | Admin | Manage permission groups / users / tracks. |
+| `nimbus.cloud.players` | cloud | Admin+Mod | Inspect player tracker (list / info / history / stats). |
+| `nimbus.cloud.punish` | cloud | Admin+Mod | Issue or revoke punishments. |
+| `nimbus.cloud.reload` | cloud | Admin | Reload controller config. |
+| `nimbus.cloud.resourcepack` | cloud | Admin | Manage resource packs and assignments. |
+| `nimbus.cloud.restart` | cloud | Admin | Restart a service. |
+| `nimbus.cloud.scaling` | cloud | Admin | Manage smart-scaling schedules and rules. |
+| `nimbus.cloud.send` | cloud | Admin+Mod | Send a player to another service. |
+| `nimbus.cloud.setstate` | cloud | Admin | Set or clear a custom state label on a service. |
+| `nimbus.cloud.start` | cloud | Admin | Start a service. |
+| `nimbus.cloud.status` | cloud | Admin | Read controller status. |
+| `nimbus.cloud.stop` | cloud | Admin | Stop a service. |
+| `nimbus.cloud.stress` | cloud | Admin | Start / stop / ramp stress tests. |
+
+## Dashboard / REST (`nimbus.dashboard.*`)
+
+Dashboard nodes follow `resource.verb`. The four umbrella nodes predate the grid and stay as-is.
+
+### Umbrella nodes
+
+| Node | Scope | Default Groups | Description |
+| --- | --- | --- | --- |
+| `nimbus.dashboard.admin` | dashboard | Admin | Super-permission — implied by every API token. |
+| `nimbus.dashboard.view` | dashboard | — | Allow login to the dashboard (no resource access). |
+| `nimbus.dashboard.reload` | dashboard | Admin | Trigger controller reload via REST. |
+| `nimbus.dashboard.shutdown` | dashboard | Admin | Trigger controller shutdown via REST. |
+
+### Per-resource grid
+
+| Node | Scope | Default Groups | Description |
+| --- | --- | --- | --- |
+| `nimbus.dashboard.audit.view` | dashboard | Admin | Read audit log via REST / dashboard. |
+| `nimbus.dashboard.dedicated.view` | dashboard | Admin | List dedicated services. |
+| `nimbus.dashboard.dedicated.manage` | dashboard | Admin | Start / stop / edit dedicated services. |
+| `nimbus.dashboard.groups.view` | dashboard | Admin | List server groups. |
+| `nimbus.dashboard.groups.edit` | dashboard | Admin | Edit group configs. |
+| `nimbus.dashboard.maintenance.toggle` | dashboard | Admin | Toggle maintenance mode. |
+| `nimbus.dashboard.nodes.view` | dashboard | Admin | List agent nodes. |
+| `nimbus.dashboard.nodes.manage` | dashboard | Admin | Manage agent nodes. |
+| `nimbus.dashboard.players.view` | dashboard | Admin+Mod | List currently online players. |
+| `nimbus.dashboard.players.history` | dashboard | Admin+Mod | Read player session history. |
+| `nimbus.dashboard.punishments.view` | dashboard | Admin+Mod | Inspect active punishments. |
+| `nimbus.dashboard.punishments.history` | dashboard | Admin+Mod | Read player punishment history. |
+| `nimbus.dashboard.punishments.ban` | dashboard | Admin+Mod | Issue permanent bans. |
+| `nimbus.dashboard.punishments.tempban` | dashboard | Admin+Mod | Issue temporary bans. |
+| `nimbus.dashboard.punishments.ipban` | dashboard | Admin | Issue IP bans. |
+| `nimbus.dashboard.punishments.mute` | dashboard | Admin+Mod | Issue permanent mutes. |
+| `nimbus.dashboard.punishments.tempmute` | dashboard | Admin+Mod | Issue temporary mutes. |
+| `nimbus.dashboard.punishments.kick` | dashboard | Admin+Mod | Kick players. |
+| `nimbus.dashboard.punishments.warn` | dashboard | Admin+Mod | Warn players. |
+| `nimbus.dashboard.punishments.revoke` | dashboard | Admin+Mod | Revoke an active punishment. |
+| `nimbus.dashboard.resourcepacks.view` | dashboard | Admin | List resource packs. |
+| `nimbus.dashboard.resourcepacks.manage` | dashboard | Admin | Upload / delete resource packs. |
+| `nimbus.dashboard.resourcepacks.assign` | dashboard | Admin | Assign packs to GLOBAL / GROUP / SERVICE scopes. |
+| `nimbus.dashboard.services.view` | dashboard | Admin | List services. |
+| `nimbus.dashboard.services.start` | dashboard | Admin | Start services. |
+| `nimbus.dashboard.services.stop` | dashboard | Admin | Stop services. |
+| `nimbus.dashboard.services.restart` | dashboard | Admin | Restart services. |
+| `nimbus.dashboard.services.console` | dashboard | Admin | Attach to a service console (read + write). |
+| `nimbus.dashboard.services.edit_config` | dashboard | Admin | Edit a service's TOML config. |
+
+## Gameplay (`nimbus.<module>.*`)
+
+Enforced by module plugins on SDK / Bridge / backends. No verbs — just a behavior name.
+
+| Node | Scope | Default Groups | Description |
+| --- | --- | --- | --- |
+| `nimbus.display.sign` | gameplay | Admin | Place or break selector signs. |
+| `nimbus.display.npc` | gameplay | Admin | Run `/display npc …` subcommands. |
+| `nimbus.display.list` | gameplay | Admin | Run `/display list`. |
+| `nimbus.display.reload` | gameplay | Admin | Run `/display reload`. |
+| `nimbus.maintenance.bypass` | gameplay | Admin | Connect while maintenance mode is on. |
+| `nimbus.punish.bypass` | gameplay | Admin | Bypass mute enforcement on backend chat. |
+
+<Callout type="warn">
+  **Schema rule** — Do **not** introduce bare `nimbus.<module>` nodes (like `nimbus.players` used to be). Use `nimbus.cloud.<action>` for admin actions, `nimbus.dashboard.<resource>.<verb>` for REST/dashboard, and `nimbus.<module>.<behavior>` for in-game behaviors.
+</Callout>

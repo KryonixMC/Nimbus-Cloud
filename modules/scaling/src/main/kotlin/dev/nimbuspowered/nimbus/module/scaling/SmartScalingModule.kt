@@ -10,11 +10,11 @@ import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
 import dev.nimbuspowered.nimbus.module.scaling.commands.ScalingCommand
 import dev.nimbuspowered.nimbus.module.scaling.routes.scalingRoutes
-import dev.nimbuspowered.nimbus.module.service
+import dev.nimbuspowered.nimbus.module.api.service
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import kotlinx.coroutines.Job

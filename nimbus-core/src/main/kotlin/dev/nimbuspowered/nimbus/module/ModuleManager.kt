@@ -1,5 +1,7 @@
 package dev.nimbuspowered.nimbus.module
 
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
 import dev.nimbuspowered.nimbus.NimbusVersion
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
@@ -21,7 +23,7 @@ import kotlin.io.path.listDirectoryEntries
  *
  * Modules are loaded from the `modules/` directory using [ServiceLoader].
  * Each JAR must declare its module implementation in
- * `META-INF/services/dev.nimbuspowered.nimbus.module.NimbusModule`.
+ * `META-INF/services/dev.nimbuspowered.nimbus.module.api.NimbusModule`.
  */
 class ModuleManager(
     private val modulesDir: Path,

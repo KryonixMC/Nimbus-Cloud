@@ -7,7 +7,7 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.RESET
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.error
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.info
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter.success
-import dev.nimbuspowered.nimbus.module.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
 import dev.nimbuspowered.nimbus.module.docker.DockerClient
 import dev.nimbuspowered.nimbus.module.docker.DockerConfigManager
 import kotlinx.serialization.json.JsonObject

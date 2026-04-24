@@ -1,9 +1,9 @@
 package dev.nimbuspowered.nimbus.module.auth.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
-import dev.nimbuspowered.nimbus.module.PermissionSet
+import dev.nimbuspowered.nimbus.module.api.PermissionSet
 import dev.nimbuspowered.nimbus.module.auth.service.PermissionResolver
 import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
@@ -89,7 +89,7 @@ fun Route.passkeyRoutes(
                 )
             } catch (e: IllegalArgumentException) {
                 return@post call.respond(HttpStatusCode.Conflict,
-                    apiError(e.message ?: "Cannot start registration", "PASSKEY_LIMIT_REACHED"))
+                    apiError(e.message ?: "Cannot start registration", ApiError.PASSKEY_LIMIT_REACHED))
             }
             val optionsJson = json.parseToJsonElement(options.toCredentialsCreateJson())
             call.respond(PasskeyStartResponse(ceremonyId, optionsJson))
@@ -100,7 +100,7 @@ fun Route.passkeyRoutes(
             requireSession(call, sessionService) ?: return@post
             val req = runCatching { call.receive<PasskeyFinishRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("ceremonyId + responseJson required", ApiErrors.VALIDATION_FAILED))
+                    apiError("ceremonyId + responseJson required", ApiError.VALIDATION_FAILED))
             try {
                 val stored = webAuthn.finishRegistration(req.ceremonyId, req.responseJson)
                 call.respond(PasskeyCredentialDto(
@@ -113,7 +113,7 @@ fun Route.passkeyRoutes(
             } catch (e: Exception) {
                 logger.warn("Passkey registration finish failed: {}", e.message)
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError(e.message ?: "Registration failed", "PASSKEY_REGISTER_FAILED"))
+                    apiError(e.message ?: "Registration failed", ApiError.PASSKEY_REGISTER_FAILED))
             }
         }
 
@@ -137,11 +137,11 @@ fun Route.passkeyRoutes(
             val session = requireSession(call, sessionService) ?: return@delete
             val credId = call.parameters["id"]
                 ?: return@delete call.respond(HttpStatusCode.BadRequest,
-                    apiError("credential id required", ApiErrors.VALIDATION_FAILED))
+                    apiError("credential id required", ApiError.VALIDATION_FAILED))
             val ok = webAuthn.deleteCredential(session.uuid.toString(), credId)
             if (!ok) {
                 return@delete call.respond(HttpStatusCode.NotFound,
-                    apiError("Credential not found", "PASSKEY_NOT_FOUND"))
+                    apiError("Credential not found", ApiError.PASSKEY_NOT_FOUND))
             }
             call.respond(ApiMessage(success = true, message = "Passkey removed"))
         }
@@ -161,17 +161,17 @@ fun Route.passkeyRoutes(
             if (!webAuthn.isEnabled()) return@post call.respondDisabled()
             val req = runCatching { call.receive<PasskeyFinishRequest>() }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("ceremonyId + responseJson required", ApiErrors.VALIDATION_FAILED))
+                    apiError("ceremonyId + responseJson required", ApiError.VALIDATION_FAILED))
             val (uuidStr, name) = try {
                 webAuthn.finishAuthentication(req.ceremonyId, req.responseJson)
             } catch (e: Exception) {
                 logger.warn("Passkey login finish failed: {}", e.message)
                 return@post call.respond(HttpStatusCode.Unauthorized,
-                    apiError("Passkey verification failed", "PASSKEY_LOGIN_FAILED"))
+                    apiError("Passkey verification failed", ApiError.PASSKEY_LOGIN_FAILED))
             }
             val uuid = runCatching { UUID.fromString(uuidStr) }.getOrNull()
                 ?: return@post call.respond(HttpStatusCode.InternalServerError,
-                    apiError("Invalid userHandle", ApiErrors.INTERNAL_ERROR))
+                    apiError("Invalid userHandle", ApiError.INTERNAL_ERROR))
             val permissions = permissionResolver.resolve(uuidStr)
             val issued = sessionService.issue(
                 uuid = uuid,
@@ -198,27 +198,27 @@ fun Route.passkeyRoutes(
 
 private suspend fun ApplicationCall.respondDisabled() =
     respond(HttpStatusCode.ServiceUnavailable,
-        apiError("Passkey authentication is disabled", "PASSKEY_DISABLED"))
+        apiError("Passkey authentication is disabled", ApiError.PASSKEY_DISABLED))
 
 private suspend fun requireSession(
     call: ApplicationCall,
     sessionService: SessionService
-): dev.nimbuspowered.nimbus.module.AuthPrincipal.UserSession? {
+): dev.nimbuspowered.nimbus.module.api.AuthPrincipal.UserSession? {
     val header = call.request.headers["Authorization"] ?: run {
         call.respond(HttpStatusCode.Unauthorized,
-            apiError("Missing session token", ApiErrors.UNAUTHORIZED))
+            apiError("Missing session token", ApiError.UNAUTHORIZED))
         return null
     }
     if (!header.startsWith("Bearer ", ignoreCase = true)) {
         call.respond(HttpStatusCode.Unauthorized,
-            apiError("Bearer token required", ApiErrors.UNAUTHORIZED))
+            apiError("Bearer token required", ApiError.UNAUTHORIZED))
         return null
     }
     val raw = header.substring(7).trim()
     val session = sessionService.validate(raw)
     if (session == null) {
         call.respond(HttpStatusCode.Unauthorized,
-            apiError("Invalid or expired session", AuthErrors.AUTH_SESSION_INVALID))
+            apiError("Invalid or expired session", ApiError.AUTH_SESSION_INVALID))
         return null
     }
     return session

@@ -3,7 +3,7 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 
@@ -15,6 +15,7 @@ class ExecCommand(
     override val name = "exec"
     override val description = "Execute a command on a service"
     override val usage = "exec <service> <command...>"
+    override val permission = "nimbus.cloud.exec"
 
     override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.size < 2) {

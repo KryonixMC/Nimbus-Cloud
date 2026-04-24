@@ -1,0 +1,60 @@
+---
+title: API-Stabilität
+description: Kompatibilitätsgarantien für die Nimbus REST-API, Error-Codes und das Cluster-Protokoll.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dieses Dokument beschreibt, welche Teile der öffentlichen Nimbus-API garantiert stabil sind, welche additiv zwischen Minor-Versionen erweitert werden dürfen, und wie Deprecations über den `Deprecation:`-HTTP-Header angekündigt werden.
+
+<Callout type="info">
+  Nimbus ist pre-1.0. Bis zum 1.0-Release können **Minor-Releases** (`0.X.0`) Breaking Changes enthalten — dokumentiert im [Changelog](/docs/project/changelog) inklusive Migrations-Hinweisen. Ab 1.0 gelten dann die unten beschriebenen SemVer-Regeln regulär.
+</Callout>
+
+## REST-API (`/api/*`)
+
+Der URL-Space unter `/api/*` ist innerhalb einer Major-Version stabil:
+
+- **Additive Changes** — neue Endpoints, neue optionale Request-Felder und neue Response-Felder dürfen jederzeit in einem Minor-Release erscheinen. Consumer müssen mit unbekannten Feldern in Responses tolerant umgehen (ignorieren statt failen).
+- **Removals & Breaks** — das Entfernen von Endpoints oder Feldern, das Umbenennen von JSON-Keys oder das Ändern von Semantik bestehender Felder passiert ausschließlich in einem Major-Version-Bump und wird mit einem Migrations-Guide im Changelog begleitet.
+- **HTTP-Status-Codes** für einen gegebenen Endpoint-/Error-Pfad ändern sich nicht zwischen Minor-Releases.
+
+<Callout type="warn">
+  **Kein `/api/v1/`-Prefix.** Die Nimbus-API ist eine private Admin-API — alle primären Consumer (Dashboard, Velocity-Bridge, Backend-SDK, Agent, Remote-CLI) werden gemeinsam mit dem Controller ausgeliefert und passen exakt zur installierten Nimbus-Version. Ein Kubernetes-artiges URL-Versioning (`/api/v1/`, `/api/v2/`) wäre für diesen Use-Case Overkill und würde den URL-Space unnötig aufblähen. Die SemVer-Version des Controllers selbst (abrufbar über `GET /api/health`) ist der Kontrakt.
+</Callout>
+
+## Deprecation-Pfad
+
+Wenn ein Feld oder Endpoint in einer künftigen Major-Version entfernt werden soll, wird er zuvor als deprecated markiert:
+
+1. **Markierung** in einem Minor-Release: Responses enthalten einen
+   ```http
+   Deprecation: true
+   Sunset: Wed, 01 Jan 2027 00:00:00 GMT
+   ```
+   -Header-Paar (RFC 8594 / draft-ietf-httpapi-deprecation-header). Alternativ / zusätzlich wird im JSON ein `_deprecated: true` neben dem betroffenen Feld gesetzt.
+2. **Sunset-Fenster** — zwischen Markierung und tatsächlicher Entfernung liegt mindestens ein Minor-Release, so dass Consumer Zeit haben, ihre Integrationen anzupassen.
+3. **Removal** — die eigentliche Entfernung erfolgt erst in einem **Major**-Release. In einem Minor-Release werden deprecated-markierte Endpoints weiter bedient.
+
+## Error-Codes
+
+Die Wire-Strings im `error`-Feld von Error-Responses (`VALIDATION_FAILED`, `SERVICE_NOT_FOUND`, `AUTH_INVALID_TOTP`, `BACKUP_NOT_FOUND`, …) sind Teil des API-Kontrakts und werden wie JSON-Felder behandelt:
+
+- **Neue Error-Codes** dürfen in Minor-Releases eingeführt werden — Consumer sollten unbekannte Codes generisch behandeln (z. B. auf den HTTP-Status zurückfallen).
+- **Bestehende Codes umbenennen oder entfernen** ist eine Breaking Change und nur in einem Major-Release zulässig.
+
+Die vollständige Liste lebt im typisierten `ApiError`-Enum (`ApiErrors.kt`) und ist im [REST-API-Referenzdokument](/docs/reference/api) aufgeführt.
+
+## Cluster-Protokoll
+
+Das WebSocket-Protokoll zwischen Controller und Agent-Nodes (`ClusterMessage`) hat sein **eigenes Versioning**, unabhängig von der REST-API-Version:
+
+- Die aktuelle Protokoll-Version liegt in `ClusterMessage.CURRENT_PROTOCOL_VERSION`.
+- `AuthRequest` / `AuthResponse` tragen ein explizites `protocolVersion`-Feld und matchen beim Handshake — Mismatch führt zu einem harten WS-Close mit `VIOLATED_POLICY`.
+- Bump-Regel: die Version wird nur angehoben, wenn ein bestehendes Feld semantisch geändert, entfernt oder umbenannt wird. Rein additive Änderungen (neue Message-Typen, neue optionale Felder mit Defaults) brauchen keinen Bump, weil der Agent `ignoreUnknownKeys = true` verwendet.
+
+Details siehe [Developer: Cluster-Protokoll](/docs/developer/protocol).
+
+## SDK & Modul-API
+
+Die `plugins/sdk`- und `modules/api`-Oberflächen folgen derselben SemVer-Regel wie die REST-API: alle nicht mit `@ApiStatus.Internal` markierten Typen sind stabil innerhalb einer Major-Version. Siehe Einträge im Changelog zum Freezing der SDK-Public-Surface.

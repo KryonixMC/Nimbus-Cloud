@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.backup.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.module.backup.BackupConfigManager
@@ -47,7 +47,7 @@ fun Route.backupRoutes(
             catch (e: Exception) {
                 return@put call.respond(
                     HttpStatusCode.BadRequest,
-                    apiError("Invalid body: ${e.message}", ApiErrors.VALIDATION_FAILED)
+                    apiError("Invalid body: ${e.message}", ApiError.VALIDATION_FAILED)
                 )
             }
             try {
@@ -55,11 +55,11 @@ fun Route.backupRoutes(
                 scheduler.reload()
                 call.respond(configManager.getConfig())
             } catch (e: IllegalArgumentException) {
-                call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "invalid config", ApiErrors.VALIDATION_FAILED))
+                call.respond(HttpStatusCode.BadRequest, apiError(e.message ?: "invalid config", ApiError.BACKUP_CONFIG_INVALID))
             } catch (e: Exception) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    apiError("Failed to write config: ${e.message}", ApiErrors.INTERNAL_ERROR)
+                    apiError("Failed to write config: ${e.message}", ApiError.INTERNAL_ERROR)
                 )
             }
         }
@@ -89,40 +89,40 @@ fun Route.backupRoutes(
 
         get("{id}") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val rec = manager.fetchRecord(id)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiErrors.NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiError.BACKUP_NOT_FOUND))
             call.respond(rec.toResponse())
         }
 
         get("{id}/manifest") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val rec = manager.fetchRecord(id)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiErrors.NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiError.BACKUP_NOT_FOUND))
             // Cheapest path: extract and stream MANIFEST.sha256 entry. verify() already
             // reads the whole archive; we avoid doing that here by deferring to the
             // archive extraction helper on-demand.
             val archive = manager.localDestination.resolve(rec.archivePath)
             if (!Files.exists(archive)) {
-                return@get call.respond(HttpStatusCode.NotFound, apiError("Archive file missing", ApiErrors.NOT_FOUND))
+                return@get call.respond(HttpStatusCode.NotFound, apiError("Archive file missing", ApiError.BACKUP_ARCHIVE_MISSING))
             }
             // Quick-and-dirty: read the manifest by doing a verify pass — but verify
             // doesn't return the manifest text. We stream-read just the manifest entry here.
             val manifest = readManifest(archive)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Manifest not in archive", ApiErrors.NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Manifest not in archive", ApiError.BACKUP_MANIFEST_MISSING))
             call.response.header(HttpHeaders.ContentType, "text/plain")
             call.respondText(manifest, ContentType.parse("text/plain"))
         }
 
         get("{id}/download") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@get call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val rec = manager.fetchRecord(id)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiErrors.NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiError.BACKUP_NOT_FOUND))
             val file = manager.localDestination.resolve(rec.archivePath)
             if (!Files.exists(file)) {
-                return@get call.respond(HttpStatusCode.NotFound, apiError("Archive file missing", ApiErrors.NOT_FOUND))
+                return@get call.respond(HttpStatusCode.NotFound, apiError("Archive file missing", ApiError.BACKUP_ARCHIVE_MISSING))
             }
             val fileName = file.fileName.toString()
             call.response.header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\"")
@@ -136,7 +136,7 @@ fun Route.backupRoutes(
         post("trigger") {
             val req = try { call.receive<TriggerBackupRequest>() }
             catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest,
-                apiError("Invalid body: ${e.message}", ApiErrors.VALIDATION_FAILED)) }
+                apiError("Invalid body: ${e.message}", ApiError.VALIDATION_FAILED)) }
             val types: Set<BackupTargetType> = req.targets.mapNotNull { parseTargetType(it) }.toSet()
             val cls = parseRetention(req.scheduleClass)
             val records = manager.runBackup(types, cls, "", "api", req.target)
@@ -145,10 +145,10 @@ fun Route.backupRoutes(
 
         post("{id}/restore") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val req = try { call.receive<RestoreBackupRequest>() }
             catch (e: Exception) { return@post call.respond(HttpStatusCode.BadRequest,
-                apiError("Invalid body: ${e.message}", ApiErrors.VALIDATION_FAILED)) }
+                apiError("Invalid body: ${e.message}", ApiError.VALIDATION_FAILED)) }
             try {
                 val result = manager.restore(
                     id,
@@ -164,24 +164,24 @@ fun Route.backupRoutes(
                     "files" to result.files
                 ))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.Conflict, apiError(e.message ?: "restore failed", ApiErrors.VALIDATION_FAILED))
+                call.respond(HttpStatusCode.Conflict, apiError(e.message ?: "restore failed", ApiError.BACKUP_RESTORE_FAILED))
             }
         }
 
         post("{id}/verify") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             val r = manager.verify(id)
             call.respond(VerifyResponse(r.valid, r.errors))
         }
 
         delete("{id}") {
             val id = call.parameters["id"]?.toLongOrNull()
-                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiErrors.VALIDATION_FAILED))
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, apiError("Invalid id", ApiError.VALIDATION_FAILED))
             if (manager.delete(id)) {
                 call.respond(ApiMessage(true, "Backup #$id deleted"))
             } else {
-                call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiErrors.NOT_FOUND))
+                call.respond(HttpStatusCode.NotFound, apiError("Backup not found", ApiError.BACKUP_NOT_FOUND))
             }
         }
 

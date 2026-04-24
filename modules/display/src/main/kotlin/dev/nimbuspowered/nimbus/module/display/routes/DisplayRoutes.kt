@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.module.display.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.group.GroupManager
@@ -24,7 +24,7 @@ fun Route.displayRoutes(displayManager: DisplayManager, groupManager: GroupManag
         get("{name}") {
             val name = call.parameters["name"]!!
             val display = displayManager.getDisplay(name)
-                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("No display config for '$name'", ApiErrors.NOT_FOUND))
+                ?: return@get call.respond(HttpStatusCode.NotFound, apiError("No display config for '$name'", ApiError.DISPLAY_CONFIG_NOT_FOUND))
             call.respond(display.toResponse())
         }
 
@@ -32,7 +32,7 @@ fun Route.displayRoutes(displayManager: DisplayManager, groupManager: GroupManag
         put("{name}") {
             val name = call.parameters["name"]!!
             if (displayManager.getDisplay(name) == null) {
-                return@put call.respond(HttpStatusCode.NotFound, apiError("No display config for '$name'", ApiErrors.NOT_FOUND))
+                return@put call.respond(HttpStatusCode.NotFound, apiError("No display config for '$name'", ApiError.DISPLAY_CONFIG_NOT_FOUND))
             }
 
             val req = call.receive<UpdateDisplayRequest>()
@@ -56,7 +56,7 @@ fun Route.displayRoutes(displayManager: DisplayManager, groupManager: GroupManag
             if (displayManager.updateDisplay(name, update)) {
                 call.respond(displayManager.getDisplay(name)!!.toResponse())
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to update display config", ApiErrors.INTERNAL_ERROR))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to update display config", ApiError.INTERNAL_ERROR))
             }
         }
 
@@ -64,12 +64,12 @@ fun Route.displayRoutes(displayManager: DisplayManager, groupManager: GroupManag
         post("{name}/reset") {
             val name = call.parameters["name"]!!
             val group = groupManager.getGroup(name)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("No group '$name'", ApiErrors.GROUP_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("No group '$name'", ApiError.GROUP_NOT_FOUND))
 
             if (displayManager.resetDisplay(name, group.config)) {
                 call.respond(displayManager.getDisplay(name)!!.toResponse())
             } else {
-                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to reset display config", ApiErrors.INTERNAL_ERROR))
+                call.respond(HttpStatusCode.InternalServerError, apiError("Failed to reset display config", ApiError.INTERNAL_ERROR))
             }
         }
 

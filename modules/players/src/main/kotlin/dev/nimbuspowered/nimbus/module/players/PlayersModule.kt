@@ -9,13 +9,13 @@ import dev.nimbuspowered.nimbus.console.ConsoleFormatter.error
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
-import dev.nimbuspowered.nimbus.module.DashboardConfig
-import dev.nimbuspowered.nimbus.module.DashboardSection
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.DashboardConfig
+import dev.nimbuspowered.nimbus.module.api.DashboardSection
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
 import dev.nimbuspowered.nimbus.module.players.commands.PlayersModuleCommand
 import dev.nimbuspowered.nimbus.module.players.routes.playerRoutes
-import dev.nimbuspowered.nimbus.module.service
+import dev.nimbuspowered.nimbus.module.api.service
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import org.slf4j.LoggerFactory
 

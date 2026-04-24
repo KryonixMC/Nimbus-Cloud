@@ -5,12 +5,12 @@ import dev.nimbuspowered.nimbus.config.NimbusConfig
 import dev.nimbuspowered.nimbus.database.DatabaseManager
 import dev.nimbuspowered.nimbus.event.EventBus
 import dev.nimbuspowered.nimbus.event.NimbusEvent
-import dev.nimbuspowered.nimbus.module.AuthLevel
-import dev.nimbuspowered.nimbus.module.ModuleContext
-import dev.nimbuspowered.nimbus.module.NimbusModule
-import dev.nimbuspowered.nimbus.module.PluginDeployment
-import dev.nimbuspowered.nimbus.module.PluginTarget
-import dev.nimbuspowered.nimbus.module.SessionValidator
+import dev.nimbuspowered.nimbus.module.api.AuthLevel
+import dev.nimbuspowered.nimbus.module.api.ModuleContext
+import dev.nimbuspowered.nimbus.module.api.NimbusModule
+import dev.nimbuspowered.nimbus.module.api.PluginDeployment
+import dev.nimbuspowered.nimbus.module.api.PluginTarget
+import dev.nimbuspowered.nimbus.module.api.SessionValidator
 import dev.nimbuspowered.nimbus.module.auth.commands.DashboardCommand
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8000_Sessions
 import dev.nimbuspowered.nimbus.module.auth.migrations.AuthV8001_Challenges
@@ -31,7 +31,7 @@ import dev.nimbuspowered.nimbus.module.auth.service.SessionService
 import dev.nimbuspowered.nimbus.module.auth.service.TotpService
 import dev.nimbuspowered.nimbus.module.auth.service.WebAuthnService
 import dev.nimbuspowered.nimbus.module.auth.service.WsTicketStore
-import dev.nimbuspowered.nimbus.module.service
+import dev.nimbuspowered.nimbus.module.api.service
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
@@ -84,9 +84,12 @@ class AuthModule : NimbusModule {
         val db = context.service<DatabaseManager>()
             ?: error("Auth module requires DatabaseManager")
 
+        val strictConfig = context.getService(dev.nimbuspowered.nimbus.config.NimbusConfig::class.java)
+            ?.controller?.strictConfig ?: false
         configStore = AuthConfigStore(
             moduleDir = context.moduleConfigDir(id),
-            baseDir = context.baseDir
+            baseDir = context.baseDir,
+            strict = strictConfig
         )
         authConfig = configStore.loadOrCreate()
         val encryptionKey = configStore.ensureKey(authConfig)

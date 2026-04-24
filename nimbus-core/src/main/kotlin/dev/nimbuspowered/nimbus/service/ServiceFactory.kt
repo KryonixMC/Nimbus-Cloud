@@ -16,18 +16,13 @@ import dev.nimbuspowered.nimbus.template.PerformanceOptimizer
 import dev.nimbuspowered.nimbus.template.SoftwareResolver
 import dev.nimbuspowered.nimbus.template.TemplateManager
 import dev.nimbuspowered.nimbus.velocity.VelocityConfigGen
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.util.UUID
 import kotlin.io.path.Path
 import kotlinx.coroutines.sync.withLock
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
-import kotlin.io.path.readText
 import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.seconds
 
@@ -71,6 +66,8 @@ class ServiceFactory(
     }
     private val geyserConfigGen = GeyserConfigGen()
     private val javaResolver = JavaResolver(config.java.toMap(), Path(config.paths.templates).toAbsolutePath().parent ?: Path("."))
+    private val pluginDeploymentResolver = PluginDeploymentResolver(softwareResolver, moduleContext)
+    private val templateInitializer = TemplateInitializer(velocityConfigGen)
 
     data class PreparedService(
         val service: Service,
@@ -226,14 +223,14 @@ class ServiceFactory(
         // Pre-initialize Fabric template: run launcher once to download vanilla server
         if (software == ServerSoftware.FABRIC && !templateDir.resolve(".fabric").exists()) {
             logger.info("Initializing Fabric template (downloading vanilla server)...")
-            initializeFabricTemplate(templateDir)
+            templateInitializer.initializeFabricTemplate(templateDir)
         }
 
         // Initialize Velocity template if velocity.toml doesn't exist yet
         val jarName = softwareResolver.jarFileName(software)
         if (software == ServerSoftware.VELOCITY && !templateDir.resolve("velocity.toml").exists()) {
             logger.info("Initializing Velocity template (first run generates config files)...")
-            initializeVelocityTemplate(templateDir, jarName)
+            templateInitializer.initializeVelocityTemplate(templateDir, jarName)
         }
 
         // Registration already done inside the slot-allocation lock above — nothing
@@ -258,7 +255,7 @@ class ServiceFactory(
             }
 
             // Deploy module-dependent plugins based on active modules and software compatibility
-            resolveModulePlugins(software, group.config.group.version, workDir, serviceName)
+            pluginDeploymentResolver.resolveModulePlugins(software, group.config.group.version, workDir, serviceName)
 
             val forwardingMode = compatibilityChecker.determineForwardingMode()
             when (software) {
@@ -612,187 +609,4 @@ class ServiceFactory(
             null
         }
     }
-
-    /**
-     * Deploys runtime-managed plugins to a service's working directory:
-     *   - Velocity proxies  → `nimbus-bridge.jar` + every [PluginDeployment] a module
-     *     registered with [PluginTarget.VELOCITY] (e.g. nimbus-punishments-velocity)
-     *   - Paper-based backends → `nimbus-sdk.jar` + every [PluginDeployment] a module
-     *     registered with [PluginTarget.BACKEND] (the default)
-     *   - Forge / Fabric / other software → nothing (no Nimbus runtime support yet)
-     *
-     * Copies are from the core JAR's classpath, always with REPLACE_EXISTING — deleted or
-     * modified plugin files are restored on the next service prepare. This keeps
-     * `templates/global/plugins/` and `templates/global_proxy/plugins/` free of
-     * Nimbus-managed artefacts; they're user-owned only.
-     */
-    private suspend fun resolveModulePlugins(software: ServerSoftware, version: String, workDir: Path, serviceName: String) {
-        val pluginsDir = workDir.resolve("plugins")
-        val allDeployments = moduleContext?.pluginDeployments.orEmpty()
-
-        if (software == ServerSoftware.VELOCITY) {
-            if (!pluginsDir.exists()) pluginsDir.createDirectories()
-            deployBridgePlugin(pluginsDir)
-            for (deployment in allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.VELOCITY }) {
-                deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
-            }
-            return
-        }
-
-        val isPaperBased = software in listOf(ServerSoftware.PAPER, ServerSoftware.PURPUR, ServerSoftware.PUFFERFISH, ServerSoftware.LEAF, ServerSoftware.FOLIA)
-        if (!isPaperBased) return
-
-        if (!pluginsDir.exists()) pluginsDir.createDirectories()
-
-        // Always deploy the SDK — it's the base layer for every Nimbus-aware plugin
-        deployResourcePlugin(pluginsDir, "nimbus-sdk.jar", "plugins/nimbus-sdk.jar")
-
-        val backendDeployments = allDeployments.filter { it.target == dev.nimbuspowered.nimbus.module.PluginTarget.BACKEND }
-        if (backendDeployments.isEmpty()) return
-
-        val minor = version.split(".").getOrNull(1)?.toIntOrNull() ?: 0
-        var needsPacketEvents = false
-
-        for (deployment in backendDeployments) {
-            // Skip plugins that require a newer Minecraft version
-            val minVersion = deployment.minMinecraftVersion
-            if (minVersion != null && minor < minVersion) {
-                logger.info("Service '{}': {} skipped (requires 1.{}+, got {})", serviceName, deployment.displayName, minVersion, version)
-                continue
-            }
-
-            deployResourcePlugin(pluginsDir, deployment.fileName, deployment.resourcePath)
-
-            // Track if any deployed plugin needs PacketEvents on Folia
-            if (deployment.foliaRequiresPacketEvents && software == ServerSoftware.FOLIA) {
-                needsPacketEvents = true
-            }
-        }
-
-        if (needsPacketEvents) {
-            softwareResolver.ensurePacketEventsPlugin(pluginsDir, version)
-        }
-    }
-
-    private fun deployResourcePlugin(pluginsDir: Path, fileName: String, resourcePath: String) {
-        val target = pluginsDir.resolve(fileName)
-        val resource = javaClass.classLoader.getResourceAsStream(resourcePath) ?: return
-        resource.use { input ->
-            Files.copy(input, target, StandardCopyOption.REPLACE_EXISTING)
-        }
-    }
-
-    /**
-     * Deploys the Nimbus Bridge plugin JAR to a Velocity proxy's plugins folder.
-     * Prefers the versioned resource (`nimbus-bridge-<version>.jar`) and falls back
-     * to the unversioned name — this matches `PluginDeployer`'s historical behaviour
-     * for dev builds where the versioned artefact isn't present.
-     */
-    private fun deployBridgePlugin(pluginsDir: Path) {
-        val version = dev.nimbuspowered.nimbus.NimbusVersion.version
-        val versionedResource = "plugins/nimbus-bridge-$version.jar"
-        val resourcePath = if (javaClass.classLoader.getResource(versionedResource) != null) {
-            versionedResource
-        } else {
-            "plugins/nimbus-bridge.jar"
-        }
-        deployResourcePlugin(pluginsDir, "nimbus-bridge.jar", resourcePath)
-    }
-
-    /**
-     * Runs Fabric server launcher once in the template dir to download vanilla server JAR
-     * and create .fabric/ cache directory. This prevents each instance from re-downloading.
-     */
-    private suspend fun initializeFabricTemplate(templateDir: Path) {
-        try {
-            logger.info("Running Fabric launcher to download vanilla server...")
-            val process = withContext(Dispatchers.IO) {
-                ProcessBuilder("java", "-jar", "server.jar", "nogui")
-                    .directory(templateDir.toFile())
-                    .redirectErrorStream(true)
-                    .start()
-            }
-            // Wait for the Fabric launcher to download vanilla server and start up
-            // Once we see "Done" or eula prompt, kill it — we just needed the download
-            withContext(Dispatchers.IO) {
-                val reader = process.inputStream.bufferedReader()
-                val startTime = System.currentTimeMillis()
-                val timeout = 120_000L // 2 minutes max
-                while (process.isAlive && System.currentTimeMillis() - startTime < timeout) {
-                    if (reader.ready()) {
-                        val line = reader.readLine() ?: break
-                        // Stop once Fabric has downloaded what it needs
-                        if (line.contains("You need to agree to the EULA") || line.contains("Done (") || line.contains("Stopping server")) {
-                            break
-                        }
-                    } else {
-                        Thread.sleep(200)
-                    }
-                }
-                if (process.isAlive) process.destroyForcibly()
-            }
-
-            if (templateDir.resolve(".fabric").exists()) {
-                logger.info("Fabric template initialized — vanilla server downloaded")
-            } else {
-                logger.warn("Fabric initialization may not have completed — .fabric/ directory not found")
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to initialize Fabric template: {}", e.message, e)
-        }
-    }
-
-    /**
-     * Runs Velocity once in the template dir to generate velocity.toml, forwarding.secret, etc.
-     * Velocity exits after generating configs -- we wait for it to finish.
-     */
-    private suspend fun initializeVelocityTemplate(templateDir: Path, jarName: String) {
-        try {
-            val process = withContext(Dispatchers.IO) {
-                ProcessBuilder("java", "-jar", jarName)
-                    .directory(templateDir.toFile())
-                    .redirectErrorStream(true)
-                    .start()
-            }
-            // Wait up to 15 seconds for Velocity to generate its config and exit
-            withContext(Dispatchers.IO) {
-                process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
-                if (process.isAlive) process.destroyForcibly()
-            }
-
-            if (templateDir.resolve("velocity.toml").exists()) {
-                logger.info("Velocity template initialized successfully")
-                // Remove Velocity's default server entries (lobby, factions, minigames, etc.)
-                // Nimbus manages the [servers] section dynamically via VelocityConfigGen
-                cleanDefaultVelocityServers(templateDir)
-            } else {
-                logger.warn("Velocity config was not generated -- proxy may fail to start")
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to initialize Velocity template: {}", e.message, e)
-        }
-    }
-
-    /**
-     * Removes Velocity's default server entries from velocity.toml.
-     * Velocity generates default servers (lobby, factions, minigames) on first run.
-     * Nimbus manages servers dynamically -- these defaults cause ghost entries and confuse the hub plugin.
-     */
-    private fun cleanDefaultVelocityServers(templateDir: Path) {
-        val configFile = templateDir.resolve("velocity.toml")
-        if (!configFile.exists()) return
-
-        val content = configFile.readText()
-
-        // Replace [servers] with an empty section (Nimbus fills this at runtime)
-        val cleanServers = "[servers]\ntry = []\n"
-        val cleanForcedHosts = "[forced-hosts]\n"
-
-        var result = velocityConfigGen.replaceTOMLSection(content, "servers", cleanServers)
-        result = velocityConfigGen.replaceTOMLSection(result, "forced-hosts", cleanForcedHosts)
-
-        configFile.writeText(result)
-        logger.info("Cleaned default server entries from Velocity template")
-    }
-
 }

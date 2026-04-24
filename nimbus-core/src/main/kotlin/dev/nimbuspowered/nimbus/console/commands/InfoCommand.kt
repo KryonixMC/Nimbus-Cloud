@@ -5,7 +5,7 @@ import dev.nimbuspowered.nimbus.config.ServerSoftware
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.group.GroupManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 
@@ -18,6 +18,7 @@ class InfoCommand(
     override val name = "info"
     override val description = "Show detailed group configuration"
     override val usage = "info <group>"
+    override val permission = "nimbus.cloud.info"
 
     override suspend fun execute(args: List<String>, output: CommandOutput): Boolean {
         if (args.isEmpty()) {

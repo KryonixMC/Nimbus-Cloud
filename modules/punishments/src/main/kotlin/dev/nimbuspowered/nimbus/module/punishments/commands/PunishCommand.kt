@@ -3,10 +3,10 @@ package dev.nimbuspowered.nimbus.module.punishments.commands
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.event.EventBus
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.CompletionMeta
-import dev.nimbuspowered.nimbus.module.CompletionType
-import dev.nimbuspowered.nimbus.module.SubcommandMeta
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CompletionMeta
+import dev.nimbuspowered.nimbus.module.api.CompletionType
+import dev.nimbuspowered.nimbus.module.api.SubcommandMeta
 import dev.nimbuspowered.nimbus.module.punishments.DurationParser
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentManager
 import dev.nimbuspowered.nimbus.module.punishments.PunishmentRecord

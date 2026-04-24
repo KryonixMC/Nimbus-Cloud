@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.api.auth.ApiScope
@@ -36,7 +36,7 @@ fun Route.tokenRoutes(jwtTokenManager: JwtTokenManager?) {
         post {
             if (jwtTokenManager == null) {
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError("JWT is not enabled. Set jwt_enabled = true in [api] config.", ApiErrors.VALIDATION_FAILED))
+                    apiError("JWT is not enabled. Set jwt_enabled = true in [api] config.", ApiError.VALIDATION_FAILED))
                 return@post
             }
 
@@ -44,20 +44,20 @@ fun Route.tokenRoutes(jwtTokenManager: JwtTokenManager?) {
 
             if (request.subject.isBlank()) {
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError("Subject must not be blank", ApiErrors.VALIDATION_FAILED))
+                    apiError("Subject must not be blank", ApiError.VALIDATION_FAILED))
                 return@post
             }
 
             val invalidScopes = request.scopes.filter { it !in ApiScope.ALL }
             if (invalidScopes.isNotEmpty()) {
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError("Invalid scopes: ${invalidScopes.joinToString()}", ApiErrors.VALIDATION_FAILED))
+                    apiError("Invalid scopes: ${invalidScopes.joinToString()}", ApiError.VALIDATION_FAILED))
                 return@post
             }
 
             if (request.expiresInSeconds < 60) {
                 call.respond(HttpStatusCode.BadRequest,
-                    apiError("Token must be valid for at least 60 seconds", ApiErrors.VALIDATION_FAILED))
+                    apiError("Token must be valid for at least 60 seconds", ApiError.VALIDATION_FAILED))
                 return@post
             }
 

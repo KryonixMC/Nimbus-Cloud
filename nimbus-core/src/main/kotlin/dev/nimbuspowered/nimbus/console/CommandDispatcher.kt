@@ -2,8 +2,8 @@ package dev.nimbuspowered.nimbus.console
 
 import dev.nimbuspowered.nimbus.console.commands.ShutdownCommand
 import dev.nimbuspowered.nimbus.group.GroupManager
-import dev.nimbuspowered.nimbus.module.CommandOutput
-import dev.nimbuspowered.nimbus.module.ModuleCommand
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.ModuleCommand
 import dev.nimbuspowered.nimbus.service.DedicatedServiceManager
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import org.slf4j.LoggerFactory

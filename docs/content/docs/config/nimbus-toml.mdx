@@ -43,6 +43,7 @@ max_services = 20
 heartbeat_interval = 5000
 scaling_tick_interval = 10
 service_stale_timeout = 300
+strict_config = false
 
 [console]
 colored = true
@@ -147,6 +148,7 @@ Resource limits and scaling engine settings.
 | `heartbeat_interval` | Long | `5000` | Interval in milliseconds between scaling engine evaluation cycles. Each cycle checks player counts and applies scaling rules. |
 | `scaling_tick_interval` | Long | `10` | Interval in seconds between scaling engine evaluation ticks. Lower values (e.g., 5) make scaling more responsive for fast-paced game modes. Higher values reduce CPU overhead on large clusters. |
 | `service_stale_timeout` | Long | `300` | Seconds a service can remain READY without any heartbeat or API activity before being flagged as stale. `0` disables the check. Stale services are surfaced by the `doctor` command and the health API. |
+| `strict_config` | Boolean | `false` | When `true`, unknown keys in controller-owned TOML configs (`nimbus.toml`, `groups/*.toml`, `dedicated/*.toml`, `config/modules/syncproxy/*.toml`, `config/modules/auth/auth.toml`, `config/modules/docker/docker.toml`) cause a fatal startup error instead of a warning. Defaults to `false` in 0.13 (warn-only — each unknown key logs one WARN line naming the key and scope). Will default to `true` in Nimbus 1.0. User-editable message templates (`auth-messages.toml`, `punishments/messages.toml`) stay lenient regardless of this flag to keep forward-compat with future placeholder keys. |
 
 ```toml title="config/nimbus.toml"
 [controller]

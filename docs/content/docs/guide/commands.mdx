@@ -630,10 +630,10 @@ nimbus » perms group info Admin
   Suffix:    -
   Parents:   Moderator
 ▸ Permissions (4)
-  nimbus.admin
-  nimbus.manage.*
-  nimbus.start
-  -nimbus.debug
+  nimbus.cloud.audit
+  nimbus.cloud.*
+  nimbus.cloud.start
+  -nimbus.cloud.shutdown
 ```
 
 #### Other group subcommands
@@ -884,6 +884,52 @@ Transfer a player to another service via the Velocity proxy.
 <Callout type="warn">
 Requires a running Velocity proxy instance.
 </Callout>
+
+---
+
+### `broadcast`
+
+Send a message to all ready services (or a specific group) using the server's native broadcast command.
+
+**Syntax:** `broadcast [--group <group>] <message...>`
+
+```text title="Nimbus"
+nimbus » broadcast Server restart in 5 minutes!
+✓ Broadcast sent to 4/4 services in network.
+
+nimbus » broadcast --group Lobby Please move to BedWars!
+✓ Broadcast sent to 2/2 services in group 'Lobby'.
+```
+
+- On Velocity proxies the command uses `velocity broadcast <message>`.
+- On all other backends it uses `say <message>`.
+- Only READY services are targeted.
+
+**Tab completion:** `--group`, then group names.
+
+**Permission:** `nimbus.cloud.broadcast`
+
+---
+
+### `setstate`
+
+Set or clear a custom state label on a READY service. Custom states are arbitrary strings (e.g. `INGAME`, `WAITING`, `FULL`) used by game plugins and the SDK to signal slot availability.
+
+**Syntax:** `setstate <service> <state|clear>`
+
+```text title="Nimbus"
+nimbus » setstate BedWars-1 INGAME
+✓ Custom state on 'BedWars-1' set to 'INGAME'.
+
+nimbus » setstate BedWars-1 clear
+✓ Cleared custom state on 'BedWars-1'.
+```
+
+Use `clear` or `null` to remove a previously set custom state.
+
+**Tab completion:** Service names.
+
+**Permission:** `nimbus.cloud.setstate`
 
 ---
 

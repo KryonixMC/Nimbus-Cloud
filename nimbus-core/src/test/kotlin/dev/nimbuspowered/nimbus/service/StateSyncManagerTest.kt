@@ -303,4 +303,131 @@ class StateSyncManagerTest {
         // Non-special still uses default
         assertTrue(mgr.canonicalDir("regular").startsWith(tempDir.resolve("state")))
     }
+
+    // ── Additional: buildManifest edge cases ────────────────────────────────
+
+    @Test
+    fun `buildManifest on empty directory returns empty manifest`() {
+        val mgr = newManager()
+        // Create an empty canonical directory for the service
+        val dir = mgr.canonicalDir("empty-svc")
+        Files.createDirectories(dir)
+        val manifest = mgr.buildManifest("empty-svc")
+        assertTrue(manifest.files.isEmpty(), "Empty directory should produce empty manifest")
+    }
+
+    @Test
+    fun `buildManifest with excludes omits matching files`() {
+        val mgr = newManager()
+        seedCanonical(
+            mgr, "svc2",
+            mapOf(
+                "keep.txt" to "keep".toByteArray(),
+                "cache/data.bin" to "cache".toByteArray(),
+                "logs/server.log" to "log".toByteArray()
+            )
+        )
+        val manifest = mgr.buildManifest("svc2", excludes = listOf("cache/", "logs/"))
+        assertEquals(setOf("keep.txt"), manifest.files.keys, "Only keep.txt should remain after exclude")
+    }
+
+    // ── Additional: cleanupStaleStaging edge cases ───────────────────────────
+
+    @Test
+    fun `cleanupStaleStaging returns 0 when no stale dirs exist`() {
+        val mgr = newManager()
+        // State root is fresh (created by newManager), no *.incoming or *.old entries
+        val cleaned = mgr.cleanupStaleStaging()
+        assertEquals(0, cleaned, "Fresh manager with no stale dirs should return 0")
+    }
+
+    @Test
+    fun `cleanupStaleStaging uses extra roots when provided`() {
+        val mgr = newManager()
+        val extraRoot = tempDir.resolve("extra-root")
+        Files.createDirectories(extraRoot)
+        Files.createDirectories(extraRoot.resolve("dedicated-svc.incoming"))
+        Files.createDirectories(extraRoot.resolve("dedicated-svc.old"))
+
+        val cleaned = mgr.cleanupStaleStaging(extraRoots = listOf(extraRoot))
+        assertEquals(2, cleaned, "Two stale dirs in extra root should be cleaned")
+        assertFalse(Files.exists(extraRoot.resolve("dedicated-svc.incoming")))
+        assertFalse(Files.exists(extraRoot.resolve("dedicated-svc.old")))
+    }
+
+    // ── Additional: enforceQuota with 0 quota ────────────────────────────────
+
+    @Test
+    fun `enforceQuota with 0 quota does not throw even for very large values`() {
+        val mgr = newManager(quota = 0L) // 0 = unlimited
+        // Should never throw regardless of projected size
+        mgr.enforceQuota("svc", Long.MAX_VALUE)
+        mgr.enforceQuota("svc", 1_000_000_000L)
+    }
+
+    // ── Additional: listSyncServices ─────────────────────────────────────────
+
+    @Test
+    fun `listSyncServices returns empty when no services synced`() {
+        val mgr = newManager()
+        // Fresh manager — no canonical dirs, no in-flight locks, no stats
+        val services = mgr.listSyncServices()
+        assertTrue(services.isEmpty(), "Fresh manager should have no sync services")
+    }
+
+    // ── Additional: concurrent lock serialization ────────────────────────────
+
+    @Test
+    fun `concurrent tryAcquireLock for same service allows only one holder`() {
+        val mgr = newManager()
+        // Acquire on main thread
+        assertTrue(mgr.tryAcquireLock("concurrent-svc"))
+        assertTrue(mgr.isSyncInFlight("concurrent-svc"))
+
+        // Spin up N threads; none of them should be able to acquire
+        val acquired = java.util.concurrent.atomic.AtomicInteger(0)
+        val threads = (1..5).map {
+            Thread {
+                if (mgr.tryAcquireLock("concurrent-svc")) {
+                    acquired.incrementAndGet()
+                    mgr.releaseLock("concurrent-svc")
+                }
+            }
+        }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        assertEquals(0, acquired.get(), "No other thread should acquire while lock is held")
+
+        // Release and verify another thread can now acquire
+        mgr.releaseLock("concurrent-svc")
+        assertFalse(mgr.isSyncInFlight("concurrent-svc"))
+
+        val acquired2 = java.util.concurrent.atomic.AtomicBoolean(false)
+        val t = Thread {
+            if (mgr.tryAcquireLock("concurrent-svc")) {
+                acquired2.set(true)
+                mgr.releaseLock("concurrent-svc")
+            }
+        }
+        t.start()
+        t.join()
+        assertTrue(acquired2.get(), "Thread should acquire lock after it was released")
+    }
+
+    @Test
+    fun `tryAcquireLock for different services does not contend`() {
+        val mgr = newManager()
+        // Locking "svc-x" must not prevent locking "svc-y"
+        assertTrue(mgr.tryAcquireLock("svc-x"))
+        val acquiredY = java.util.concurrent.atomic.AtomicBoolean(false)
+        val t = Thread {
+            acquiredY.set(mgr.tryAcquireLock("svc-y"))
+            if (acquiredY.get()) mgr.releaseLock("svc-y")
+        }
+        t.start()
+        t.join()
+        assertTrue(acquiredY.get(), "Lock on svc-x must not block svc-y")
+        mgr.releaseLock("svc-x")
+    }
 }

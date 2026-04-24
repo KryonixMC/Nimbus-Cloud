@@ -77,9 +77,23 @@ The `apiToken` sent to game servers is a restricted **service token** (HMAC-deri
 
 ### AuthRequest
 
-Sent by the agent after connecting. Fields: `token`, `nodeName`, `maxMemory`, `maxServices`, `currentServices`, `agentVersion`, `os`, `arch`, `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`, `publicHost`, `runningServices`.
+Sent by the agent after connecting. Fields: `token`, `nodeName`, `maxMemory`, `maxServices`, `currentServices`, `agentVersion`, `os`, `arch`, `hostname`, `osVersion`, `cpuModel`, `availableProcessors`, `systemMemoryTotalMb`, `javaVersion`, `javaVendor`, `publicHost`, `runningServices`, `protocolVersion`.
 
 `publicHost` is the publicly reachable IP or hostname reported by the agent for player routing. `runningServices` is a list of services the agent was already managing before the (re-)connection, used during the controller's reconciliation window to avoid duplicate restarts.
+
+### Protocol version
+
+Both `AuthRequest` and `AuthResponse` carry an integer `protocolVersion`. The current value is exposed as the compile-time constant `ClusterMessage.CURRENT_PROTOCOL_VERSION` (in 0.13.0: `1`).
+
+During the handshake, the controller compares the agent's reported version to its own **before** checking the auth token. On mismatch, the controller replies with `AuthResponse(accepted = false, reason = "protocol version mismatch: agent=X, controller=Y", protocolVersion = <controller>)` and closes the WebSocket with `VIOLATED_POLICY`. The ordering is intentional: when both versions and tokens disagree, the operator sees the real cause (incompatible builds) instead of a misleading token error.
+
+The agent recognises a version-mismatch reject via a local compare of the advertised versions, logs a single ERROR, and **exits the reconnect loop immediately** -- no exponential backoff, no silent retry churn. Incompatible deployments fail loud and fast; the fix is to bring both controller and agent to matching Nimbus versions and restart.
+
+Both fields default to `1` on the wire. Combined with `clusterJson.ignoreUnknownKeys = true`, this preserves the rolling-upgrade path between 0.12.x and 0.13.0 nodes that don't yet emit the field.
+
+<Callout type="info">
+**When to bump `CURRENT_PROTOCOL_VERSION`.** Only when an existing `ClusterMessage` field changes semantics, is renamed, or is removed. Adding a new `@SerialName`'d message type, or adding a new optional field to an existing type with a sensible default, does **not** require a bump -- older peers ignore unknown keys and fall through to the default.
+</Callout>
 
 ### ServiceHeartbeat
 

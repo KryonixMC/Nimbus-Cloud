@@ -1,11 +1,11 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.console.CommandDispatcher
-import dev.nimbuspowered.nimbus.module.CommandCaller
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandCaller
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -49,7 +49,7 @@ fun Route.commandRoutes(dispatcher: CommandDispatcher) {
             val command = dispatcher.getCommand(name)
 
             if (command == null || command.permission.isEmpty()) {
-                call.respond(HttpStatusCode.NotFound, apiError("Command '$name' not found", ApiErrors.COMMAND_NOT_FOUND))
+                call.respond(HttpStatusCode.NotFound, apiError("Command '$name' not found", ApiError.COMMAND_NOT_FOUND))
                 return@post
             }
 
@@ -62,7 +62,7 @@ fun Route.commandRoutes(dispatcher: CommandDispatcher) {
                 if (!handled) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        apiError("Command '$name' does not support remote execution", ApiErrors.COMMAND_NOT_REMOTE)
+                        apiError("Command '$name' does not support remote execution", ApiError.COMMAND_NOT_REMOTE)
                     )
                     return@post
                 }

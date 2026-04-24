@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.ApiMessage
 import dev.nimbuspowered.nimbus.api.NimbusApi
 import dev.nimbuspowered.nimbus.api.apiError
@@ -24,11 +24,11 @@ fun Route.templateRoutes(
     get("/api/templates/{name}/download") {
         // C2 fix: reject when cluster token is blank (prevents unauthenticated downloads)
         if (clusterToken.isBlank()) {
-            return@get call.respond(HttpStatusCode.ServiceUnavailable, apiError("Cluster not configured", ApiErrors.SERVICE_UNAVAILABLE))
+            return@get call.respond(HttpStatusCode.ServiceUnavailable, apiError("Cluster not configured", ApiError.SERVICE_UNAVAILABLE))
         }
         val clientToken = call.queryParameters["token"] ?: ""
         if (!NimbusApi.timingSafeEquals(clientToken, clusterToken)) {
-            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
+            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiError.FORBIDDEN))
         }
 
         val templateName = call.parameters["name"]!!
@@ -36,7 +36,7 @@ fun Route.templateRoutes(
         val templateDir = templatesDir.resolve(templateName)
 
         if (!templateDir.toFile().exists() || !templateDir.toFile().isDirectory) {
-            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiErrors.NOT_FOUND))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiError.TEMPLATE_NOT_FOUND))
         }
 
         // Collect directories to include: group template + applicable global templates
@@ -65,11 +65,11 @@ fun Route.templateRoutes(
     // GET /api/templates/{name}/hash?software=PAPER — returns SHA-256 hash including global templates
     get("/api/templates/{name}/hash") {
         if (clusterToken.isBlank()) {
-            return@get call.respond(HttpStatusCode.ServiceUnavailable, apiError("Cluster not configured", ApiErrors.SERVICE_UNAVAILABLE))
+            return@get call.respond(HttpStatusCode.ServiceUnavailable, apiError("Cluster not configured", ApiError.SERVICE_UNAVAILABLE))
         }
         val clientToken = call.queryParameters["token"] ?: ""
         if (!NimbusApi.timingSafeEquals(clientToken, clusterToken)) {
-            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiErrors.FORBIDDEN))
+            return@get call.respond(HttpStatusCode.Unauthorized, apiError("Invalid token", ApiError.FORBIDDEN))
         }
 
         val templateName = call.parameters["name"]!!
@@ -77,7 +77,7 @@ fun Route.templateRoutes(
         val templateDir = templatesDir.resolve(templateName)
 
         if (!templateDir.toFile().exists()) {
-            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiErrors.NOT_FOUND))
+            return@get call.respond(HttpStatusCode.NotFound, apiError("Template '$templateName' not found", ApiError.TEMPLATE_NOT_FOUND))
         }
 
         val digest = java.security.MessageDigest.getInstance("SHA-256")

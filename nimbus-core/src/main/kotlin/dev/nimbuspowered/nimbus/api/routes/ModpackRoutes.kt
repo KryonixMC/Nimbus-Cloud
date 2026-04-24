@@ -1,6 +1,6 @@
 package dev.nimbuspowered.nimbus.api.routes
 
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.CreateGroupRequest
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.config.CurseForgeConfig
@@ -121,12 +121,12 @@ fun Route.modpackRoutes(
             Files.createDirectories(downloadDir)
 
             val resolvedPath = installer.resolve(request.source, downloadDir)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.MODPACK_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiError.MODPACK_NOT_FOUND))
 
             // Server pack ZIP (CurseForge-style)
             if (installer.isServerPack(resolvedPath)) {
                 val info = installer.getServerPackInfo(resolvedPath)
-                    ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+                    ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiError.MODPACK_INVALID))
                 return@post call.respond(ModpackInfoResponse(
                     name = info.name,
                     version = info.version,
@@ -141,7 +141,7 @@ fun Route.modpackRoutes(
 
             // Modrinth .mrpack
             val index = installer.parseIndex(resolvedPath)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.MODPACK_INVALID))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiError.MODPACK_INVALID))
 
             val info = installer.getInfo(index)
             call.respond(ModpackInfoResponse(
@@ -161,17 +161,17 @@ fun Route.modpackRoutes(
             val request = call.receive<ModpackImportRequest>()
 
             if (request.groupName.isBlank() || !request.groupName.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiError.VALIDATION_FAILED))
             }
             if (groupManager.getGroup(request.groupName) != null) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.groupName}' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '${request.groupName}' already exists", ApiError.GROUP_ALREADY_EXISTS))
             }
 
             val downloadDir = templatesDir.resolve(".modpack-cache")
             Files.createDirectories(downloadDir)
 
             val resolvedPath = installer.resolve(request.source, downloadDir)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiErrors.MODPACK_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Could not resolve modpack '${request.source}'", ApiError.MODPACK_NOT_FOUND))
 
             val templateName = request.groupName.lowercase()
             val templateDir = templatesDir.resolve(templateName)
@@ -188,7 +188,7 @@ fun Route.modpackRoutes(
 
             // Modrinth .mrpack path
             val index = installer.parseIndex(resolvedPath)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiErrors.MODPACK_INVALID))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid .mrpack file", ApiError.MODPACK_INVALID))
 
             val info = installer.getInfo(index)
 
@@ -253,15 +253,15 @@ fun Route.modpackRoutes(
             val rawFileName = call.request.queryParameters["fileName"] ?: "upload.zip"
 
             if (groupName.isBlank() || !groupName.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiError.VALIDATION_FAILED))
             }
             if (groupManager.getGroup(groupName) != null) {
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiError.GROUP_ALREADY_EXISTS))
             }
 
             // C3 fix: sanitize fileName to prevent path traversal
             val fileName = sanitizeFileName(rawFileName)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid file name", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid file name", ApiError.VALIDATION_FAILED))
 
             // Stream request body directly to disk — no memory buffering
             val uploadDir = templatesDir.resolve(".modpack-uploads")
@@ -270,7 +270,7 @@ fun Route.modpackRoutes(
 
             // Verify resolved path stays inside upload directory
             if (!uploadedZip.toFile().canonicalPath.startsWith(uploadDir.toFile().canonicalPath + java.io.File.separator)) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Path traversal detected", ApiErrors.PATH_TRAVERSAL))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Path traversal detected", ApiError.PATH_TRAVERSAL))
             }
 
             try {
@@ -286,7 +286,7 @@ fun Route.modpackRoutes(
                                 output.close()
                                 Files.deleteIfExists(uploadedZip)
                                 return@post call.respond(HttpStatusCode.PayloadTooLarge,
-                                    apiError("File too large (max ${maxUploadBytes / 1024 / 1024}MB)", ApiErrors.PAYLOAD_TOO_LARGE))
+                                    apiError("File too large (max ${maxUploadBytes / 1024 / 1024}MB)", ApiError.PAYLOAD_TOO_LARGE))
                             }
                         }
                     }
@@ -294,7 +294,7 @@ fun Route.modpackRoutes(
             } catch (e: Exception) {
                 Files.deleteIfExists(uploadedZip)
                 return@post call.respond(HttpStatusCode.InternalServerError,
-                    apiError("Upload failed: ${e.message}", ApiErrors.MODPACK_UPLOAD_FAILED))
+                    apiError("Upload failed: ${e.message}", ApiError.MODPACK_UPLOAD_FAILED))
             }
 
             val templateName = groupName.lowercase()
@@ -313,7 +313,7 @@ fun Route.modpackRoutes(
                 val index = installer.parseIndex(uploadedZip)
                 if (index == null) {
                     Files.deleteIfExists(uploadedZip)
-                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file — not a server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file — not a server pack ZIP or .mrpack", ApiError.MODPACK_INVALID))
                 }
                 val info = installer.getInfo(index)
 
@@ -352,7 +352,7 @@ fun Route.modpackRoutes(
                 ))
             } else {
                 Files.deleteIfExists(uploadedZip)
-                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiError.MODPACK_INVALID))
             }
         }
 
@@ -362,15 +362,15 @@ fun Route.modpackRoutes(
         post("upload/init") {
             val rawFileName = call.request.queryParameters["fileName"] ?: "upload.zip"
             val totalChunks = call.request.queryParameters["totalChunks"]?.toIntOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing totalChunks parameter", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing totalChunks parameter", ApiError.VALIDATION_FAILED))
 
             if (totalChunks < 1 || totalChunks > 100_000) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid totalChunks value", ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid totalChunks value", ApiError.VALIDATION_FAILED))
             }
 
             // C3 fix: sanitize fileName to prevent path traversal
             val fileName = sanitizeFileName(rawFileName)
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid file name", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid file name", ApiError.VALIDATION_FAILED))
 
             val uploadId = java.util.UUID.randomUUID().toString()
             val uploadDir = templatesDir.resolve(".modpack-uploads")
@@ -379,7 +379,7 @@ fun Route.modpackRoutes(
 
             // Verify resolved path stays inside upload directory
             if (!filePath.toFile().canonicalPath.startsWith(uploadDir.toFile().canonicalPath + java.io.File.separator)) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Path traversal detected", ApiErrors.PATH_TRAVERSAL))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Path traversal detected", ApiError.PATH_TRAVERSAL))
             }
 
             // Create empty file
@@ -405,13 +405,13 @@ fun Route.modpackRoutes(
         post("upload/chunk") {
             val uploadId = call.request.queryParameters["uploadId"] ?: ""
             val chunkIndex = call.request.queryParameters["index"]?.toIntOrNull()
-                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing index parameter", ApiErrors.VALIDATION_FAILED))
+                ?: return@post call.respond(HttpStatusCode.BadRequest, apiError("Missing index parameter", ApiError.VALIDATION_FAILED))
 
             val state = chunkedUploads[uploadId]
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiErrors.CHUNKED_UPLOAD_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiError.CHUNKED_UPLOAD_NOT_FOUND))
 
             if (chunkIndex < 0 || chunkIndex >= state.totalChunks) {
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid chunk index", ApiErrors.CHUNKED_UPLOAD_INVALID))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid chunk index", ApiError.CHUNKED_UPLOAD_INVALID))
             }
 
             // Chunks must arrive in order for simple file append
@@ -419,7 +419,7 @@ fun Route.modpackRoutes(
             val expectedIndex = state.receivedChunks.size
             if (chunkIndex != expectedIndex) {
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("Expected chunk $expectedIndex, got $chunkIndex. Chunks must be sent in order.", ApiErrors.CHUNKED_UPLOAD_INVALID))
+                    apiError("Expected chunk $expectedIndex, got $chunkIndex. Chunks must be sent in order.", ApiError.CHUNKED_UPLOAD_INVALID))
             }
 
             try {
@@ -435,7 +435,7 @@ fun Route.modpackRoutes(
                 state.receivedChunks.add(chunkIndex)
             } catch (e: Exception) {
                 return@post call.respond(HttpStatusCode.InternalServerError,
-                    apiError("Failed to write chunk: ${e.message}", ApiErrors.MODPACK_UPLOAD_FAILED))
+                    apiError("Failed to write chunk: ${e.message}", ApiError.MODPACK_UPLOAD_FAILED))
             }
 
             call.respond(ChunkedUploadStatus(
@@ -457,21 +457,21 @@ fun Route.modpackRoutes(
             val maxInstances = call.request.queryParameters["maxInstances"]?.toIntOrNull() ?: 2
 
             val state = chunkedUploads.remove(uploadId)
-                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiErrors.CHUNKED_UPLOAD_NOT_FOUND))
+                ?: return@post call.respond(HttpStatusCode.NotFound, apiError("Upload not found or expired", ApiError.CHUNKED_UPLOAD_NOT_FOUND))
 
             if (state.receivedChunks.size != state.totalChunks) {
                 Files.deleteIfExists(state.filePath)
                 return@post call.respond(HttpStatusCode.BadRequest,
-                    apiError("Upload incomplete: ${state.receivedChunks.size}/${state.totalChunks} chunks received", ApiErrors.CHUNKED_UPLOAD_INVALID))
+                    apiError("Upload incomplete: ${state.receivedChunks.size}/${state.totalChunks} chunks received", ApiError.CHUNKED_UPLOAD_INVALID))
             }
 
             if (groupName.isBlank() || !groupName.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
                 Files.deleteIfExists(state.filePath)
-                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiErrors.VALIDATION_FAILED))
+                return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid group name", ApiError.VALIDATION_FAILED))
             }
             if (groupManager.getGroup(groupName) != null) {
                 Files.deleteIfExists(state.filePath)
-                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiErrors.GROUP_ALREADY_EXISTS))
+                return@post call.respond(HttpStatusCode.Conflict, apiError("Group '$groupName' already exists", ApiError.GROUP_ALREADY_EXISTS))
             }
 
             val uploadedZip = state.filePath
@@ -490,7 +490,7 @@ fun Route.modpackRoutes(
                 val index = installer.parseIndex(uploadedZip)
                 if (index == null) {
                     Files.deleteIfExists(uploadedZip)
-                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file", ApiErrors.MODPACK_INVALID))
+                    return@post call.respond(HttpStatusCode.BadRequest, apiError("Invalid modpack file", ApiError.MODPACK_INVALID))
                 }
                 val info = installer.getInfo(index)
 
@@ -529,7 +529,7 @@ fun Route.modpackRoutes(
                 ))
             } else {
                 Files.deleteIfExists(uploadedZip)
-                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiErrors.MODPACK_INVALID))
+                call.respond(HttpStatusCode.BadRequest, apiError("Uploaded file is not a valid server pack ZIP or .mrpack", ApiError.MODPACK_INVALID))
             }
         }
     }
@@ -555,7 +555,7 @@ private suspend fun handleServerPackImport(
     val info = installer.getServerPackInfo(zipPath)
     if (info == null) {
         Files.deleteIfExists(zipPath)
-        return call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiErrors.MODPACK_INVALID))
+        return call.respond(HttpStatusCode.BadRequest, apiError("Could not analyze server pack", ApiError.MODPACK_INVALID))
     }
 
     // Extract all server files to template

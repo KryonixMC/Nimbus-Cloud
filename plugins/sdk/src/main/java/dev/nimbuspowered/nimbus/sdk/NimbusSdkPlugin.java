@@ -16,6 +16,10 @@ import org.bukkit.plugin.java.JavaPlugin;
  * <p>
  * Permission handling, chat rendering, and name tag management have been moved
  * to the NimbusPerms plugin (nimbus-perms module).
+ * <p><b>Not part of the public API:</b> this class is instantiated by the
+ * Bukkit/Paper server from {@code plugin.yml}. Plugin authors should not
+ * extend, subclass, or instantiate it. Use {@link Nimbus} for SDK
+ * interactions.
  */
 public class NimbusSdkPlugin extends JavaPlugin implements Listener {
 

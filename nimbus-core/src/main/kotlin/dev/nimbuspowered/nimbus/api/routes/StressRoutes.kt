@@ -1,7 +1,7 @@
 package dev.nimbuspowered.nimbus.api.routes
 
 import dev.nimbuspowered.nimbus.api.*
-import dev.nimbuspowered.nimbus.api.ApiErrors
+import dev.nimbuspowered.nimbus.api.ApiError
 import dev.nimbuspowered.nimbus.api.apiError
 import dev.nimbuspowered.nimbus.stress.StressTestManager
 import io.ktor.server.request.*
@@ -37,21 +37,21 @@ fun Route.stressRoutes(stressTestManager: StressTestManager) {
     post("/api/stress/start") {
         val req = call.receive<StressStartRequest>()
         if (req.players <= 0) {
-            call.respond(apiError("Player count must be positive", ApiErrors.INVALID_INPUT))
+            call.respond(apiError("Player count must be positive", ApiError.VALIDATION_FAILED))
             return@post
         }
         val started = stressTestManager.start(req.group, req.players, req.rampSeconds * 1000)
         if (started) {
             call.respond(ApiMessage(true, "Stress test started: ${req.players} players on ${req.group ?: "all groups"}"))
         } else {
-            call.respond(apiError("A stress test is already running or the target group is a proxy", ApiErrors.STRESS_ALREADY_RUNNING))
+            call.respond(apiError("A stress test is already running or the target group is a proxy", ApiError.STRESS_ALREADY_RUNNING))
         }
     }
 
     // POST /api/stress/stop — Stop the stress test
     post("/api/stress/stop") {
         if (!stressTestManager.isActive()) {
-            call.respond(apiError("No stress test is running", ApiErrors.STRESS_NOT_RUNNING))
+            call.respond(apiError("No stress test is running", ApiError.STRESS_NOT_RUNNING))
             return@post
         }
         stressTestManager.stop()
@@ -62,14 +62,14 @@ fun Route.stressRoutes(stressTestManager: StressTestManager) {
     post("/api/stress/ramp") {
         val req = call.receive<StressRampRequest>()
         if (req.players < 0) {
-            call.respond(apiError("Player count cannot be negative", ApiErrors.INVALID_INPUT))
+            call.respond(apiError("Player count cannot be negative", ApiError.VALIDATION_FAILED))
             return@post
         }
         val ramped = stressTestManager.ramp(req.players, req.durationSeconds * 1000)
         if (ramped) {
             call.respond(ApiMessage(true, "Ramping to ${req.players} players over ${req.durationSeconds}s"))
         } else {
-            call.respond(apiError("No stress test is running", ApiErrors.STRESS_NOT_RUNNING))
+            call.respond(apiError("No stress test is running", ApiError.STRESS_NOT_RUNNING))
         }
     }
 }

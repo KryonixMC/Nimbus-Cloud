@@ -3,7 +3,7 @@ package dev.nimbuspowered.nimbus.console.commands
 import dev.nimbuspowered.nimbus.console.Command
 import dev.nimbuspowered.nimbus.console.ConsoleFormatter
 import dev.nimbuspowered.nimbus.console.ConsoleOutput
-import dev.nimbuspowered.nimbus.module.CommandOutput
+import dev.nimbuspowered.nimbus.module.api.CommandOutput
 import dev.nimbuspowered.nimbus.service.ServerListPing
 import dev.nimbuspowered.nimbus.service.ServiceRegistry
 import dev.nimbuspowered.nimbus.service.ServiceState
@@ -15,6 +15,7 @@ class PlayersCommand(
     override val name = "players"
     override val description = "List all connected players across services"
     override val usage = "players [service]"
+    override val permission = "nimbus.cloud.players"
 
     private data class PlayerEntry(val playerName: String, val serviceName: String, val serverGroup: String)
 
