@@ -26,6 +26,18 @@ class PermissionManager(private val db: DatabaseManager) {
     private val players = mutableMapOf<String, PlayerEntry>() // UUID -> PlayerEntry
     private val tracks = mutableMapOf<String, PermissionTrack>()
 
+    private val resolver by lazy { PermissionResolver(groups, players) }
+    private val trackManager by lazy {
+        PermissionTrackManager(
+            tracks = tracks,
+            db = db,
+            groups = groups,
+            players = players,
+            setPlayerGroup = { uuid, name, groupName -> setPlayerGroup(uuid, name, groupName) },
+            removePlayerGroup = { uuid, groupName -> removePlayerGroup(uuid, groupName) }
+        )
+    }
+
     suspend fun init() {
         reload()
         ensureDefaultGroup()
@@ -35,7 +47,6 @@ class PermissionManager(private val db: DatabaseManager) {
         if (groups.isNotEmpty()) return
         logger.info("No permission groups found — creating default groups")
 
-        // Default group for all players
         val defaultGroup = PermissionGroup(
             name = "Default",
             default = true,
@@ -45,7 +56,6 @@ class PermissionManager(private val db: DatabaseManager) {
         groups[defaultGroup.name.lowercase()] = defaultGroup
         saveGroup(defaultGroup)
 
-        // Admin group with all permissions
         val adminGroup = PermissionGroup(
             name = "Admin",
             prefix = "&c[Admin] &7",
@@ -92,7 +102,6 @@ class PermissionManager(private val db: DatabaseManager) {
         groups.remove(group.name.lowercase())
 
         db.query {
-            // Delete contexts before permissions (FK dependency)
             val permIds = GroupPermissions.selectAll()
                 .where { GroupPermissions.groupId inSubQuery PermissionGroups.select(PermissionGroups.id).where { PermissionGroups.name.lowerCase() eq group.name.lowercase() } }
                 .map { it[GroupPermissions.id] }
@@ -105,7 +114,6 @@ class PermissionManager(private val db: DatabaseManager) {
             PlayerGroupContexts.deleteWhere { PlayerGroupContexts.groupName.lowerCase() eq group.name.lowercase() }
         }
 
-        // Remove group from in-memory player cache
         players.values.forEach {
             it.groups.removeAll { g -> g.equals(name, ignoreCase = true) }
             it.groupContexts.remove(name.lowercase())
@@ -117,16 +125,12 @@ class PermissionManager(private val db: DatabaseManager) {
         val group = getGroup(groupName) ?: throw IllegalArgumentException("Group '$groupName' not found")
 
         if (context.server == null && context.world == null && context.expiresAt == null) {
-            // Global permission — always active
             if (permission !in group.permissions) {
                 group.permissions.add(permission)
             }
-            // If it was previously contextual, promote to global
             group.contextualPermissions.remove(permission)
             saveGroup(group)
         } else {
-            // Contextual permission — only active when context matches
-            // Remove from global list (scoped overrides global)
             group.permissions.remove(permission)
             val contexts = group.contextualPermissions.getOrPut(permission) { mutableListOf() }
             if (contexts.none { it == context }) {
@@ -136,13 +140,15 @@ class PermissionManager(private val db: DatabaseManager) {
         }
     }
 
-    /**
-     * Renames a permission node in every group (global + contextual).
-     * Idempotent: if no group has [old], returns an empty report.
-     * If a group already has [new] alongside [old], the duplicate is
-     * deduped (old removed, new kept, contexts merged).
-     * Also rewrites negated variants: "-old" → "-new".
-     */
+    suspend fun removePermission(groupName: String, permission: String) {
+        val group = getGroup(groupName) ?: throw IllegalArgumentException("Group '$groupName' not found")
+        val removedGlobal = group.permissions.remove(permission)
+        val removedContextual = group.contextualPermissions.remove(permission) != null
+        if (removedGlobal || removedContextual) {
+            saveGroup(group)
+        }
+    }
+
     suspend fun renamePermissionInAllGroups(old: String, new: String): PermissionRenameReport {
         validatePermission(new)
         val updatedGroups = mutableListOf<String>()
@@ -185,15 +191,6 @@ class PermissionManager(private val db: DatabaseManager) {
             }
         }
         return PermissionRenameReport(old, new, updatedGroups, total)
-    }
-
-    suspend fun removePermission(groupName: String, permission: String) {
-        val group = getGroup(groupName) ?: throw IllegalArgumentException("Group '$groupName' not found")
-        val removedGlobal = group.permissions.remove(permission)
-        val removedContextual = group.contextualPermissions.remove(permission) != null
-        if (removedGlobal || removedContextual) {
-            saveGroup(group)
-        }
     }
 
     suspend fun setDefault(groupName: String, default: Boolean) {
@@ -327,7 +324,6 @@ class PermissionManager(private val db: DatabaseManager) {
             }
         }
 
-        // Auto-assign new players to the default group
         if (isNew) {
             val defaultGroup = getDefaultGroup()
             if (defaultGroup != null) {
@@ -346,7 +342,6 @@ class PermissionManager(private val db: DatabaseManager) {
             entry.groups.add(groupName)
         }
 
-        // Store context in memory if provided
         if (context.server != null || context.world != null || context.expiresAt != null) {
             val contexts = entry.groupContexts.getOrPut(groupName.lowercase()) { mutableListOf() }
             if (contexts.none { it == context }) {
@@ -357,7 +352,6 @@ class PermissionManager(private val db: DatabaseManager) {
         players[uuid] = entry.copy(name = playerName)
 
         db.query {
-            // Ensure player exists
             val exists = Players.selectAll().where { Players.uuid eq uuid }.count() > 0
             if (exists) {
                 Players.update({ Players.uuid eq uuid }) { it[name] = playerName }
@@ -367,7 +361,6 @@ class PermissionManager(private val db: DatabaseManager) {
                     it[name] = playerName
                 }
             }
-            // Add group assignment (ignore if duplicate)
             val alreadyAssigned = PlayerGroups.selectAll().where {
                 (PlayerGroups.playerUuid eq uuid) and (PlayerGroups.groupName.lowerCase() eq groupName.lowercase())
             }.count() > 0
@@ -378,7 +371,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Store context if any
             if (context.server != null || context.world != null || context.expiresAt != null) {
                 PlayerGroupContexts.insert {
                     it[PlayerGroupContexts.playerUuid] = uuid
@@ -406,248 +398,51 @@ class PermissionManager(private val db: DatabaseManager) {
         }
     }
 
-    // ── Permission Resolution ───────────────────────────────────
+    // ── Permission Resolution (delegated to PermissionResolver) ─
 
-    /**
-     * Resolves the effective permissions for a player, filtered by optional server/world context.
-     *
-     * - Global permissions (no context) are always included.
-     * - Contextual permissions are included only when the context matches.
-     * - Player group assignments with contexts are only active when matching.
-     * - Expired contexts are excluded.
-     */
-    fun getEffectivePermissions(uuid: String, server: String? = null, world: String? = null): Set<String> {
-        val result = mutableSetOf<String>()
-        val negated = mutableSetOf<String>()
-        val now = Instant.now()
+    fun getEffectivePermissions(uuid: String, server: String? = null, world: String? = null): Set<String> =
+        resolver.getEffectivePermissions(uuid, server, world)
 
-        getDefaultGroup()?.let { collectPermissionsWithContext(it, result, negated, mutableSetOf(), server, world, now) }
+    fun hasPermission(uuid: String, permission: String, server: String? = null, world: String? = null): Boolean =
+        resolver.hasPermission(uuid, permission, server, world)
 
-        val entry = players[uuid]
-        if (entry != null) {
-            for (groupName in entry.groups) {
-                val group = getGroup(groupName) ?: continue
-                // Check if this player-group assignment has context restrictions
-                val contexts = entry.groupContexts[groupName.lowercase()]
-                if (contexts != null && contexts.isNotEmpty()) {
-                    // Scoped assignment: only active if at least one context matches
-                    if (contexts.none { ctx -> contextMatches(ctx, server, world, now) }) continue
-                }
-                collectPermissionsWithContext(group, result, negated, mutableSetOf(), server, world, now)
-            }
-        }
+    fun checkPermission(uuid: String, permission: String, server: String? = null, world: String? = null): PermissionDebugResult =
+        resolver.checkPermission(uuid, permission, server, world)
 
-        result.removeAll(negated)
-        return result
-    }
+    fun getPlayerDisplay(uuid: String): PlayerDisplay =
+        resolver.getPlayerDisplay(uuid)
 
-    fun hasPermission(uuid: String, permission: String, server: String? = null, world: String? = null): Boolean {
-        val effective = getEffectivePermissions(uuid, server, world)
-        return matchesPermission(effective, permission)
-    }
+    data class PlayerDisplay(
+        val prefix: String,
+        val suffix: String,
+        val groupName: String,
+        val priority: Int
+    )
 
-    // ── Permission Debug ────────────────────────────────────────
-
-    fun checkPermission(uuid: String, permission: String, server: String? = null, world: String? = null): PermissionDebugResult {
-        val chain = mutableListOf<DebugStep>()
-        val entry = players[uuid]
-        val defaultGroup = getDefaultGroup()
-        val now = Instant.now()
-
-        // Collect debug info from default group
-        if (defaultGroup != null) {
-            collectDebugStepsWithContext(defaultGroup, permission, chain, mutableSetOf(), "default", server, world, now)
-        }
-
-        // Collect debug info from player's groups
-        if (entry != null) {
-            for (groupName in entry.groups) {
-                val group = getGroup(groupName) ?: continue
-                // Check group context
-                val contexts = entry.groupContexts[groupName.lowercase()]
-                if (contexts != null && contexts.isNotEmpty()) {
-                    if (contexts.none { ctx -> contextMatches(ctx, server, world, now) }) {
-                        chain.add(DebugStep(
-                            source = groupName,
-                            permission = "(group inactive — context does not match)",
-                            type = "context-filtered",
-                            granted = false
-                        ))
-                        continue
-                    }
-                }
-                collectDebugStepsWithContext(group, permission, chain, mutableSetOf(), "assigned", server, world, now)
-            }
-        }
-
-        val effective = getEffectivePermissions(uuid, server, world)
-        val result = matchesPermission(effective, permission)
-
-        val reason = if (chain.isEmpty()) {
-            if (result) "Granted (no specific matching node found)" else "Denied — no matching permission node"
-        } else {
-            val decisive = chain.lastOrNull { it.granted != result }?.let { chain.last() } ?: chain.last()
-            if (result) {
-                "Granted by group '${decisive.source}' via ${decisive.type} match on '${decisive.permission}'"
-            } else {
-                val negatedStep = chain.find { !it.granted }
-                if (negatedStep != null) {
-                    "Denied — negated by '${negatedStep.permission}' in group '${negatedStep.source}'"
-                } else {
-                    "Denied — no matching permission node"
-                }
-            }
-        }
-
-        return PermissionDebugResult(
-            permission = permission,
-            result = result,
-            reason = reason,
-            chain = chain
+    suspend fun updateGroupDisplay(groupName: String, prefix: String?, suffix: String?, priority: Int?) {
+        val group = getGroup(groupName) ?: throw IllegalArgumentException("Group '$groupName' not found")
+        groups[group.name.lowercase()] = group.copy(
+            prefix = prefix ?: group.prefix,
+            suffix = suffix ?: group.suffix,
+            priority = priority ?: group.priority
         )
+        saveGroup(groups[group.name.lowercase()]!!)
     }
 
-    private fun collectDebugStepsWithContext(
-        group: PermissionGroup,
-        permission: String,
-        chain: MutableList<DebugStep>,
-        visited: MutableSet<String>,
-        assignmentType: String,
-        server: String?,
-        world: String?,
-        now: Instant
-    ) {
-        if (group.name.lowercase() in visited) return
-        visited.add(group.name.lowercase())
+    // ── Tracks (delegated to PermissionTrackManager) ─────────────
 
-        // Check parents first (inherited)
-        for (parentName in group.parents) {
-            val parent = getGroup(parentName) ?: continue
-            collectDebugStepsWithContext(parent, permission, chain, visited, "inherited", server, world, now)
-        }
+    fun getAllTracks(): List<PermissionTrack> = trackManager.getAllTracks()
 
-        // Check global permissions
-        for (perm in group.permissions) {
-            addDebugMatch(perm, permission, group.name, assignmentType, chain)
-        }
+    fun getTrack(name: String): PermissionTrack? = trackManager.getTrack(name)
 
-        // Check contextual permissions
-        for ((perm, contexts) in group.contextualPermissions) {
-            if (contexts.any { contextMatches(it, server, world, now) }) {
-                addDebugMatch(perm, permission, group.name, assignmentType, chain)
-            }
-        }
-    }
+    suspend fun createTrack(name: String, trackGroups: List<String>): PermissionTrack =
+        trackManager.createTrack(name, trackGroups)
 
-    private fun addDebugMatch(perm: String, permission: String, groupName: String, assignmentType: String, chain: MutableList<DebugStep>) {
-        val isNegated = perm.startsWith("-")
-        val actualPerm = if (isNegated) perm.removePrefix("-") else perm
+    suspend fun deleteTrack(name: String) = trackManager.deleteTrack(name)
 
-        val matches = actualPerm == permission ||
-                actualPerm == "*" ||
-                (actualPerm.endsWith(".*") && permission.startsWith(actualPerm.removeSuffix(".*")))
+    suspend fun promote(uuid: String, trackName: String): String? = trackManager.promote(uuid, trackName)
 
-        if (matches) {
-            val type = when {
-                isNegated -> "negated"
-                assignmentType == "inherited" -> "inherited"
-                actualPerm == permission -> "exact"
-                else -> "wildcard"
-            }
-            chain.add(DebugStep(
-                source = groupName,
-                permission = perm,
-                type = type,
-                granted = !isNegated
-            ))
-        }
-    }
-
-    // ── Tracks ──────────────────────────────────────────────────
-
-    fun getAllTracks(): List<PermissionTrack> = tracks.values.toList()
-
-    fun getTrack(name: String): PermissionTrack? =
-        tracks.values.find { it.name.equals(name, ignoreCase = true) }
-
-    suspend fun createTrack(name: String, trackGroups: List<String>): PermissionTrack {
-        require(getTrack(name) == null) { "Track '$name' already exists" }
-        require(trackGroups.size >= 2) { "Track must have at least 2 groups" }
-        for (g in trackGroups) {
-            getGroup(g) ?: throw IllegalArgumentException("Group '$g' not found")
-        }
-
-        val track = PermissionTrack(name = name, groups = trackGroups)
-        tracks[name.lowercase()] = track
-
-        db.query {
-            PermissionTracks.insert {
-                it[PermissionTracks.name] = name
-                it[groups] = Json.encodeToString(trackGroups)
-            }
-        }
-
-        return track
-    }
-
-    suspend fun deleteTrack(name: String) {
-        val track = getTrack(name) ?: throw IllegalArgumentException("Track '$name' not found")
-        tracks.remove(track.name.lowercase())
-
-        db.query {
-            PermissionTracks.deleteWhere { PermissionTracks.name.lowerCase() eq name.lowercase() }
-        }
-    }
-
-    suspend fun promote(uuid: String, trackName: String): String? {
-        val track = getTrack(trackName) ?: throw IllegalArgumentException("Track '$trackName' not found")
-        val entry = players[uuid] ?: throw IllegalArgumentException("Player not found")
-
-        // Find the highest group the player has on this track
-        var currentIndex = -1
-        for ((i, groupName) in track.groups.withIndex()) {
-            if (entry.groups.any { it.equals(groupName, ignoreCase = true) }) {
-                currentIndex = i
-            }
-        }
-
-        if (currentIndex >= track.groups.size - 1) return null // already at top
-
-        val newGroup = track.groups[currentIndex + 1]
-
-        // Remove current track group if any
-        if (currentIndex >= 0) {
-            removePlayerGroup(uuid, track.groups[currentIndex])
-        }
-
-        // Add new group
-        setPlayerGroup(uuid, entry.name, newGroup)
-        return newGroup
-    }
-
-    suspend fun demote(uuid: String, trackName: String): String? {
-        val track = getTrack(trackName) ?: throw IllegalArgumentException("Track '$trackName' not found")
-        val entry = players[uuid] ?: throw IllegalArgumentException("Player not found")
-
-        // Find the highest group the player has on this track
-        var currentIndex = -1
-        for ((i, groupName) in track.groups.withIndex()) {
-            if (entry.groups.any { it.equals(groupName, ignoreCase = true) }) {
-                currentIndex = i
-            }
-        }
-
-        if (currentIndex <= 0) return null // already at bottom or not on track
-
-        val newGroup = track.groups[currentIndex - 1]
-
-        // Remove current track group
-        removePlayerGroup(uuid, track.groups[currentIndex])
-
-        // Add new group
-        setPlayerGroup(uuid, entry.name, newGroup)
-        return newGroup
-    }
+    suspend fun demote(uuid: String, trackName: String): String? = trackManager.demote(uuid, trackName)
 
     // ── Temporary Permission Cleanup ────────────────────────────
 
@@ -660,7 +455,6 @@ class PermissionManager(private val db: DatabaseManager) {
         var cleaned = 0
 
         db.query {
-            // Clean expired group permission contexts
             val expiredPermContexts = GroupPermissionContexts.selectAll()
                 .where { (GroupPermissionContexts.expiresAt.isNotNull()) and (GroupPermissionContexts.expiresAt less now) }
                 .map { it[GroupPermissionContexts.id] }
@@ -669,7 +463,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 cleaned++
             }
 
-            // Clean expired player group contexts
             val expiredPlayerContexts = PlayerGroupContexts.selectAll()
                 .where { (PlayerGroupContexts.expiresAt.isNotNull()) and (PlayerGroupContexts.expiresAt less now) }
                 .map { it[PlayerGroupContexts.id] }
@@ -680,7 +473,6 @@ class PermissionManager(private val db: DatabaseManager) {
         }
 
         if (cleaned > 0) {
-            // Reload to sync in-memory state with DB
             reload()
             logger.info("Cleaned up {} expired permission context(s)", cleaned)
         }
@@ -727,118 +519,6 @@ class PermissionManager(private val db: DatabaseManager) {
         }
     }
 
-    // ── Display (Prefix/Suffix) ──────────────────────────────────
-
-    fun getPlayerDisplay(uuid: String): PlayerDisplay {
-        val entry = players[uuid]
-        val playerGroups = entry?.groups?.mapNotNull { getGroup(it) } ?: emptyList()
-        val defaultGroup = getDefaultGroup()
-
-        val allGroups = if (playerGroups.isEmpty() && defaultGroup != null) {
-            listOf(defaultGroup)
-        } else {
-            playerGroups
-        }
-
-        val bestGroup = allGroups.maxByOrNull { it.priority } ?: defaultGroup
-
-        return PlayerDisplay(
-            prefix = bestGroup?.prefix ?: "",
-            suffix = bestGroup?.suffix ?: "",
-            groupName = bestGroup?.name ?: "",
-            priority = bestGroup?.priority ?: 0
-        )
-    }
-
-    data class PlayerDisplay(
-        val prefix: String,
-        val suffix: String,
-        val groupName: String,
-        val priority: Int
-    )
-
-    suspend fun updateGroupDisplay(groupName: String, prefix: String?, suffix: String?, priority: Int?) {
-        val group = getGroup(groupName) ?: throw IllegalArgumentException("Group '$groupName' not found")
-        groups[group.name.lowercase()] = group.copy(
-            prefix = prefix ?: group.prefix,
-            suffix = suffix ?: group.suffix,
-            priority = priority ?: group.priority
-        )
-        saveGroup(groups[group.name.lowercase()]!!)
-    }
-
-    // ── Context Matching ────────────────────────────────────────
-
-    /**
-     * Checks if a permission context matches the current server/world.
-     *
-     * Rules:
-     * - If context.server is set and server is provided, they must match (case-insensitive)
-     * - If context.server is set but no server is specified by caller, context still matches (backward compat)
-     * - If context.world is set and world is provided, they must match (case-insensitive)
-     * - If context.expiresAt is set and has passed, context does NOT match
-     * - If context field is null, it matches any value (no restriction)
-     */
-    private fun contextMatches(ctx: PermissionContext, server: String?, world: String?, now: Instant): Boolean {
-        // Check expiry first
-        if (ctx.expiresAt != null) {
-            try {
-                if (Instant.parse(ctx.expiresAt).isBefore(now)) return false
-            } catch (_: Exception) {
-                return false
-            }
-        }
-        // Check server match
-        if (ctx.server != null && server != null && !ctx.server.equals(server, ignoreCase = true)) return false
-        // Check world match
-        if (ctx.world != null && world != null && !ctx.world.equals(world, ignoreCase = true)) return false
-        return true
-    }
-
-    // ── Internal ────────────────────────────────────────────────
-
-    /**
-     * Collects permissions from a group and its parents, respecting context filtering.
-     * Global permissions are always included. Contextual permissions only when the context matches.
-     */
-    private fun collectPermissionsWithContext(
-        group: PermissionGroup,
-        granted: MutableSet<String>,
-        negated: MutableSet<String>,
-        visited: MutableSet<String>,
-        server: String?,
-        world: String?,
-        now: Instant
-    ) {
-        if (group.name.lowercase() in visited) return
-        visited.add(group.name.lowercase())
-
-        for (parentName in group.parents) {
-            val parent = getGroup(parentName) ?: continue
-            collectPermissionsWithContext(parent, granted, negated, visited, server, world, now)
-        }
-
-        // Global permissions — always active
-        for (perm in group.permissions) {
-            if (perm.startsWith("-")) {
-                negated.add(perm.removePrefix("-"))
-            } else {
-                granted.add(perm)
-            }
-        }
-
-        // Contextual permissions — only active when at least one context matches
-        for ((perm, contexts) in group.contextualPermissions) {
-            if (contexts.any { contextMatches(it, server, world, now) }) {
-                if (perm.startsWith("-")) {
-                    negated.add(perm.removePrefix("-"))
-                } else {
-                    granted.add(perm)
-                }
-            }
-        }
-    }
-
     companion object {
         private val PERMISSION_PATTERN = Regex("^-?[a-zA-Z0-9_.#*-]+$")
 
@@ -882,7 +562,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 val groupId = row[PermissionGroups.id]
                 val name = row[PermissionGroups.name]
 
-                // Load all permissions with their context info
                 val allPermissions = GroupPermissions.selectAll()
                     .where { GroupPermissions.groupId eq groupId }
                     .map { it[GroupPermissions.id].value to it[GroupPermissions.permission] }
@@ -945,7 +624,6 @@ class PermissionManager(private val db: DatabaseManager) {
                     .map { it[PlayerGroups.groupName] }
                     .toMutableList()
 
-                // Load group contexts
                 val groupContexts = mutableMapOf<String, MutableList<PermissionContext>>()
                 PlayerGroupContexts.selectAll()
                     .where { PlayerGroupContexts.playerUuid eq uuid }
@@ -1013,7 +691,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Delete existing contexts before permissions (FK dependency)
             val existingPermIds = GroupPermissions.selectAll()
                 .where { GroupPermissions.groupId eq groupId }
                 .map { it[GroupPermissions.id] }
@@ -1021,10 +698,8 @@ class PermissionManager(private val db: DatabaseManager) {
                 GroupPermissionContexts.deleteWhere { GroupPermissionContexts.groupPermissionId eq permId }
             }
 
-            // Replace permissions
             GroupPermissions.deleteWhere { GroupPermissions.groupId eq groupId }
 
-            // Save global permissions (no contexts)
             for (perm in group.permissions) {
                 GroupPermissions.insert {
                     it[GroupPermissions.groupId] = groupId
@@ -1032,7 +707,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Save contextual permissions with their contexts
             for ((perm, contexts) in group.contextualPermissions) {
                 val permId = GroupPermissions.insertAndGetId {
                     it[GroupPermissions.groupId] = groupId
@@ -1048,7 +722,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Replace parents
             GroupParents.deleteWhere { GroupParents.groupId eq groupId }
             for (parent in group.parents) {
                 GroupParents.insert {
@@ -1057,7 +730,6 @@ class PermissionManager(private val db: DatabaseManager) {
                 }
             }
 
-            // Replace meta
             GroupMeta.deleteWhere { GroupMeta.groupId eq groupId }
             for ((key, value) in group.meta) {
                 GroupMeta.insert {
