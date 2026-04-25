@@ -26,68 +26,54 @@ These shape what gets built and what gets cut:
 - **Operator autonomy** — Self-hosted, no phone-home, no telemetry, no vendor lock-in. Your infrastructure, your data
 
 <Callout type="info">
-  Nimbus follows [Semantic Versioning](https://semver.org/). The API is not yet stable — breaking changes are possible before 1.0. See the [Changelog](/docs/project/changelog) for detailed release history.
+  Nimbus 1.0 is released. The REST API is now stable — breaking changes only in major versions. See [API Stability](/docs/reference/api-stability) for the full policy and [Changelog](/docs/project/changelog) for release history.
 </Callout>
 
 ---
 
-## Now — Current Focus
+## Now — Post-1.0 Focus
 
-What's actively being worked on or is next in the queue. Priorities shift as the project grows — expect this section to evolve between releases rather than line up with a specific version number.
+Nimbus 1.0 is stable. The focus now shifts from core hardening to ecosystem depth, operator ergonomics, and community growth. Priorities shift as the project evolves — expect this section to evolve between releases.
 
-### Operator-Facing Features
+### Operator-Facing Modules
 
-The core engine, cluster system, and module framework are feature-complete for most use cases, so the next layer of work is what operators actually reach for day-to-day: moderation tooling, asset distribution, player-visible polish. Recent first-party modules (Punishments, Resource Packs) sit in this category, and more will follow wherever real networks hit a gap.
-
-| Goal | Why it matters |
-|------|----------------|
-| **Fill in operator workflows** | Things every network needs but nobody should have to glue together from third-party plugins — reports/appeals, chat filtering, staff tooling, analytics. Each lands as its own module so operators can opt in. Punishments, resource packs, and dashboard auth have already shipped |
-| **Dashboard parity + depth** | Every console workflow should have a first-class dashboard equivalent. Not "a UI for the API", but the thing operators reach for first |
-| **Multi-user dashboard maturity** | v0.11 shipped the auth core — next is operational depth: audit-log view of auth events, admin-facing user management, per-user API tokens, configurable session TTL per group, and webhook delivery for magic links (Discord / email) alongside the in-game path |
-
-### Stabilization
-
-Making what's already shipped rock-solid under real workloads. This work competes for attention with new features and generally wins when the two collide.
+The core engine, module framework, and first-party modules (Punishments, Resource Packs, Backups, Auth, Docker) are stable. The next layer is what networks reach for daily but currently glue together from third-party plugins:
 
 | Goal | Why it matters |
 |------|----------------|
-| **Dashboard → BETA** | The web dashboard is currently ALPHA. Stabilize the UX, fix edge cases, and reach a state where operators can rely on it daily |
-| **Documentation completeness** | Several guides are thin or missing (advanced cluster topologies, backup strategies, migration from CloudNet/SimpleCloud). Docs need to match the feature set |
-| **Real-world deployment feedback** | Run Nimbus on production networks, collect operator pain points, and fix what actually breaks — not what we imagine might break |
-| **Error messages & diagnostics** | When something goes wrong, the operator should know *what* and *why* without reading source code. Better error context, actionable suggestions, diagnostic commands |
+| **Staff tooling module** | Reports, appeals, staff chat, infraction history — the operational layer above raw punishments. Every network needs it; nobody should build it from scratch |
+| **Analytics module** | Player session stats, minigame leaderboards, network health trends. Nimbus already has the data pipeline (player events, metrics, audit log) — a stats module aggregates it into queryable form |
+| **Chat module** | Cross-server chat channels, private messages, chat filtering. Complements the existing mute enforcement in the Punishments module |
+
+### Dashboard
+
+| Goal | Why it matters |
+|------|----------------|
+| **Dashboard → stable** | Move from beta to a stable channel once operator workflows are covered end-to-end and edge cases are resolved |
+| **Per-user API tokens** | Operators need scoped tokens for CI/CD and third-party integrations without exposing the master key |
+| **Auth event audit view** | Dashboard page surfacing login events, session history, and failed attempts from the audit log |
 
 ### Community & Ecosystem
 
 | Goal | Why it matters |
 |------|----------------|
-| **Module developer experience** | The Module API (`nimbus-module-api`) needs better documentation, examples, and a published Maven artifact so third-party developers can build modules |
-| **Migration guides** | Operators coming from CloudNet or SimpleCloud need a clear path. Concept mapping, config translation, step-by-step guides |
-| **Community module registry** | A way for operators to discover and share community-built modules beyond the built-in ones |
+| **Published Maven artifact for Module API** | `nimbus-module-api` on Maven Central so third-party module authors don't need a local JAR or GitHub Packages setup |
+| **Community module registry** | Discovery page for community-built modules — README, version matrix, install command |
+| **Migration guide depth** | CloudNet and SimpleCloud guides exist; expanding them with worked examples and gotchas from real migrations |
 
 ---
 
-## Next — Path to 1.0
+## Next — Path to 2.0
 
-What needs to be true before Nimbus can call itself stable. These are **outcomes**, not a feature list — the specific implementation may change.
+Bigger architectural work that depends on community demand and real-world scale data. These are directions, not commitments.
 
-### Stable API Contract
+### Cluster-Aware Backups
 
-The REST API (currently v0.2) needs a stability guarantee. Operators and tool developers need confidence that their integrations won't break on minor updates.
+Stream tar+zstd archives from agent nodes to the controller. Phase 1 (0.9.1) ships local-only; agent-node services are skipped with `PARTIAL` status. Design notes are parked in the GitHub issue tracker and will be revived when multi-node users surface the need.
 
-- Versioned API with deprecation policy
-- Published OpenAPI/Swagger spec
-- Breaking changes only on major versions
+### Agent-Node Docker Support
 
-### Operational Confidence
-
-Operators running Nimbus in production need to trust that it handles failure gracefully and recovers without intervention.
-
-- Comprehensive integration test suite covering lifecycle, scaling, cluster failover
-- Chaos testing: random service kills, network partitions, disk full scenarios
-- Documented backup and disaster recovery procedures
-- Upgrade path testing (can you go from 0.8 → 1.0 without data loss?)
-- **Cluster-aware backups** — stream tar+zstd archives from agent nodes to the controller. Phase 1 of the backup module (0.9.1) ships local-only; agent-node services are currently skipped with `PARTIAL` status. Design notes are parked in the GitHub issue tracker and will be revived when real multi-node users surface the need
-- **Agent-node Docker support** — the Docker module (0.10.0) ships controller-only; agents still run bare processes. Needs a small cluster protocol tweak so agents can report container runtime info in heartbeats. Tracked for a follow-up phase alongside pre-built image support and Windows named-pipe sockets
+The Docker module (0.10.0) is controller-only; agents still run bare processes. Needs a small cluster protocol tweak so agents can report container runtime info in heartbeats. Tracked alongside pre-built image support and Windows named-pipe sockets.
 
 ### Performance Baselines
 
@@ -96,14 +82,6 @@ Quantified performance so operators can capacity-plan:
 - Published benchmarks: startup time, scaling latency, API throughput, memory overhead per service
 - Performance regression tests in CI
 - Tuning guide for large networks (500+ services, 10+ nodes)
-
-### Polish
-
-The kind of work that separates "it works" from "it's good":
-
-- Consistent error handling across all console commands and API endpoints
-- Configuration validation with helpful messages on every field
-- Graceful handling of every edge case found in real deployments
 
 ---
 
@@ -140,6 +118,10 @@ For detailed release notes, see the [Changelog](/docs/project/changelog).
 
 | Version | Date | Theme |
 |---------|------|-------|
+| **v1.0.0** | April 24, 2026 | First stable release — API stability guarantee, `strict_config` default flipped to `true`, deprecated shims removed, all 1.0-readiness items resolved |
+| **v0.14.0** | April 24, 2026 | Cleanup — deprecated module API type aliases, `ApiErrors` compat facade, and `nimbus.players` permission node all removed |
+| **v0.13.0** | April 21, 2026 | API stabilization — strict TOML validation, cluster protocol version handshake, module API package reorganization, `ApiError` enum, SDK surface freeze, full permission registry |
+| **v0.12.0** | April 20, 2026 | Production hardening — cgroup v2 managed sandbox, startup crash diagnosis, five new Prometheus metrics, structured reload report, opt-in JSON logging, hard-fail on unknown server versions |
 | **v0.11.0** | April 19, 2026 | Auth module — dashboard gains real multi-user login (MC-account 6-digit code, magic link, WebAuthn/passkeys, TOTP 2FA + recovery codes) with `nimbus.dashboard.*` permission tree via the Perms module; API tokens keep working as implicit admin. Module-owned plugins co-locate next to their modules on disk. Dashboard rewrites the login screen as a wizard and ships a `/profile` section |
 | **v0.10.0** | April 17, 2026 | Docker module — opt-in container backend per group/dedicated, resource limits, daemon doctor check, dashboard module page + group toggle + service badge; new `LocalServiceHandleFactory` + `ServiceMemorySource` extension points |
 | **v0.9.1** | April 15, 2026 | Backup module — scheduled tar+zstd snapshots with GFS retention, native multi-threaded zstd, SHA-256 manifests, live TOML config editing, full dashboard editor |

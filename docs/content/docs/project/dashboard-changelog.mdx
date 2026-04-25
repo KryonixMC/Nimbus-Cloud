@@ -13,6 +13,18 @@ The Nimbus Web Dashboard is versioned independently of the controller, so its UI
 
 ---
 
+## [1.0.0-stable.1] — 2026-04-25
+
+**Controller compatibility:** `1.0.0`
+
+Visual polish for the stable release: the login page background is upgraded from the hand-rolled SVG pixel sky to real layered pixel-art assets, with separate day and night themes.
+
+### Changed
+
+- **Layered pixel-art login background.** Replaces the `<PixelSky />` SVG component with `<LoginBackground />`, which composites multiple transparent PNG layers from `/public/backgrounds/sky-light/` (3 layers, daytime) and `/public/backgrounds/sky-dark/` (6 layers, night) depending on the active colour scheme. Per-layer opacity tuning in dark mode — upper cloud layer (layer 3) at 0.35 opacity so the moon remains visible beneath. `image-rendering: pixelated` keeps the 576×324 source assets crisp at any viewport size. An SSR-safe fallback gradient prevents a flash of unstyled content before the client mounts and the theme resolves.
+
+---
+
 ## [0.11.0-beta.1] — 2026-04-19
 
 **Controller compatibility:** `0.11.0`
