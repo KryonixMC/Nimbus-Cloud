@@ -15,6 +15,7 @@ class StorageModule : NimbusModule {
     private val logger = LoggerFactory.getLogger(StorageModule::class.java)
     private lateinit var configManager: StorageConfigManager
     private var driver: S3StorageDriver? = null
+    private var syncManager: TemplateSyncManager? = null
 
     override suspend fun init(context: ModuleContext) {
         val configDir = context.moduleConfigDir("storage")
@@ -27,6 +28,8 @@ class StorageModule : NimbusModule {
                 logger.warn("Storage module enabled but no bucket configured — S3 sync disabled")
             } else {
                 driver = S3StorageDriver(cfg)
+                syncManager = TemplateSyncManager(driver!!, context.templatesDir, cfg)
+                context.registerService(TemplateSyncManager::class.java, syncManager!!)
                 logger.info("Storage module initialized: bucket={}, endpoint={}",
                     cfg.bucket, cfg.endpoint.ifBlank { "AWS S3 (${cfg.region})" })
             }
@@ -40,5 +43,6 @@ class StorageModule : NimbusModule {
     override fun disable() {
         driver?.close()
         driver = null
+        syncManager = null
     }
 }
